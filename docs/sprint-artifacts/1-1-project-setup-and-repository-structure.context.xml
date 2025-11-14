@@ -1,0 +1,192 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.1</storyId>
+    <title>Project Setup and Repository Structure</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-1-project-setup-and-repository-structure.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>a well-organized project structure with proper configuration files</iWant>
+    <soThat>the codebase is maintainable and follows best practices</soThat>
+    <tasks>
+      <task id="1" ac="1,2">Initialize Frontend Project Structure
+        - Create `frontend/` directory
+        - Initialize React app with Vite: `npm create vite@latest frontend -- --template react-ts`
+        - Install Tailwind CSS 3.3+ and configure `tailwind.config.js`
+        - Install React Router 6+ and Zustand 4.4+
+        - Install Axios 1.6+ for API client
+        - Configure TypeScript with strict mode in `tsconfig.json`
+        - Set up ESLint and Prettier configurations
+        - Create basic folder structure: `src/routes/`, `src/components/`, `src/lib/`, `src/store/`
+        - Create `.env.example` with `VITE_API_URL` placeholder
+        - Testing: Verify frontend builds successfully with `npm run build`
+      </task>
+      <task id="2" ac="1,2">Initialize Backend Project Structure
+        - Create `backend/` directory
+        - Set up Python 3.11+ virtual environment
+        - Create `requirements.txt` with FastAPI 0.104+, Uvicorn, SQLAlchemy 2.0+, Pydantic, python-dotenv
+        - Create basic FastAPI project structure: `app/main.py`, `app/core/`, `app/api/`, `app/db/`, `app/schemas/`
+        - Create `.env.example` with database URL and API key placeholders
+        - Create `backend/app/core/config.py` for environment variable management
+        - Testing: Verify backend imports and can start with `uvicorn app.main:app --reload`
+      </task>
+      <task id="3" ac="1">Create Deployment Directory Structure
+        - Create `deployment/` directory
+        - Create placeholder files: `deploy.sh`, `nginx.conf`, `fastapi.service`
+        - Add deployment documentation comments in files
+      </task>
+      <task id="4" ac="1">Verify Project Structure Matches Architecture
+        - Compare actual structure with `docs/architecture.md#Project-Structure`
+        - Verify frontend structure matches: `frontend/src/routes/`, `frontend/src/components/`, `frontend/src/lib/`, `frontend/src/store/`
+        - Verify backend structure matches: `backend/app/api/routes/`, `backend/app/core/`, `backend/app/db/`, `backend/app/schemas/`
+        - Testing: Run directory structure validation script or manual verification
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <ac id="1">
+      <given>a new project repository</given>
+      <when>I clone and examine the project structure</when>
+      <then>I see frontend directory with React + TypeScript + Vite, backend directory with Python + FastAPI, and proper configuration files</then>
+    </ac>
+    <ac id="2">
+      <given>the project structure</given>
+      <when>I examine configuration files</when>
+      <then>the project includes:
+        - `package.json` with React 18+, TypeScript 5+, Vite 5+, Tailwind CSS 3.3+
+        - `requirements.txt` with Python 3.11+, FastAPI 0.104+, SQLAlchemy 2.0+
+        - TypeScript configuration with strict mode enabled
+        - ESLint and Prettier configuration for code quality
+        - Basic folder structure for components, services, utilities
+      </then>
+    </ac>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 1.1: Project Setup and Repository Structure">
+        Story requirements and acceptance criteria for project setup. Specifies frontend (React + TypeScript + Vite) and backend (Python + FastAPI) structure with configuration files.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.1.1, AC-1.1.2, AC-1.1.3">
+        Technical specification with detailed acceptance criteria for project structure, frontend configuration (React 18+, TypeScript 5+, Vite 5+, Tailwind CSS 3.3+), and backend configuration (Python 3.11+, FastAPI 0.104+, SQLAlchemy 2.0+).
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Project Structure">
+        Target project structure layout with greenfield target showing frontend and backend directory organization. Specifies frontend structure: `frontend/src/routes/`, `frontend/src/components/`, `frontend/src/lib/`, `frontend/src/store/`. Backend structure: `backend/app/api/routes/`, `backend/app/core/`, `backend/app/db/`, `backend/app/schemas/`.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Implementation Patterns (Key Consistency Rules)">
+        Naming conventions: React components use `PascalCase` filenames, React hooks/stores use `camelCase`, API routes use `/api/*` prefix, database tables use `snake_case`.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Frontend">
+        Frontend initialization guidance: `npm create vite@latest frontend -- --template react-ts`, install Tailwind, React Router, and Zustand.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Backend">
+        Backend initialization guidance: Create `backend` directory with FastAPI app structure, use `.env` file and central config module for environment variables.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Technology Stack">
+        Technology stack specification: Frontend (React 18 + TypeScript + Vite + Tailwind CSS), Backend (Python 3.11 + FastAPI + SQLAlchemy).
+      </doc>
+    </docs>
+    <code>
+      <!-- Greenfield project - no existing code artifacts to reference -->
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="18+"/>
+        <package name="typescript" version="5+"/>
+        <package name="vite" version="5+"/>
+        <package name="tailwindcss" version="3.3+"/>
+        <package name="react-router" version="6+"/>
+        <package name="zustand" version="4.4+"/>
+        <package name="axios" version="1.6+"/>
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version="0.104+"/>
+        <package name="uvicorn"/>
+        <package name="sqlalchemy" version="2.0+"/>
+        <package name="pydantic"/>
+        <package name="python-dotenv"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <type>Project Structure</type>
+      <rule>Follow the greenfield target layout specified in `docs/architecture.md#Project-Structure` with clear separation between `frontend/` and `backend/` directories</rule>
+    </constraint>
+    <constraint>
+      <type>Frontend Framework</type>
+      <rule>React 18 + TypeScript 5 + Vite 5 as specified in architecture document</rule>
+    </constraint>
+    <constraint>
+      <type>Backend Framework</type>
+      <rule>Python 3.11 + FastAPI 0.104+ as specified in architecture document</rule>
+    </constraint>
+    <constraint>
+      <type>Configuration Management</type>
+      <rule>Use `.env` files for environment variables, never commit sensitive data</rule>
+    </constraint>
+    <constraint>
+      <type>Naming Conventions</type>
+      <rule>React components: `PascalCase` filenames. React hooks/stores: `camelCase`. API routes: `/api/*` prefix. Database tables: `snake_case`.</rule>
+    </constraint>
+    <constraint>
+      <type>TypeScript Configuration</type>
+      <rule>TypeScript configuration must have strict mode enabled</rule>
+    </constraint>
+    <constraint>
+      <type>Code Quality</type>
+      <rule>ESLint and Prettier configurations required for code quality</rule>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <!-- Greenfield project - no existing interfaces to reference -->
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing frameworks to be set up in this story: Frontend build verification (`npm run build`), Backend import verification (`uvicorn app.main:app --reload`). Full test coverage will be added in later epics when business logic is implemented. Testing standards from architecture: pytest for backend (setup in Epic 1, tests written in Epic 2+), Vitest or Jest for frontend (setup in Epic 1, tests written in Epic 2+).
+    </standards>
+    <locations>
+      - `backend/tests/` (to be created in future stories)
+      - `frontend/src/__tests__/` or `frontend/tests/` (to be created in future stories)
+    </locations>
+    <ideas>
+      <test ac="1">
+        <idea>Verify frontend directory structure exists with expected subdirectories (`src/routes/`, `src/components/`, `src/lib/`, `src/store/`)</idea>
+      </test>
+      <test ac="1">
+        <idea>Verify backend directory structure exists with expected subdirectories (`app/api/routes/`, `app/core/`, `app/db/`, `app/schemas/`)</idea>
+      </test>
+      <test ac="1">
+        <idea>Verify deployment directory exists with placeholder files (`deploy.sh`, `nginx.conf`, `fastapi.service`)</idea>
+      </test>
+      <test ac="2">
+        <idea>Verify `frontend/package.json` contains React 18+, TypeScript 5+, Vite 5+, Tailwind CSS 3.3+</idea>
+      </test>
+      <test ac="2">
+        <idea>Verify `backend/requirements.txt` contains FastAPI 0.104+, SQLAlchemy 2.0+</idea>
+      </test>
+      <test ac="2">
+        <idea>Verify TypeScript configuration has strict mode enabled in `tsconfig.json`</idea>
+      </test>
+      <test ac="2">
+        <idea>Verify ESLint and Prettier configuration files exist</idea>
+      </test>
+      <test ac="1,2">
+        <idea>Integration test: Run `npm run build` in frontend directory and verify successful build</idea>
+      </test>
+      <test ac="1,2">
+        <idea>Integration test: Run `uvicorn app.main:app --reload` in backend directory and verify server starts without import errors</idea>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

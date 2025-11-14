@@ -1,0 +1,22 @@
+generated: "2025-11-14"
+project: "ad-mint-ai"
+project_type: "software"
+selected_track: "method"
+field_type: "greenfield"
+workflow_path: ".bmad/bmm/workflows/workflow-status/paths/method-greenfield.yaml"
+workflow_status: |
+  # Phase 1: Planning
+  prd: docs/PRD.md  # agent: pm
+  validate-prd: optional  # agent: pm
+  create-design: conditional  # agent: ux-designer
+
+  # Phase 2: Solutioning
+  create-architecture: docs/bmm-architecture-2025-11-14.md  # agent: architect
+  test-design: recommended  # agent: tea
+  validate-architecture: optional  # agent: architect
+  solutioning-gate-check: required  # agent: architect
+
+  # Phase 3: Implementation
+  sprint-planning: required  # agent: sm
+
+

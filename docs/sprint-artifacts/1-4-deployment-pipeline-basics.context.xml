@@ -1,0 +1,196 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.4</storyId>
+    <title>Deployment Pipeline Basics</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-4-deployment-pipeline-basics.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>basic deployment scripts and configuration</iWant>
+    <soThat>I can deploy the application to AWS EC2</soThat>
+    <tasks>
+      <task id="1" title="Complete Deployment Script">
+        - Update `deployment/deploy.sh` to install system dependencies (Python 3.11, Node.js 18+, FFmpeg, Nginx)
+        - Add steps to set up Python virtual environment in backend directory
+        - Add steps to install Python dependencies from `backend/requirements.txt`
+        - Add steps to build React frontend (`cd frontend && npm install && npm run build`)
+        - Add steps to copy Nginx configuration file to `/etc/nginx/sites-available/`
+        - Add steps to create symlink for Nginx site configuration
+        - Add steps to copy systemd service file to `/etc/systemd/system/`
+        - Add steps to reload systemd daemon and enable/start services
+        - Add error handling with `set -e` and proper error messages
+        - Add verification steps (check service status, test health endpoint)
+        - Testing: Run deployment script on test EC2 instance and verify all steps complete
+      </task>
+      <task id="2" title="Complete Nginx Configuration">
+        - Update `deployment/nginx.conf` with correct paths (frontend/dist directory)
+        - Update server_name with placeholder or environment variable
+        - Verify frontend static file serving from `frontend/dist/`
+        - Verify API reverse proxy configuration (`/api/*` → `http://127.0.0.1:8000`)
+        - Update health check endpoint to use `/api/health` (not `/health`)
+        - Add proper error handling and logging configuration
+        - Testing: Test Nginx configuration syntax (`nginx -t`), verify frontend serves and API proxies correctly
+      </task>
+      <task id="3" title="Complete Systemd Service File">
+        - Update `deployment/fastapi.service` with correct paths (working directory, venv path, uvicorn path)
+        - Configure proper user/group (www-data or dedicated user)
+        - Set `Restart=always` and `RestartSec=10` for auto-restart on failure
+        - Configure `WantedBy=multi-user.target` for boot startup
+        - Add environment variable loading (if needed)
+        - Verify logging configuration (StandardOutput=journal, StandardError=journal)
+        - Testing: Install service file, enable and start service, verify auto-restart works
+      </task>
+      <task id="4" title="Environment Variable Templates">
+        - Verify `backend/.env.example` exists with all required variables (DATABASE_URL, SECRET_KEY, etc.)
+        - Verify `frontend/.env.example` exists with `VITE_API_URL`
+        - Add deployment-specific environment variables if needed
+        - Document environment variable setup in deployment script or README
+        - Testing: Verify .env.example files are complete and documented
+      </task>
+      <task id="5" title="Deployment Documentation">
+        - Create or update deployment README with step-by-step instructions
+        - Document EC2 instance requirements (Ubuntu 22.04, minimum specs)
+        - Document prerequisites (SSH access, AWS RDS endpoint if using PostgreSQL)
+        - Document post-deployment verification steps
+        - Document troubleshooting common issues
+        - Testing: Follow documentation to deploy on clean EC2 instance
+      </task>
+      <task id="6" title="Verification and Testing">
+        - Add verification steps to deployment script (check service status, test `/api/health` endpoint)
+        - Verify Nginx serves frontend correctly
+        - Verify API requests are proxied correctly
+        - Verify FastAPI service starts and restarts automatically
+        - Verify services start on system boot
+        - Testing: Complete end-to-end deployment test on EC2 instance
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-1">
+      **Given** I have an AWS EC2 instance with Ubuntu 22.04
+      **When** I run the deployment script
+      **Then** the script:
+      - Installs system dependencies (Python 3.11, Node.js, FFmpeg, Nginx)
+      - Sets up Python virtual environment and installs dependencies
+      - Builds the React frontend (`npm run build`)
+      - Configures Nginx to serve static files and proxy API requests
+      - Creates systemd service for FastAPI backend
+      - Starts all services
+    </criterion>
+    <criterion id="AC-2">
+      **And** the deployment includes:
+      - Basic Nginx configuration file
+      - Systemd service file for FastAPI
+      - Deployment script (`deploy.sh`) with error handling
+      - Environment variable template (`.env.example`)
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 1.4: Deployment Pipeline Basics">
+        Story requirements and acceptance criteria for deployment pipeline. Defines system dependencies, deployment script, Nginx configuration, and systemd service setup.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.4.1: Deployment Script">
+        Acceptance criteria for deployment script: Installs system dependencies (Python 3.11, Node.js, FFmpeg, Nginx), sets up Python virtual environment, builds React frontend, configures Nginx, creates systemd service.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.4.2: Nginx Configuration">
+        Acceptance criteria for Nginx: Serves React frontend from `frontend/dist/`, proxies `/api/*` to FastAPI on port 8000.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.4.3: Systemd Service">
+        Acceptance criteria for systemd service: Configured with auto-restart on failure, starts on system boot.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="Deployment Workflow (EC2)">
+        Deployment workflow steps: SSH into EC2, install dependencies, clone repository, set up virtual environment, build frontend, configure Nginx, create systemd service, start services.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Deployment">
+        Deployment architecture: Single EC2 instance on Ubuntu 22.04 LTS, AWS RDS PostgreSQL in same VPC, Nginx serves frontend and reverse-proxies API.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Deployment Strategy">
+        PRD deployment strategy: Single EC2 + RDS deployment, Nginx serves React build and proxies `/api/*` to FastAPI, systemd service for FastAPI with auto-restart.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Deployment Process">
+        Deployment process: Initial setup steps, continuous deployment workflow, deployment script structure, environment configuration.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="deployment/deploy.sh" kind="script" symbol="deployment script" lines="1-31" reason="Deployment script with basic structure and TODOs. Needs completion: system dependency installation, virtual environment setup, frontend build, Nginx/systemd configuration, service startup." />
+      <artifact path="deployment/nginx.conf" kind="configuration" symbol="Nginx configuration" lines="1-47" reason="Nginx configuration with placeholder paths. Needs updates: correct frontend/dist path, server_name, health check endpoint should use `/api/health` not `/health`." />
+      <artifact path="deployment/fastapi.service" kind="configuration" symbol="systemd service" lines="1-44" reason="Systemd service file with placeholder paths. Needs updates: correct working directory, virtual environment path, uvicorn path. Already has Restart=always and WantedBy=multi-user.target configured." />
+      <artifact path="backend/app/db/init_db.py" kind="script" symbol="database initialization" reason="Database initialization script exists - should be run during deployment to create tables." />
+      <artifact path="backend/app/core/config.py" kind="configuration" symbol="Settings" reason="Configuration management - DATABASE_URL and other environment variables loaded from .env file." />
+      <artifact path="backend/app/main.py" kind="application" symbol="FastAPI app" reason="FastAPI application with `/api/health` endpoint - service will run this via uvicorn." />
+    </code>
+    <dependencies>
+      <ecosystem name="system">
+        <package name="python3.11" reason="Python 3.11+ runtime for FastAPI backend" />
+        <package name="nodejs" version="18+" reason="Node.js 18+ for building React frontend" />
+        <package name="ffmpeg" reason="FFmpeg for future video processing (installed but not used in Epic 1)" />
+        <package name="nginx" reason="Nginx web server for serving frontend and reverse-proxying API" />
+        <package name="systemd" reason="Systemd for service management (built into Ubuntu 22.04)" />
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" reason="FastAPI web framework" />
+        <package name="uvicorn" version=">=0.24.0" reason="ASGI server for running FastAPI" />
+        <package name="sqlalchemy" version=">=2.0.0" reason="ORM for database models" />
+      </ecosystem>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" reason="React framework for frontend" />
+        <package name="vite" version="^7.2.2" reason="Vite build tool for frontend" />
+        <package name="typescript" version="~5.9.3" reason="TypeScript for frontend type safety" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="deployment_target">Single EC2 instance on Ubuntu 22.04 LTS for frontend + backend</constraint>
+    <constraint type="database">AWS RDS PostgreSQL instance in same VPC/subnet (configured separately, not in this story)</constraint>
+    <constraint type="nginx_config">Nginx serves React frontend from `frontend/dist/` and reverse-proxies `/api/*` to FastAPI on port 8000</constraint>
+    <constraint type="systemd_service">FastAPI backend runs as systemd service with auto-restart on failure and boot startup</constraint>
+    <constraint type="environment_variables">Use `.env` files for configuration, never commit sensitive data</constraint>
+    <constraint type="error_handling">Deployment script should use `set -e` for error handling and provide clear error messages</constraint>
+    <constraint type="health_endpoint">Health endpoint is `/api/health` (not `/health`) - update nginx.conf health check</constraint>
+    <constraint type="service_restart">Systemd service must have `Restart=always` and `RestartSec=10` for auto-restart on failure</constraint>
+    <constraint type="service_boot">Systemd service must have `WantedBy=multi-user.target` for boot startup</constraint>
+    <constraint type="nginx_paths">Nginx configuration needs actual paths, not placeholders (`/path/to/ad-mint-ai` → actual deployment path)</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="Deployment Script" kind="bash script" signature="deploy.sh [environment]" path="deployment/deploy.sh" reason="Main deployment script that orchestrates all deployment steps: dependency installation, virtual environment setup, frontend build, Nginx/systemd configuration, service startup" />
+    <interface name="Nginx Configuration" kind="configuration file" signature="nginx.conf -> /etc/nginx/sites-available/ad-mint-ai" path="deployment/nginx.conf" reason="Nginx configuration file that serves frontend static files and reverse-proxies API requests to FastAPI backend" />
+    <interface name="Systemd Service" kind="service file" signature="fastapi.service -> /etc/systemd/system/fastapi.service" path="deployment/fastapi.service" reason="Systemd service file that runs FastAPI backend as a managed service with auto-restart and boot startup" />
+    <interface name="Database Initialization" kind="function" signature="init_db() -> None" path="backend/app/db/init_db.py" reason="Database initialization function that creates tables - should be called during deployment" />
+    <interface name="FastAPI Application" kind="application" signature="uvicorn app.main:app --host 127.0.0.1 --port 8000" path="backend/app/main.py" reason="FastAPI application entry point - systemd service runs this via uvicorn" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing standards: Manual testing on EC2 instance is primary validation method. Test deployment script completes all steps without errors. Test Nginx configuration syntax with `nginx -t`. Test systemd service starts, restarts on failure, and starts on boot. Test frontend serves correctly. Test API requests are proxied correctly. Test health endpoint `/api/health` returns 200 OK. Verify all services are running after deployment.
+    </standards>
+    <locations>
+      - Manual testing on EC2 instance (primary)
+      - Local testing of script syntax and configuration files (pre-deployment validation)
+    </locations>
+    <ideas>
+      <test id="AC-1" idea="Test deployment script: Run on clean Ubuntu 22.04 EC2 instance, verify all system dependencies are installed (Python 3.11, Node.js 18+, FFmpeg, Nginx), verify virtual environment is created, verify frontend builds successfully, verify Nginx and systemd services are configured and started" />
+      <test id="AC-1" idea="Test system dependencies: After deployment, verify Python 3.11 is installed (`python3.11 --version`), Node.js 18+ is installed (`node --version`), FFmpeg is installed (`ffmpeg -version`), Nginx is installed and running (`systemctl status nginx`)" />
+      <test id="AC-1" idea="Test virtual environment: Verify Python virtual environment exists in backend directory, verify dependencies are installed (`pip list` shows fastapi, uvicorn, sqlalchemy, etc.)" />
+      <test id="AC-1" idea="Test frontend build: Verify `frontend/dist/` directory exists with built files (index.html, assets/), verify build is production-ready" />
+      <test id="AC-1" idea="Test service startup: Verify FastAPI systemd service is enabled (`systemctl is-enabled fastapi`), verify service is running (`systemctl status fastapi`), verify service starts on boot (reboot and check)" />
+      <test id="AC-2" idea="Test Nginx configuration: Verify configuration syntax (`nginx -t`), verify Nginx serves frontend from `frontend/dist/` (access root URL, see React app), verify API requests are proxied (`curl http://localhost/api/health` returns 200 OK)" />
+      <test id="AC-2" idea="Test Nginx health check: Verify health check endpoint uses `/api/health` (not `/health`), verify it returns correct response" />
+      <test id="AC-2" idea="Test systemd service file: Verify service file is installed at `/etc/systemd/system/fastapi.service`, verify paths are correct (working directory, venv path, uvicorn path), verify Restart=always and WantedBy=multi-user.target are set" />
+      <test id="AC-2" idea="Test error handling: Verify deployment script stops on errors (`set -e`), verify error messages are clear and helpful" />
+      <test id="AC-2" idea="Test environment variables: Verify `.env.example` files exist for both frontend and backend, verify they document all required variables" />
+      <test id="AC-1" idea="Test service auto-restart: Kill FastAPI process, verify systemd restarts it within 10 seconds (`systemctl status fastapi` shows restarted)" />
+      <test id="AC-1" idea="Test end-to-end: After deployment, verify frontend loads in browser, verify API health endpoint works, verify services survive reboot" />
+    </ideas>
+  </tests>
+</story-context>
+

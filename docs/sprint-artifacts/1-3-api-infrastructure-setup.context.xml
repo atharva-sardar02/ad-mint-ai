@@ -1,0 +1,183 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.3</storyId>
+    <title>API Infrastructure Setup</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-3-api-infrastructure-setup.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>a complete API infrastructure with backend server and frontend client</iWant>
+    <soThat>the frontend and backend can communicate securely</soThat>
+    <tasks>
+      <task id="1" title="Backend Health Endpoint">
+        - Update `backend/app/main.py` to add `/api/health` endpoint (currently has `/health`, needs `/api/health` prefix)
+        - Implement GET `/api/health` endpoint that returns `{"status": "healthy"}`
+        - Verify endpoint returns 200 OK status code
+        - Testing: Make GET request to `/api/health` and verify response
+      </task>
+      <task id="2" title="Backend CORS Configuration">
+        - Add CORS middleware to FastAPI app in `backend/app/main.py`
+        - Configure CORS to allow requests from frontend origin (from environment variable)
+        - Enable credentials support in CORS configuration
+        - Allow common HTTP methods (GET, POST, PUT, DELETE, OPTIONS)
+        - Block requests from other origins
+        - Testing: Test CORS headers with requests from frontend origin and other origins
+      </task>
+      <task id="3" title="Frontend API Client Setup">
+        - Create `frontend/src/lib/apiClient.ts` with Axios instance
+        - Configure base URL from `VITE_API_URL` environment variable (default: `http://localhost:8000`)
+        - Set timeout to 30000ms
+        - Set default headers: `Content-Type: application/json`
+        - Testing: Verify apiClient instance is properly configured
+      </task>
+      <task id="4" title="Frontend API Client Interceptors">
+        - Create request interceptor in `apiClient.ts` that adds JWT token to Authorization header
+        - Read token from `localStorage.getItem('token')`
+        - Add `Authorization: Bearer {token}` header if token exists
+        - Create response interceptor that handles 401 errors
+        - On 401 response, clear token and redirect to login (placeholder for Epic 2)
+        - Testing: Test request interceptor adds token when available
+        - Testing: Test response interceptor handles 401 errors
+      </task>
+      <task id="5" title="Frontend API Types and Error Handling">
+        - Create `frontend/src/lib/types/api.ts` with TypeScript types for API responses
+        - Define error types: `NetworkError`, `AuthError`, `ValidationError`
+        - Create `frontend/src/lib/config.ts` with centralized API endpoint constants
+        - Define API endpoint constants (e.g., `API_ENDPOINTS.HEALTH`, `API_ENDPOINTS.AUTH.LOGIN`, etc.)
+        - Update `apiClient.ts` to use error types in error handling
+        - Testing: Verify TypeScript types are properly defined and used
+      </task>
+      <task id="6" title="Frontend Environment Configuration">
+        - Update `frontend/.env.example` to include `VITE_API_URL` (if not already present)
+        - Document environment variable usage in README or comments
+        - Testing: Verify environment variable is loaded correctly
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-1">
+      **Backend:**
+      **Given** the FastAPI server is running
+      **When** I make a GET request to `/api/health`
+      **Then** I receive a 200 OK response with health status
+      **And** CORS is configured to allow requests from frontend origin, support credentials, and allow common HTTP methods
+    </criterion>
+    <criterion id="AC-2">
+      **Frontend:**
+      **Given** the frontend application is running
+      **When** I examine the API client configuration
+      **Then** I see Axios instance with interceptors for JWT tokens and error handling
+      **And** the client includes:
+      - TypeScript types for API request/response models
+      - Centralized API endpoint constants
+      - Proper error types (NetworkError, AuthError, ValidationError)
+      - Request interceptor that adds JWT token to Authorization header
+      - Response interceptor that handles 401 errors (redirects to login)
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 1.3: API Infrastructure Setup">
+        Story requirements and acceptance criteria for API infrastructure. Defines backend health endpoint, CORS configuration, and frontend API client setup.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.3.1: Backend Health Endpoint">
+        Acceptance criteria for backend health endpoint: GET `/api/health` returns 200 OK with `{"status": "healthy"}`.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.3.2: CORS Configuration">
+        Acceptance criteria for CORS: Configured to allow requests from frontend origin only, with credentials support and common HTTP methods (GET, POST, PUT, DELETE, OPTIONS).
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.3.3: Frontend API Client">
+        Acceptance criteria for frontend API client: Axios instance with base URL from environment, request/response interceptors for JWT tokens and 401 handling.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="APIs and Interfaces">
+        Complete API client interface specification with code examples for Axios instance, request interceptor (JWT token), and response interceptor (401 handling).
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="Error Response Format">
+        Error response format specification: All API errors use top-level `error` key with `code` and `message` fields in JSON structure.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="APIs and Interfaces">
+        Frontend API client interface specification. Architecture decisions for API route prefixing (`/api/`), CORS configuration, and error handling patterns.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Implementation Patterns (Key Consistency Rules)">
+        Error handling patterns: All API errors follow PRD's JSON structure with top-level `error` key. API routes use `/api/*` prefix. Naming conventions for API endpoints.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications">
+        API specifications including health endpoint, error response format, and authentication requirements.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Error Messages & Basic Error Handling">
+        Error response format: Simple JSON structure with `error` object containing `code` and `message` fields. All API error responses must use this format.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/main.py" kind="application" symbol="FastAPI app" lines="1-22" reason="FastAPI application entry point. Currently has `/health` endpoint - needs to be updated to `/api/health` and CORS middleware added." />
+      <artifact path="backend/app/core/config.py" kind="configuration" symbol="Settings" lines="1-37" reason="Configuration management with API_V1_PREFIX='/api' already defined. Can be used to load CORS allowed origins from environment variables." />
+      <artifact path="backend/app/api/__init__.py" kind="package" symbol="api package" lines="1" reason="API package exists - routes will be organized here in future stories." />
+      <artifact path="backend/app/api/routes/__init__.py" kind="package" symbol="routes package" lines="1" reason="Routes package exists - route modules will be created here in future stories." />
+      <artifact path="frontend/package.json" kind="dependencies" symbol="axios" lines="13" reason="Axios 1.13.2 already installed - ready to use for API client." />
+      <artifact path="frontend/src/lib" kind="directory" symbol="lib directory" reason="Frontend lib directory exists (created in Story 1.1) - will create apiClient.ts and config.ts here." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" reason="Web framework - CORS middleware available via fastapi.middleware.cors" />
+        <package name="uvicorn" version=">=0.24.0" reason="ASGI server for running FastAPI application" />
+      </ecosystem>
+      <ecosystem name="node">
+        <package name="axios" version="^1.13.2" reason="HTTP client for frontend API requests with interceptors support" />
+        <package name="typescript" version="~5.9.3" reason="TypeScript for type-safe API client and error types" />
+        <package name="react" version="^19.2.0" reason="React framework - API client will be used by React components" />
+        <package name="react-router-dom" version="^7.9.6" reason="React Router - response interceptor may use navigation for 401 redirects" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="api_route_prefix">All backend API endpoints must use `/api/` prefix as specified in architecture document</constraint>
+    <constraint type="cors_configuration">CORS middleware must be configured to allow requests from frontend origin only, with credentials support</constraint>
+    <constraint type="error_handling">All API errors follow the PRD's JSON structure with top-level `error` key containing `code` and `message` fields</constraint>
+    <constraint type="frontend_api_client">Use Axios with interceptors for JWT token management and error handling</constraint>
+    <constraint type="environment_variables">Frontend uses `VITE_` prefix for environment variables (Vite requirement)</constraint>
+    <constraint type="typescript_types">All API request/response models must have TypeScript types for type safety</constraint>
+    <constraint type="http_methods">CORS must allow common HTTP methods: GET, POST, PUT, DELETE, OPTIONS</constraint>
+    <constraint type="credentials">CORS must support credentials (cookies, authorization headers)</constraint>
+    <constraint type="timeout">Frontend API client timeout set to 30000ms (30 seconds)</constraint>
+    <constraint type="default_headers">Frontend API client default headers: `Content-Type: application/json`</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="GET /api/health" kind="REST endpoint" signature="GET /api/health -> 200 OK: {&quot;status&quot;: &quot;healthy&quot;}" path="backend/app/main.py" reason="Health check endpoint for monitoring API server status" />
+    <interface name="FastAPI CORS Middleware" kind="middleware" signature="CORSMiddleware(allow_origins=[...], allow_credentials=True, allow_methods=[...])" path="backend/app/main.py" reason="CORS middleware configuration for cross-origin requests" />
+    <interface name="Axios API Client" kind="class" signature="axios.create({baseURL, timeout, headers})" path="frontend/src/lib/apiClient.ts" reason="Axios instance with base configuration for API requests" />
+    <interface name="Request Interceptor" kind="function" signature="apiClient.interceptors.request.use((config) => {...})" path="frontend/src/lib/apiClient.ts" reason="Request interceptor to add JWT token to Authorization header from localStorage" />
+    <interface name="Response Interceptor" kind="function" signature="apiClient.interceptors.response.use((response) => response, (error) => {...})" path="frontend/src/lib/apiClient.ts" reason="Response interceptor to handle 401 errors and redirect to login" />
+    <interface name="API Endpoint Constants" kind="object" signature="API_ENDPOINTS = { HEALTH: '/api/health', AUTH: { LOGIN: '/api/auth/login', ... }, ... }" path="frontend/src/lib/config.ts" reason="Centralized API endpoint constants for type-safe endpoint references" />
+    <interface name="Error Types" kind="TypeScript types" signature="type NetworkError | AuthError | ValidationError" path="frontend/src/lib/types/api.ts" reason="TypeScript error types for API error handling" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing standards: Use pytest for backend tests and Vitest/Jest for frontend tests. Test health endpoint returns correct response. Test CORS headers allow frontend origin and block other origins. Test API client configuration, interceptors, and error handling. Use mock HTTP requests for frontend tests. Verify TypeScript types compile correctly.
+    </standards>
+    <locations>
+      - backend/tests/ (backend tests)
+      - frontend/src/__tests__/ or frontend/tests/ (frontend tests, if configured)
+    </locations>
+    <ideas>
+      <test id="AC-1" idea="Test health endpoint: Make GET request to `/api/health`, verify 200 OK response, verify response body is `{'status': 'healthy'}`" />
+      <test id="AC-1" idea="Test CORS configuration: Make request from frontend origin, verify CORS headers allow origin, credentials, and methods. Make request from other origin, verify CORS headers block it." />
+      <test id="AC-2" idea="Test API client configuration: Verify apiClient has correct baseURL from VITE_API_URL, timeout is 30000ms, default headers include Content-Type: application/json" />
+      <test id="AC-2" idea="Test request interceptor: Mock localStorage.getItem('token'), make API request, verify Authorization header is added with Bearer token" />
+      <test id="AC-2" idea="Test response interceptor: Mock 401 response, verify token is cleared from localStorage, verify redirect to login (or navigation call)" />
+      <test id="AC-2" idea="Test error types: Verify NetworkError, AuthError, ValidationError types are properly defined and can be used in error handling" />
+      <test id="AC-2" idea="Test API endpoint constants: Verify API_ENDPOINTS object contains all required endpoints (HEALTH, AUTH.LOGIN, etc.)" />
+      <test id="AC-2" idea="Test TypeScript types: Verify TypeScript compilation succeeds, verify API response types are properly typed" />
+    </ideas>
+  </tests>
+</story-context>
+

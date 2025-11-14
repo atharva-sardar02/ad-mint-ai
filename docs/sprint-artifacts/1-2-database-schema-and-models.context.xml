@@ -1,0 +1,156 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.2</storyId>
+    <title>Database Schema and Models</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-2-database-schema-and-models.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>database models for users and video generations</iWant>
+    <soThat>I can store and retrieve user data and generation records</soThat>
+    <tasks>
+      <task id="1" title="Create Database Base and Session Management">
+        - Create `backend/app/db/base.py` with SQLAlchemy Base and engine initialization
+        - Create `backend/app/db/session.py` with database session factory
+        - Configure database URL from environment variables (support SQLite for dev, PostgreSQL for prod)
+        - Set up connection pooling with appropriate pool size (5-20 connections)
+        - Testing: Verify database connection can be established
+      </task>
+      <task id="2" title="Create User Model">
+        - Create `backend/app/db/models/user.py` with User ORM model
+        - Define all fields: id (UUID, primary key), username (unique, indexed), password_hash, email (optional), total_generations (default 0), total_cost (default 0.0), created_at, last_login
+        - Add relationship to Generation model: `generations = relationship("Generation", back_populates="user")`
+        - Configure UUID generation using `default=uuid4` from uuid module
+        - Testing: Verify User model can be instantiated and fields are correct
+      </task>
+      <task id="3" title="Create Generation Model">
+        - Create `backend/app/db/models/generation.py` with Generation ORM model
+        - Define all fields as specified in tech spec: id, user_id (FK), prompt, duration, aspect_ratio, status, progress, current_step, video_path, video_url, thumbnail_url, framework, num_scenes, generation_time_seconds, cost, error_message, created_at, completed_at
+        - Add foreign key constraint: `ForeignKey("users.id")` with proper cascade behavior
+        - Add relationship to User model: `user = relationship("User", back_populates="generations")`
+        - Configure default values: status="pending", progress=0, duration=15, aspect_ratio="9:16"
+        - Testing: Verify Generation model can be instantiated and relationships work
+      </task>
+      <task id="4" title="Create Database Indexes">
+        - Add unique index on `users.username`
+        - Add index on `generations.user_id` (foreign key index)
+        - Add index on `generations.status` (for querying by status)
+        - Add index on `generations.created_at` (for sorting/filtering)
+        - Testing: Verify indexes are created when tables are created
+      </task>
+      <task id="5" title="Create Database Initialization and Migration Script">
+        - Create script or function to initialize database tables using `Base.metadata.create_all()`
+        - Ensure all models are imported before creating tables
+        - Add error handling for database connection failures
+        - Testing: Run initialization script and verify both tables are created with correct schema
+      </task>
+      <task id="6" title="Create Model __init__ Module">
+        - Create `backend/app/db/models/__init__.py` to export User and Generation models
+        - Ensure models can be imported from `app.db.models`
+        - Testing: Verify imports work: `from app.db.models import User, Generation`
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-1">
+      **Given** a database connection is configured
+      **When** I run database migrations
+      **Then** the following tables are created:
+      - `users` table with fields: id (UUID), username (unique, indexed), password_hash, email (optional), total_generations, total_cost, created_at, last_login
+      - `generations` table with fields: id (UUID), user_id (FK, indexed), prompt, duration, aspect_ratio, status (indexed), progress, current_step, video_path, video_url, thumbnail_url, framework, num_scenes, generation_time_seconds, cost, error_message, created_at (indexed), completed_at
+    </criterion>
+    <criterion id="AC-2">
+      **And** the models include:
+      - SQLAlchemy ORM models with proper relationships
+      - Indexes on frequently queried fields (user_id, status, created_at)
+      - Proper data types (String, Integer, Float, DateTime, Text)
+      - UUID primary keys generated automatically
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 1.2: Database Schema and Models">
+        Story requirements and acceptance criteria for database schema and models. Defines the need for users and generations tables with specific fields.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="Data Models and Contracts">
+        Detailed model specifications with exact field definitions, data types, relationships, and indexes. Includes complete Python code examples for User and Generation models.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.2.1: Database Models">
+        Acceptance criteria for database models: users table with UUID id, username (unique, indexed), password_hash, email (optional), total_generations, total_cost, created_at, last_login. Generations table with all specified fields.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic Technical Specification: Foundation & Infrastructure" section="AC-1.2.2: Database Indexes">
+        Acceptance criteria for database indexes: unique index on users.username, indexes on generations.user_id, generations.status, and generations.created_at.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Data & Storage">
+        Database architecture decisions: SQLite for development, PostgreSQL for production via AWS RDS, identical schema. SQLAlchemy 2.0+ with declarative base pattern.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Project structure layout showing backend/app/db/ directory with models/ subdirectory. Database base and session management location.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Data Models">
+        PRD data model specifications for User and Generation models with field descriptions and relationships.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/core/config.py" kind="configuration" symbol="Settings.DATABASE_URL" lines="15-18" reason="Database URL configuration from environment variables. Defaults to SQLite for development, supports PostgreSQL via DATABASE_URL env var." />
+      <artifact path="backend/app/main.py" kind="application" symbol="FastAPI app" lines="1-23" reason="FastAPI application entry point. Database models will be used by API routes in future stories." />
+      <artifact path="backend/app/db/__init__.py" kind="package" symbol="db package" lines="1-2" reason="Database package initialization. Will contain base.py and session.py modules." />
+      <artifact path="backend/app/db/models/__init__.py" kind="package" symbol="models package" lines="1-2" reason="Database models package. Will export User and Generation models." />
+      <artifact path="backend/requirements.txt" kind="dependencies" symbol="sqlalchemy>=2.0.0" lines="3" reason="SQLAlchemy 2.0+ dependency required for ORM models and database operations." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="sqlalchemy" version=">=2.0.0" reason="ORM for database models and relationships" />
+        <package name="fastapi" version=">=0.104.0" reason="Web framework - models will be used in API routes" />
+        <package name="pydantic" version=">=2.0.0" reason="Data validation - may be used for model validation" />
+        <package name="python-dotenv" version=">=1.0.0" reason="Environment variable loading for DATABASE_URL" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="database_orm">Use SQLAlchemy 2.0+ with declarative base pattern as specified in architecture document</constraint>
+    <constraint type="database_support">Support both SQLite (development) and PostgreSQL (production via AWS RDS) with identical schema</constraint>
+    <constraint type="uuid_keys">Use String(36) for UUID fields, generate using uuid.uuid4() with default=uuid4 in Column definition</constraint>
+    <constraint type="data_types">Follow tech spec exactly: UUIDs as String(36), Text for long content, Integer for counts/durations, Float for costs, DateTime with default=datetime.utcnow</constraint>
+    <constraint type="relationships">Use SQLAlchemy relationship() with back_populates for bidirectional relationships</constraint>
+    <constraint type="indexes">Create indexes on frequently queried fields: username (unique), user_id, status, created_at</constraint>
+    <constraint type="naming">Follow architecture patterns: database tables use snake_case (users, generations), columns use snake_case</constraint>
+    <constraint type="project_structure">Database models in backend/app/db/models/, base and session in backend/app/db/</constraint>
+    <constraint type="configuration">Database URL from DATABASE_URL environment variable, loaded via app/core/config.py</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="Database Session Factory" kind="function" signature="get_db() -> Generator[Session, None, None]" path="backend/app/db/session.py" reason="Session factory function for dependency injection in FastAPI routes" />
+    <interface name="SQLAlchemy Base" kind="class" signature="Base = declarative_base()" path="backend/app/db/base.py" reason="Declarative base class for all ORM models" />
+    <interface name="User Model" kind="class" signature="class User(Base): ..." path="backend/app/db/models/user.py" reason="User ORM model with fields: id, username, password_hash, email, total_generations, total_cost, created_at, last_login" />
+    <interface name="Generation Model" kind="class" signature="class Generation(Base): ..." path="backend/app/db/models/generation.py" reason="Generation ORM model with foreign key to User and all video generation fields" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing standards: Use pytest for backend unit tests. Test database model creation, relationships, field validation, and indexes. Use SQLite in-memory database for tests. Verify models can be instantiated, relationships work correctly, and indexes are created. Test database initialization script creates tables with correct schema.
+    </standards>
+    <locations>
+      - backend/tests/ (future test directory)
+      - Test files should follow pattern: test_*.py
+    </locations>
+    <ideas>
+      <test id="AC-1" idea="Test database table creation: Create in-memory SQLite database, run Base.metadata.create_all(), verify users and generations tables exist with correct columns" />
+      <test id="AC-1" idea="Test User model: Instantiate User with required fields, verify UUID is generated, verify defaults (total_generations=0, total_cost=0.0), verify username uniqueness constraint" />
+      <test id="AC-1" idea="Test Generation model: Instantiate Generation with required fields, verify UUID is generated, verify defaults (status='pending', progress=0, duration=15, aspect_ratio='9:16'), verify foreign key to User" />
+      <test id="AC-2" idea="Test relationships: Create User and Generation instances, verify bidirectional relationship works (user.generations and generation.user)" />
+      <test id="AC-2" idea="Test indexes: Query database metadata, verify unique index on users.username, verify indexes on generations.user_id, generations.status, generations.created_at" />
+      <test id="AC-2" idea="Test data types: Verify UUID fields are String(36), Text fields accept long content, Integer/Float fields accept numeric values, DateTime fields use UTC" />
+      <test id="AC-1" idea="Test database initialization: Run initialization script, verify both tables created, verify schema matches specification, verify error handling for connection failures" />
+    </ideas>
+  </tests>
+</story-context>
+
