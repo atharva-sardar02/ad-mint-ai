@@ -41,3 +41,21 @@ export async function getGenerations(
   return response.data;
 }
 
+/**
+ * Delete a video generation.
+ *
+ * @param id - Generation ID to delete
+ * @returns Promise resolving to DeleteResponse
+ * @throws {AuthError} If user is not authenticated (401)
+ * @throws {ForbiddenError} If user doesn't own the generation (403)
+ * @throws {NotFoundError} If generation not found (404)
+ * @throws {NetworkError} If network request fails
+ */
+export async function deleteGeneration(id: string): Promise<{ message: string; generation_id: string }> {
+  const response = await apiClient.delete<{ message: string; generation_id: string }>(
+    `/api/generations/${id}`
+  );
+
+  return response.data;
+}
+

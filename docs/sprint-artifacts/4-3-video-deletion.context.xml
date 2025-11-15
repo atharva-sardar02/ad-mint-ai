@@ -1,0 +1,288 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>epic-4</epicId>
+    <storyId>4.3</storyId>
+    <title>Video Deletion</title>
+    <status>review</status>
+    <generatedAt>2025-11-14T21:50:35</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/4-3-video-deletion.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a user</asA>
+    <iWant>I want to delete videos I no longer need</iWant>
+    <soThat>So that I can manage my storage and keep my gallery organized</soThat>
+    <tasks>
+      - Task 1: Create Backend Delete Endpoint (AC: 1, 5)
+        - Add `DELETE /api/generations/{id}` endpoint to `app/api/routes/generations.py`
+        - Implement JWT authentication dependency
+        - Verify user ownership (user_id matches generation.user_id)
+        - Delete video file from disk using `os.remove()` (handle FileNotFoundError gracefully)
+        - Delete thumbnail file from disk (handle FileNotFoundError gracefully)
+        - Delete database record using SQLAlchemy
+        - Commit database transaction
+        - Return success response with generation_id
+        - Add error handling (401, 403, 404, 500)
+        - Log deletion operations (success and failures)
+      - Task 2: Create Delete Response Schema (AC: 1)
+        - Update `app/schemas/generation.py` with DeleteResponse schema
+        - Include message and generation_id fields
+        - Add proper field types
+      - Task 3: Create Confirmation Dialog Component (AC: 2)
+        - Create `frontend/src/components/ui/ConfirmDialog.tsx` component
+        - Accept props: title, message, confirmText, cancelText, onConfirm, onCancel
+        - Display modal overlay with dialog box
+        - Style with Tailwind CSS (follow existing UI patterns)
+        - Handle escape key to cancel
+        - Handle click outside to cancel (optional)
+        - Make component reusable for future confirmations
+      - Task 4: Add Delete Button to Video Detail Page (AC: 2, 3)
+        - Update `frontend/src/routes/VideoDetail.tsx` (or create if not exists)
+        - Add delete button with appropriate styling
+        - Show delete button only for video owner (if applicable)
+        - Implement click handler to show confirmation dialog
+        - Add loading state to delete button during deletion
+        - Disable button during deletion request
+      - Task 5: Implement Delete API Call (AC: 1, 2, 4)
+        - Create `deleteGeneration` function in `frontend/src/lib/services/generations.ts`
+        - Make authenticated DELETE request to `/api/generations/{id}`
+        - Handle success response
+        - Handle error responses (401, 403, 404, 500)
+        - Return typed response or throw error
+      - Task 6: Implement Delete Flow with Confirmation (AC: 2, 4)
+        - Wire up delete button click → show confirmation dialog
+        - Handle confirmation → call delete API
+        - Show loading state during deletion
+        - Handle success → redirect to gallery with success message
+        - Handle error → display error message, keep user on detail page
+        - Handle cancellation → close dialog, no action
+      - Task 7: Add Success/Error Toast Notifications (AC: 2, 4)
+        - Create or use existing toast notification component
+        - Show success toast: "Video deleted successfully" after deletion
+        - Show error toast with appropriate error message on failure
+        - Auto-dismiss toasts after 3-5 seconds
+      - Task 8: Testing (AC: 1, 2, 3, 4, 5)
+        - Create backend unit tests for delete endpoint
+        - Test successful deletion (file, thumbnail, database)
+        - Test ownership verification (403 for non-owner)
+        - Test file not found scenarios (graceful handling)
+        - Test database errors
+        - Create frontend unit tests for ConfirmDialog component
+        - Create frontend unit tests for delete button and flow
+        - Create integration test: delete flow (click → confirm → delete → redirect)
+        - Test error handling scenarios
+        - Test loading states
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Backend Video Deletion:
+       Given I own a video generation
+       When I request `DELETE /api/generations/{id}`
+       Then the video file is deleted from disk
+       And the thumbnail file is deleted from disk
+       And the database record is deleted
+       And I receive a success response
+
+    2. Deletion Confirmation:
+       Given I am viewing a video
+       When I click the delete button
+       Then a confirmation dialog appears with message: "Are you sure you want to delete this video? This action cannot be undone."
+       And deletion only proceeds if I confirm
+       And I am redirected to gallery after successful deletion
+
+    3. Deletion Loading State:
+       Given I have clicked delete and confirmed
+       When the deletion request is in progress
+       Then the delete button shows a loading state
+       And the button is disabled during deletion
+
+    4. Deletion Error Handling:
+       Given a deletion request fails
+       When an error occurs
+       Then an error message is displayed to the user
+       And the video remains in the gallery
+
+    5. Ownership Verification:
+       Given I try to delete a video I don't own
+       When I request `DELETE /api/generations/{id}`
+       Then I receive a 403 Forbidden error
+       And the video is not deleted
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Functional Requirements FR-020">
+        Video Deletion requirement: System shall allow users to delete their videos with confirmation. Part of Epic 4 (Video Management) covering FR-017 through FR-021. Deletion removes video file from storage and database record. Only video owner can delete.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications">
+        API specifications for DELETE /api/generations/{id} endpoint. Response format includes message and generation_id. Error codes: 401, 403, 404, 500. Path parameter: id (UUID). Requires JWT authentication.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Non-Functional Requirements">
+        Error handling requirement NFR-013: System shall handle errors gracefully with user-friendly messages. File deletion failures are acceptable (log warning, proceed with database deletion). All API errors use simple JSON structure with error.code and error.message.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Overview">
+        Epic 4: Video Management enables users to view, play, download, search, and delete their generated videos. Story 4.3 covers video deletion with confirmation dialog and ownership verification. Deletion removes video file, thumbnail file, and database record.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="APIs and Interfaces">
+        DELETE /api/generations/{id} endpoint specification with path parameters (id), response schema (DeleteResponse with message and generation_id), and error codes (401, 403, 404, 500). Ownership verification required before deletion.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Workflows and Sequencing">
+        Video Deletion Flow: User clicks delete button → confirmation dialog → user confirms → DELETE API call → backend verifies ownership → deletes files and database record → returns success → frontend redirects to gallery.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Reliability/Availability">
+        Error handling: Missing video files acceptable (log warning, proceed with database deletion). Partial failures: If thumbnail deletion fails but video deletion succeeds, log warning but return success. Orphaned files acceptable for MVP.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Security">
+        File deletion: Only delete files owned by requesting user. Ownership verification: Every request must verify `generation.user_id == current_user.id`. Path traversal prevention: Validate generation_id is valid UUID, verify ownership before file access.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary">
+        Backend: FastAPI 0.104+ with SQLAlchemy 2.0+. Frontend: React 18 + TypeScript + Vite. Styling: Tailwind CSS 3.3+. File system operations: Use Python `os` module for file deletion. Error handling: User-friendly error messages following PRD error structure.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Backend routes in `app/api/routes/`, schemas in `app/schemas/`, models in `app/db/models/`. Frontend routes in `src/routes/`, components in `src/components/ui/`, services in `src/lib/services/`. Testing: Backend tests in `backend/tests/`, frontend tests in `frontend/src/__tests__/`.
+      </doc>
+      <doc path="docs/epics.md" title="Epics Document" section="Epic 4: Video Management">
+        Story 4.3 goal: Enable users to delete videos with confirmation dialog, ownership verification, and proper error handling. Prerequisites: Stories 1.2, 1.3, 2.3, 1.4. Deletion removes video file, thumbnail, and database record.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/api/routes/generations.py" kind="route" symbol="router" lines="1-708" reason="Existing generations router with GET endpoints. Add DELETE /api/generations/{id} endpoint here following the same authentication and error handling patterns. Reference existing ownership verification pattern from get_generation_status endpoint (lines 464-475)." />
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_current_user" reason="JWT authentication dependency for FastAPI routes. Use `Depends(get_current_user)` to get authenticated user in delete endpoint for ownership verification. Returns User object or raises HTTPException(401)." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" reason="Existing Generation ORM model with all required fields including video_path, video_url, thumbnail_url, user_id. Use for querying generation by id and verifying ownership. Reference for field names and relationships." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="GenerationListItem" lines="35-49" reason="Existing Pydantic schemas for generation responses. Add DeleteResponse schema here following the same patterns (BaseModel with message and generation_id fields). Reference existing schema structure." />
+      <artifact path="frontend/src/lib/services/generations.ts" kind="service" symbol="getGenerations" lines="19-42" reason="Existing generations service with getGenerations function. Add deleteGeneration function here following the same pattern (use apiClient, handle errors, return typed response). Use apiClient.delete() for DELETE request." />
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="apiClient" reason="Axios instance with JWT token interceptors. Reuse for authenticated DELETE request to /api/generations/{id}. Token automatically added to Authorization header. Handles 401 errors by redirecting to login." />
+      <artifact path="frontend/src/routes/VideoDetail.tsx" kind="component" symbol="VideoDetail" lines="1-323" reason="Existing VideoDetail component with delete functionality. Already imports deleteGeneration and uses ConfirmDialog. Reference for delete button implementation, loading states, error handling, and redirect logic." />
+      <artifact path="frontend/src/components/ui/ConfirmDialog.tsx" kind="component" symbol="ConfirmDialog" lines="1-98" reason="Existing reusable ConfirmDialog component with escape key and backdrop click handling. Already used in VideoDetail. Reference for component structure and Tailwind CSS styling patterns." />
+      <artifact path="frontend/src/components/ui/Toast.tsx" kind="component" symbol="Toast" reason="Existing Toast notification component for success/error feedback. Used in VideoDetail for deletion feedback. Reference for toast implementation and auto-dismiss behavior." />
+      <artifact path="frontend/src/components/ui/Button.tsx" kind="component" symbol="Button" reason="Existing Button component with isLoading prop support. Use for delete button with loading state during deletion request. Reference for button styling and disabled state handling." />
+      <artifact path="frontend/src/components/ui/ErrorMessage.tsx" kind="component" symbol="ErrorMessage" reason="Existing ErrorMessage component. Use for displaying deletion error messages to user. Reference for error display patterns." />
+      <artifact path="frontend/src/routes/Gallery.tsx" kind="component" symbol="Gallery" reason="Existing Gallery component with video grid. Reference for component structure, styling patterns, and navigation patterns. After deletion, redirect to this page." />
+      <artifact path="backend/tests/test_generations.py" kind="test" reason="Existing test file for generations endpoints. Add delete endpoint tests here following existing patterns. Reference for test structure, mocking, and assertion patterns." />
+      <artifact path="frontend/src/__tests__/VideoDetail.test.tsx" kind="test" reason="Existing test file for VideoDetail component. Already includes delete flow tests. Reference for component testing patterns, mocking API calls, and user interaction testing." />
+      <artifact path="frontend/src/__tests__/ConfirmDialog.test.tsx" kind="test" reason="Existing test file for ConfirmDialog component. Already includes comprehensive tests. Reference for dialog component testing patterns." />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="tailwindcss" version="^4.1.17" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="PyJWT" version=">=2.8.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="httpx" version=">=0.24.0" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Backend Framework: FastAPI 0.104+ with SQLAlchemy 2.0+ (from Epic 1)
+    - Authentication: JWT-based authentication via dependency injection using `get_current_user` from `app/api/deps.py` (from Epic 2)
+    - File System Operations: Use Python `os` module for file deletion, handle FileNotFoundError gracefully (log warning, proceed with database deletion)
+    - Database Transactions: Use SQLAlchemy session for atomic deletion of database record
+    - Frontend Framework: React 18 + TypeScript + Vite (from Epic 1)
+    - State Management: Local component state for delete operation (no global state needed)
+    - Routing: React Router 6+ for navigation to `/gallery` after successful deletion
+    - Styling: Tailwind CSS 3.3+ for confirmation dialog and button styling (follow existing UI component patterns)
+    - API Client: Axios with interceptors (from Epic 2) - reuse existing apiClient instance for authenticated DELETE request
+    - Error Handling: User-friendly error messages following PRD error structure with `error.code` and `error.message` format
+    - File Deletion: Acceptable if file not found on disk (log warning, proceed with database deletion) - prevents blocking deletion if files already removed
+    - Partial Failures: If thumbnail deletion fails but video deletion succeeds, log warning but return success (acceptable for MVP)
+    - Testing: Backend uses pytest with FastAPI TestClient, frontend uses Vitest with React Testing Library
+    - Component Reusability: Confirmation dialog should be reusable component for future use cases (not just video deletion)
+    - File Paths: All paths must be project-relative (not absolute) in documentation and code references
+    - Component Structure: Follow existing patterns from Gallery, VideoCard, and Button components
+    - API Response Format: Follow existing auth routes pattern with proper status codes and error responses
+    - Ownership Verification: Must verify `generation.user_id == current_user.id` before any deletion operations
+  </constraints>
+
+  <interfaces>
+    <interface name="DELETE /api/generations/{id}" kind="REST endpoint" signature="DELETE /api/generations/{id}" path="backend/app/api/routes/generations.py">
+      Path Parameters:
+      - id (string, UUID): Generation ID
+      
+      Headers:
+      - Authorization: Bearer {jwt_token}
+      
+      Response (200 OK):
+      {
+        "message": "Video deleted successfully",
+        "generation_id": "abc-123-def-456"
+      }
+      
+      Errors:
+      - 401: Unauthorized (invalid/missing token)
+      - 404: Video not found
+      - 403: Not authorized to delete this video (user doesn't own it)
+      - 500: File deletion failed (file not found on disk is acceptable, log warning)
+    </interface>
+    <interface name="get_current_user" kind="FastAPI dependency" signature="get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -&gt; User" path="backend/app/api/deps.py">
+      FastAPI dependency that extracts JWT token from Authorization header, verifies it, and returns User object. Raises HTTPException(401) if token is invalid, expired, or user not found. Use with `Depends(get_current_user)` in delete endpoint for ownership verification.
+    </interface>
+    <interface name="apiClient" kind="Axios instance" signature="apiClient: AxiosInstance" path="frontend/src/lib/apiClient.ts">
+      Pre-configured Axios instance with base URL, timeout, and interceptors. Request interceptor automatically adds JWT token from localStorage to Authorization header. Response interceptor handles 401 errors by clearing token and redirecting to login. Use for authenticated DELETE request.
+    </interface>
+    <interface name="deleteGeneration" kind="service function" signature="deleteGeneration(id: string): Promise&lt;DeleteResponse&gt;" path="frontend/src/lib/services/generations.ts">
+      Service function to delete a video generation. Makes authenticated DELETE request to `/api/generations/{id}` using apiClient. Returns DeleteResponse with message and generation_id on success. Throws error on failure (401, 403, 404, 500).
+    </interface>
+    <interface name="DeleteResponse" kind="Pydantic schema" signature="class DeleteResponse(BaseModel): message: str, generation_id: str" path="backend/app/schemas/generation.py">
+      Pydantic response schema for DELETE endpoint. Contains message (success message) and generation_id (UUID of deleted generation). Used for type-safe API responses.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend testing uses pytest with FastAPI TestClient for integration tests. Test structure follows existing patterns in `backend/tests/test_auth_routes.py` and `backend/tests/test_generations.py` with dependency overrides for database session. Unit tests should test file deletion logic, ownership verification, and error handling in isolation. Frontend testing uses Vitest with React Testing Library following patterns in `frontend/src/__tests__/authStore.test.ts` and `frontend/src/__tests__/Gallery.test.tsx`. Component tests should verify rendering, user interactions (click delete, confirm, cancel), state management (loading state), and API call handling with mocked responses. Integration tests verify complete flows: click delete → confirmation dialog → confirm → API call → redirect → gallery update. All tests should use proper mocking of dependencies (API calls, localStorage, navigation, file system operations).
+    </standards>
+    <locations>
+      Backend tests: `backend/tests/test_generations.py` (add delete endpoint tests to existing file)
+      Frontend tests: `frontend/src/__tests__/ConfirmDialog.test.tsx` (existing file), `frontend/src/__tests__/VideoDetail.test.tsx` (existing file)
+      Test setup: `backend/tests/conftest.py` (existing), `frontend/src/__tests__/setup.ts` (existing)
+    </locations>
+    <ideas>
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} successfully deletes video file from disk" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} successfully deletes thumbnail file from disk" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} successfully deletes database record" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} returns success response with message and generation_id" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} handles FileNotFoundError gracefully (file already deleted) - log warning, proceed with database deletion" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} handles partial failures (thumbnail deletion fails, video deletion succeeds) - log warning, return success" />
+      <test acId="AC-4.3.5" idea="Test DELETE /api/generations/{id} returns 403 Forbidden when user tries to delete video they don't own" />
+      <test acId="AC-4.3.5" idea="Test DELETE /api/generations/{id} does not delete video file when ownership verification fails" />
+      <test acId="AC-4.3.5" idea="Test DELETE /api/generations/{id} does not delete database record when ownership verification fails" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} returns 404 when generation_id does not exist" />
+      <test acId="AC-4.3.1" idea="Test DELETE /api/generations/{id} returns 401 when JWT token is missing or invalid" />
+      <test acId="AC-4.3.2" idea="Test ConfirmDialog component renders with correct title and message" />
+      <test acId="AC-4.3.2" idea="Test ConfirmDialog component calls onConfirm when confirm button is clicked" />
+      <test acId="AC-4.3.2" idea="Test ConfirmDialog component calls onCancel when cancel button is clicked" />
+      <test acId="AC-4.3.2" idea="Test ConfirmDialog component calls onCancel when escape key is pressed" />
+      <test acId="AC-4.3.2" idea="Test delete button click shows confirmation dialog" />
+      <test acId="AC-4.3.2" idea="Test confirmation dialog shows correct message: 'Are you sure you want to delete this video? This action cannot be undone.'" />
+      <test acId="AC-4.3.2" idea="Test deletion only proceeds when user confirms (not when canceling)" />
+      <test acId="AC-4.3.2" idea="Test successful deletion redirects to gallery page" />
+      <test acId="AC-4.3.3" idea="Test delete button shows loading state during deletion request" />
+      <test acId="AC-4.3.3" idea="Test delete button is disabled during deletion request" />
+      <test acId="AC-4.3.4" idea="Test error message is displayed when deletion fails" />
+      <test acId="AC-4.3.4" idea="Test video remains in gallery when deletion fails" />
+      <test acId="AC-4.3.4" idea="Test user stays on detail page when deletion fails (not redirected)" />
+      <test acId="AC-4.3.4" idea="Test different error codes (401, 403, 404, 500) display appropriate error messages" />
+      <test acId="Integration" idea="Integration test: User clicks delete button → confirmation dialog appears → user confirms → API call succeeds → redirects to gallery → video no longer in gallery" />
+      <test acId="Integration" idea="Integration test: User clicks delete button → confirmation dialog appears → user cancels → dialog closes → video still in gallery" />
+      <test acId="Integration" idea="Integration test: User clicks delete button → confirmation dialog appears → user confirms → API call fails → error message displayed → video still in gallery" />
+      <test acId="Error Handling" idea="Test deleteGeneration service function handles network errors gracefully" />
+      <test acId="Error Handling" idea="Test deleteGeneration service function throws appropriate errors for different status codes" />
+      <test acId="Logging" idea="Test backend logs deletion operations (generation_id, user_id, success/failure, file deletion status)" />
+    </ideas>
+  </tests>
+</story-context>

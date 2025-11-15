@@ -18,17 +18,9 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(generations.router)
-
-# Mount static files for serving videos and thumbnails
-output_dir = Path("output")
-if output_dir.exists():
-    app.mount("/output", StaticFiles(directory="output"), name="output")
-
 # CORS middleware configuration
-# Note: CORS middleware should handle preflight OPTIONS requests automatically
+# IMPORTANT: CORS middleware must be added BEFORE routers to ensure it processes all requests
+# Note: CORS middleware handles preflight OPTIONS requests automatically
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ALLOWED_ORIGINS,
@@ -37,6 +29,19 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
     expose_headers=["*"],  # Expose all headers to the frontend
 )
+
+# Include routers (after CORS middleware)
+app.include_router(auth.router)
+app.include_router(generations.router)
+
+# Mount static files for serving videos and thumbnails
+# This allows the frontend to access files at /output/videos/ and /output/thumbnails/
+output_dir = Path("output")
+if output_dir.exists():
+    app.mount("/output", StaticFiles(directory="output"), name="output")
+    logger.info("Static files mounted at /output")
+else:
+    logger.warning("Output directory not found - static file serving disabled")
 
 
 @app.on_event("startup")

@@ -1,6 +1,7 @@
 """
 LLM enhancement service for processing user prompts into structured ad specifications.
 """
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -11,6 +12,10 @@ from app.core.config import settings
 from app.schemas.generation import AdSpecification
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration for rate limits
+INITIAL_RETRY_DELAY = 2  # seconds
+MAX_RETRY_DELAY = 60  # seconds
 
 # System prompt for LLM enhancement
 SYSTEM_PROMPT = """You are an expert advertising copywriter and strategist. Your task is to analyze a user's product description and create a comprehensive ad specification that will be used to generate a professional video advertisement.
@@ -114,9 +119,18 @@ async def enhance_prompt_with_llm(
         openai.APIError: If API call fails after retries
         ValidationError: If LLM response doesn't match schema
     """
+    # Mask API key for logging (first 4 + last 4 chars)
+    def mask_key(key: str) -> str:
+        if not key or len(key) < 8:
+            return "***"
+        return f"{key[:4]}...{key[-4:]}"
+    
     if not settings.OPENAI_API_KEY:
         logger.error("OPENAI_API_KEY not configured")
-        raise ValueError("OpenAI API key is not configured")
+        raise ValueError("OpenAI API key is not configured. API Key: (not set)")
+    
+    masked_key = mask_key(settings.OPENAI_API_KEY)
+    logger.info(f"Using OpenAI API key: {masked_key}")
     
     client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
     
@@ -182,10 +196,58 @@ async def enhance_prompt_with_llm(
                     continue
                 raise ValueError(f"LLM response doesn't match schema: {e}")
                 
+        except openai.RateLimitError as e:
+            last_error = e
+            if attempt < max_retries:
+                # Exponential backoff for rate limits (429 errors)
+                delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+                logger.warning(
+                    f"OpenAI rate limit/quota exceeded (attempt {attempt}/{max_retries}). "
+                    f"Retrying in {delay}s..."
+                )
+                await asyncio.sleep(delay)
+                continue
+            logger.error(f"OpenAI rate limit exceeded after {max_retries} attempts: {e}")
+            error_msg = f"OpenAI rate limit/quota exceeded after {max_retries} attempts. "
+            error_msg += f"API Key: {masked_key}. "
+            error_msg += "Please check your OpenAI account billing and quota limits."
+            raise RuntimeError(error_msg)
+        
         except openai.APIError as e:
             last_error = e
+            # Check if it's a 429 error (rate limit/quota) - check status_code or response body
+            status_code = getattr(e, 'status_code', None)
+            response_body = getattr(e, 'response', None) or getattr(e, 'body', None)
+            
+            # Check for 429 in status code or error response
+            is_rate_limit = (
+                status_code == 429 or
+                (response_body and isinstance(response_body, dict) and 
+                 response_body.get('error', {}).get('code') == 'insufficient_quota') or
+                (hasattr(e, 'message') and 'quota' in str(e.message).lower()) or
+                (hasattr(e, 'message') and '429' in str(e.message))
+            )
+            
+            if is_rate_limit:
+                if attempt < max_retries:
+                    # Exponential backoff for 429/quota errors
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+                    logger.warning(
+                        f"OpenAI 429/quota error (attempt {attempt}/{max_retries}). "
+                        f"Retrying in {delay}s... Error: {e}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error(f"OpenAI 429/quota error after {max_retries} attempts: {e}")
+                error_msg = f"OpenAI rate limit/quota exceeded after {max_retries} attempts. "
+                error_msg += f"API Key: {masked_key}. "
+                error_msg += "Please check your OpenAI account billing and quota limits at https://platform.openai.com/account/billing"
+                raise RuntimeError(error_msg)
+            
             logger.warning(f"OpenAI API error (attempt {attempt}/{max_retries}): {e}")
             if attempt < max_retries:
+                # Small delay for other API errors
+                await asyncio.sleep(1)
                 continue
             raise
     
