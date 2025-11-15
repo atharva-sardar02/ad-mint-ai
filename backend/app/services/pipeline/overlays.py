@@ -6,7 +6,7 @@ import platform
 from pathlib import Path
 from typing import Optional
 
-from moviepy import VideoFileClip, TextClip, CompositeVideoClip
+from moviepy import VideoFileClip, TextClip, CompositeVideoClip, ColorClip
 from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
@@ -55,11 +55,12 @@ def add_text_overlay(
         # Apply animation
         text_clip = _apply_animation(text_clip, text_overlay.animation)
         
-        # Position text clip
+        # Position text clip (pass font_size for accurate descender margin calculation)
         positioned_text = _position_text_clip(
             text_clip=text_clip,
             position=text_overlay.position,
-            video_size=video.size
+            video_size=video.size,
+            font_size=text_overlay.font_size
         )
         
         # Composite text onto video
@@ -114,31 +115,62 @@ def _create_text_clip(
     # Calculate text width (90% of video width, must be integer)
     text_width = int(video_size[0] * 0.9)
     
-    # Create text clip
+    # First, create a temporary clip to get the actual rendered height
+    # This helps us calculate proper padding
+    temp_clip = TextClip(
+        text=text_overlay.text,
+        font=font_path,
+        font_size=text_overlay.font_size,
+        color=text_overlay.color,
+        size=(text_width, None),
+        method='caption',
+        text_align='center'
+    )
+    actual_text_height = temp_clip.h
+    temp_clip.close()
+    
+    # Add padding to account for:
+    # 1. Descenders (p, y, g, q, j) - can extend ~30% of font size below baseline
+    # 2. Line spacing in multi-line text - extra space between lines
+    # 3. Shadow offset - shadow extends 2px in each direction
+    # 4. Safety margin - extra padding to prevent any clipping
+    descender_padding = int(text_overlay.font_size * 0.3)  # 30% for descenders
+    line_spacing_padding = int(text_overlay.font_size * 0.2)  # 20% for line spacing
+    shadow_padding = 4  # 2px shadow offset on each side
+    safety_margin = 10  # Extra safety margin
+    
+    # Calculate total padding (add to both top and bottom for safety)
+    total_padding = descender_padding + line_spacing_padding + shadow_padding + safety_margin
+    padded_height = actual_text_height + (total_padding * 2)  # Padding on top and bottom
+    
+    # Create text clip with explicit height that includes padding
+    # Note: When using explicit height with method='caption', the text may not fill
+    # the entire height, but the clip will be the specified size, preventing clipping
     text_clip = TextClip(
         text=text_overlay.text,
         font=font_path,
         font_size=text_overlay.font_size,
         color=text_overlay.color,
-        size=(text_width, None),  # 90% of video width
-        method='caption',  # Auto-wrap text
+        size=(text_width, padded_height),  # Explicit height with padding
+        method='caption',
         text_align='center'
     ).with_duration(duration)
     
     # Add text shadow for readability
-    # Create shadow clip (slightly offset, darker color)
     shadow_color = _get_shadow_color(text_overlay.color)
     shadow_clip = TextClip(
         text=text_overlay.text,
         font=font_path,
         font_size=text_overlay.font_size,
         color=shadow_color,
-        size=(text_width, None),
+        size=(text_width, padded_height),
         method='caption',
         text_align='center'
-    ).with_duration(duration).with_position((2, 2))  # Slight offset for shadow
+    ).with_duration(duration).with_position((2, 2))  # Shadow offset
     
     # Composite shadow and text
+    # The composite will be sized to fit both clips including shadow offset
+    # The padded height ensures descenders and multi-line text have room
     text_with_shadow = CompositeVideoClip([shadow_clip, text_clip])
     
     return text_with_shadow
@@ -242,7 +274,8 @@ def _apply_animation(text_clip: TextClip, animation: str) -> TextClip:
 def _position_text_clip(
     text_clip: TextClip,
     position: str,
-    video_size: tuple
+    video_size: tuple,
+    font_size: int = 48
 ) -> TextClip:
     """
     Position text clip based on specification (top, center, or bottom).
@@ -274,16 +307,25 @@ def _position_text_clip(
         return text_clip.with_position(('center', y_pos))
     
     elif position == "bottom":
-        # Position at bottom with margin - ensure text is fully visible
-        # Calculate margin (10% of video height, minimum 20 pixels)
-        margin = max(int(height * 0.1), 20)
-        # Position so bottom of text is at (height - margin)
-        # y_pos is the top edge of the text, so: y_pos + text_height = height - margin
-        y_pos = int(height - text_height - margin)
+        # Position at bottom with generous margin for descenders and multi-line text
+        # Descenders (p, y, g, q, j) can extend ~30-40% of font size below baseline
+        # TextClip's calculated height doesn't always account for descenders properly
+        # Multi-line text needs extra vertical space
+        # Use a large, safe margin to ensure nothing gets clipped
+        descender_margin = int(font_size * 0.4)  # 40% of font size for descenders
+        base_margin = max(int(height * 0.08), 25)  # Base margin from bottom
+        multi_line_margin = 20  # Extra margin for multi-line text
+        total_margin = base_margin + descender_margin + multi_line_margin
+        
+        # Position so the text clip (including descenders) stays well within bounds
+        y_pos = int(height - text_height - total_margin)
+        
         # Safety check: ensure text doesn't go off-screen
         if y_pos < 0:
-            logger.warning(f"Text height ({text_height}) exceeds available space, positioning at minimum margin")
-            y_pos = max(0, int(height - text_height - 10))  # Minimum 10px margin
+            logger.warning(f"Text height ({text_height}) + margins exceed video height, using minimum safe margin")
+            y_pos = max(0, int(height - text_height - 30))  # Minimum 30px margin
+        
+        logger.debug(f"Bottom positioning: text_height={text_height}, font_size={font_size}, margin={total_margin}, y_pos={y_pos}")
         return text_clip.with_position(('center', y_pos))
     
     else:

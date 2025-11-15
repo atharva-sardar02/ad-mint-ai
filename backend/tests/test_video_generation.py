@@ -61,7 +61,7 @@ async def test_generate_video_clip_success(sample_scene, mock_replicate_client, 
         with patch('app.services.pipeline.video_generation._download_video') as mock_download:
             with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
                 output_dir = str(tmp_path)
-                clip_path = await generate_video_clip(
+                clip_path, model_used = await generate_video_clip(
                     scene=sample_scene,
                     output_dir=output_dir,
                     generation_id="test-gen-123",

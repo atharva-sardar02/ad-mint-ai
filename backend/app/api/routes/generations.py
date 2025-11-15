@@ -159,6 +159,7 @@ async def process_generation(generation_id: str, prompt: str):
                     
                     # Check cache first (scene index is 0-based)
                     cached_clip = None
+                    model_used = None
                     if use_cache:
                         cached_clip = get_cached_clip(prompt, i - 1)
                     
@@ -166,6 +167,7 @@ async def process_generation(generation_id: str, prompt: str):
                         logger.info(f"[{generation_id}] Using cached clip for scene {i}: {cached_clip}")
                         clip_path = cached_clip
                         clip_cost = 0.0  # Cached clips are free
+                        model_used = "cached"  # Mark as cached for logging
                     else:
                         # Update progress to show we're calling the API (this can take 30-60+ seconds)
                         update_generation_progress(
@@ -177,22 +179,23 @@ async def process_generation(generation_id: str, prompt: str):
                         
                         # Generate video clip
                         logger.info(f"[{generation_id}] Calling Replicate API for clip {i}...")
-                        clip_path = await generate_video_clip(
+                        clip_path, model_used = await generate_video_clip(
                             scene=scene,
                             output_dir=temp_output_dir,
                             generation_id=generation_id,
                             scene_number=i,
                             cancellation_check=check_cancellation
                         )
-                        logger.info(f"[{generation_id}] Clip {i} generated successfully: {clip_path}")
+                        logger.info(f"[{generation_id}] Clip {i} generated successfully: {clip_path} (model: {model_used})")
                         
                         # Cache the clip if caching is enabled
                         if use_cache:
                             cache_clip(prompt, i - 1, clip_path)
                         
-                        # Track cost per clip (approximate - actual cost from API response would be better)
-                        model_cost_per_sec = MODEL_COSTS.get(REPLICATE_MODELS["primary"], 0.05)
+                        # Calculate cost using the actual model that was used
+                        model_cost_per_sec = MODEL_COSTS.get(model_used, 0.05)
                         clip_cost = model_cost_per_sec * scene.duration
+                        logger.info(f"[{generation_id}] Clip {i} cost calculated: ${clip_cost:.4f} (model: {model_used}, ${model_cost_per_sec}/sec × {scene.duration}s)")
                     
                     clip_paths.append(clip_path)
                     total_video_cost += clip_cost
@@ -206,15 +209,17 @@ async def process_generation(generation_id: str, prompt: str):
                         current_step=f"Completed clip {i} of {num_scenes}"
                     )
                     
-                    logger.info(f"[{generation_id}] Clip {i} cost: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f}")
+                    logger.info(f"[{generation_id}] Clip {i} cost: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f} (model: {model_used})")
                     
-                    track_video_generation_cost(
-                        db=db,
-                        generation_id=generation_id,
-                        scene_number=i,
-                        cost=clip_cost,
-                        model_name=REPLICATE_MODELS["primary"]
-                    )
+                    # Track cost with actual model used (only for non-cached clips)
+                    if not cached_clip:
+                        track_video_generation_cost(
+                            db=db,
+                            generation_id=generation_id,
+                            scene_number=i,
+                            cost=clip_cost,
+                            model_name=model_used
+                        )
                 
                 # Store temp clip paths
                 generation.temp_clip_paths = clip_paths
