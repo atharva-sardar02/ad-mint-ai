@@ -54,6 +54,8 @@ AI Video Ad Generator is a web application that enables users to create professi
 - **AI-Powered Creative Direction**: LLM automatically determines brand guidelines, colors, style, and music
 - **Framework-Based Storytelling**: Implements proven advertising frameworks (PAS, BAB, AIDA)
 - **Professional Video Composition**: Multi-scene videos with transitions, text overlays, and background music
+- **Video Editing Tools**: Timeline-based editor with trim, split, and merge capabilities for fine-tuning generated videos
+- **Intelligent Quality Optimization**: Automatic video coherence enhancement and LLM-powered prompt optimization for best results
 - **User Management**: Authentication system with video history and profile management
 - **Cost-Effective**: Target cost under $2 per video generated
 
@@ -288,6 +290,40 @@ Our solution transforms a simple text prompt into a publication-ready video adve
    - Output: Video removed from gallery and storage
    - Acceptance: Video no longer accessible
 
+### 7.3 Video Editing User Stories
+
+9. **Edit Generated Video with Timeline**
+   - Action: Open video in editor mode
+   - Output: Timeline interface showing all video clips with visual representation
+   - Acceptance: Timeline displays all clips, durations, and allows navigation
+
+10. **Trim Video Clips**
+   - Action: Select clip on timeline and adjust start/end points
+   - Output: Clip trimmed to selected duration
+   - Acceptance: Trimmed clip updates in timeline, preview shows changes
+
+11. **Split Video Clips**
+   - Action: Click split point on timeline within a clip
+   - Output: Single clip divided into two separate clips
+   - Acceptance: Two clips appear on timeline, can be edited independently
+
+12. **Merge Video Clips**
+   - Action: Select multiple adjacent clips and merge
+   - Output: Multiple clips combined into single clip
+   - Acceptance: Merged clip appears as one segment on timeline
+
+### 7.4 Video Quality Optimization User Stories
+
+13. **Optimize Video Coherence Between Clips**
+   - Action: System automatically analyzes and improves visual consistency
+   - Output: Enhanced transitions and visual flow between clips
+   - Acceptance: Final video shows smooth, coherent visual narrative across all clips
+
+14. **AI-Powered Prompt Optimization**
+   - Action: User provides initial prompt, LLM analyzes and enhances it
+   - Output: Optimized prompt that generates higher quality video
+   - Acceptance: Enhanced prompt produces better visual results than original
+
 ---
 
 ## 8. Functional Requirements
@@ -434,9 +470,86 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 - System shall filter videos by prompt text (optional feature)
 - System shall filter by status (completed, failed, processing)
 
-### 8.4 User Profile
+### 8.4 Video Editing
 
-**FR-022: Profile Display**
+**FR-024: Video Editor Access**
+- System shall provide an editor interface accessible from completed video detail page
+- Editor shall load video with all individual scene clips available for editing
+- Editor shall maintain original video as backup for restoration
+
+**FR-025: Timeline Interface**
+- System shall display a timeline showing all video clips in sequence
+- Timeline shall show visual thumbnails for each clip
+- Timeline shall display clip durations and allow scrubbing/playback
+- Timeline shall support zoom in/out for precise editing
+- Timeline shall show current playback position indicator
+
+**FR-026: Clip Trimming**
+- System shall allow users to select any clip on the timeline
+- System shall provide trim handles (start and end points) for selected clip
+- System shall allow users to adjust trim points by dragging or entering time values
+- System shall provide real-time preview of trimmed clip
+- System shall validate that trim points are within clip boundaries
+- System shall update timeline immediately after trim operation
+
+**FR-027: Clip Splitting**
+- System shall allow users to place a split point at any position within a clip
+- System shall divide the clip into two separate clips at the split point
+- System shall maintain both resulting clips in the timeline sequence
+- System shall preserve all metadata (text overlays, transitions) for both clips
+- System shall allow independent editing of split clips
+
+**FR-028: Clip Merging**
+- System shall allow users to select multiple adjacent clips
+- System shall merge selected clips into a single continuous clip
+- System shall preserve video content and maintain frame rate consistency
+- System shall apply appropriate transitions between merged segments
+- System shall update timeline to show merged clip as single entity
+
+**FR-029: Editor Save and Export**
+- System shall allow users to save editing changes without exporting
+- System shall create new video version when exporting edited video
+- System shall preserve original video for comparison
+- System shall track editing history for undo/redo functionality
+- System shall export edited video in same format and quality as original
+
+### 8.5 Video Quality Optimization
+
+**FR-030: Video Coherence Analysis**
+- System shall automatically analyze visual consistency across all clips in a video
+- System shall detect visual inconsistencies (color, lighting, style, motion)
+- System shall identify optimal transition points between clips
+- System shall assess narrative flow and visual continuity
+
+**FR-031: Coherence Enhancement**
+- System shall automatically apply color grading adjustments to improve consistency
+- System shall optimize transitions between clips for smoother visual flow
+- System shall adjust lighting and contrast to create cohesive visual narrative
+- System shall maintain brand guidelines while improving coherence
+- System shall apply enhancements during video stitching phase
+
+**FR-032: Prompt Optimization via LLM**
+- System shall accept user's initial prompt as input
+- System shall send prompt to LLM (GPT-4/Claude) for analysis and enhancement
+- LLM shall analyze prompt for clarity, specificity, and visual generation potential
+- LLM shall generate optimized prompt that:
+  - Includes relevant visual style keywords
+  - Specifies composition and framing details
+  - Adds brand-appropriate descriptive elements
+  - Enhances product feature descriptions
+  - Improves scene-by-scene visual prompts
+- System shall present optimized prompt to user with explanation of improvements
+- System shall allow user to accept, modify, or reject optimized prompt
+
+**FR-033: Quality Feedback Loop**
+- System shall track video quality metrics (coherence score, visual consistency)
+- System shall learn from user preferences and regeneration patterns
+- System shall improve prompt optimization based on successful video outcomes
+- System shall refine coherence enhancement algorithms based on user feedback
+
+### 8.6 User Profile
+
+**FR-034: Profile Display**
 - System shall show user statistics:
   - Total videos generated
   - Total cost spent
@@ -444,7 +557,7 @@ Our solution transforms a simple text prompt into a publication-ready video adve
   - Last login timestamp
 - Display username and email (if provided)
 
-**FR-023: User Stats Update**
+**FR-035: User Stats Update**
 - System shall increment total_generations on video completion
 - System shall add generation cost to total_cost
 - System shall update last_login on each login
@@ -585,6 +698,9 @@ To keep implementation focused, all capabilities in this PRD are categorized int
    - True concurrent video generation guarantees and request queuing
    - Advanced analytics and engagement dashboards
    - Collaboration features (teams, comments, approvals)
+   - Video editing tools (timeline interface, trim, split, merge clips)
+   - Video coherence optimization (automatic visual consistency enhancement)
+   - LLM-powered prompt optimization (enhance user prompts for better video quality)
    - Advanced video editing tools (scene regeneration, text edits, music changes)
    - Brand asset uploads, logos, and custom fonts
    - Subscription plans, billing, and payment integrations
@@ -1928,12 +2044,12 @@ VITE_API_URL=http://your-ec2-ip
 - Custom fonts (upload TTF files)
 - Brand voice/tone settings
 
-**Video Editing:**
+**Advanced Video Editing:**
 - Regenerate specific scenes
 - Edit text overlays
 - Change music track
-- Adjust scene durations
 - Apply different color grading
+- Advanced timeline effects and filters
 
 ### 20.2 Phase 3 Features
 
@@ -1960,6 +2076,8 @@ VITE_API_URL=http://your-ec2-ip
 - Custom music generation per video
 - Real video footage (not just AI-generated)
 - Character consistency across scenes
+- Advanced prompt optimization with style transfer
+- Multi-model ensemble generation for quality improvement
 
 ### 20.3 Enterprise Features
 
@@ -2356,6 +2474,7 @@ VITE_API_URL=http://your-ec2-ip
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | Nov 14, 2025 | Dev Team | Initial PRD creation |
+| 1.1 | Nov 14, 2025 | PM Agent | Added video editing user stories (timeline, trim, split, merge) and video quality optimization features (coherence enhancement, LLM prompt optimization) |
 
 ---
 
