@@ -44,8 +44,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["generations"])
 
-# Temporary flag: text overlays are disabled due to ongoing font issues (see #TODO)
-TEXT_OVERLAYS_ENABLED = False
+# Text overlays are enabled - font loading uses system fonts with graceful fallback
+TEXT_OVERLAYS_ENABLED = True
 
 
 async def process_generation(generation_id: str, prompt: str):
@@ -228,7 +228,7 @@ async def process_generation(generation_id: str, prompt: str):
                 logger.info(f"[{generation_id}] All {len(clip_paths)} video clips generated, progress: 70% - Adding text overlays")
                 
                 if TEXT_OVERLAYS_ENABLED:
-                    # Normal overlay flow (disabled for now, see flag above)
+                    # Add text overlays to all video clips
                     logger.info(f"[{generation_id}] Starting text overlay addition for {len(clip_paths)} clips...")
                     scene_plan_obj = ScenePlan(**generation.scene_plan)
                     overlay_output_dir = str(temp_dir / f"{generation_id}_overlays")
@@ -240,9 +240,9 @@ async def process_generation(generation_id: str, prompt: str):
                     )
                     logger.info(f"[{generation_id}] Text overlays added successfully to all clips")
                 else:
-                    # TODO: Re-enable overlays once font loading issues are resolved (MoviePy/Pillow errors)
+                    # Fallback: use raw clips without overlays (should not happen with flag enabled)
                     overlay_paths = clip_paths
-                    logger.info(f"[{generation_id}] Text overlay stage temporarily disabled - using raw clips")
+                    logger.warning(f"[{generation_id}] Text overlay stage disabled - using raw clips")
                 
                 # Update temp_clip_paths with overlay paths
                 generation.temp_clip_paths = overlay_paths

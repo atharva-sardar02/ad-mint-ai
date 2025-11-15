@@ -9,7 +9,7 @@ from app.schemas.generation import TextOverlay
 from app.services.pipeline.overlays import (
     add_text_overlay,
     _create_text_clip,
-    _get_font_family,
+    _get_font_path,
     _get_shadow_color,
     _apply_animation,
     _position_text_clip
@@ -39,11 +39,13 @@ def mock_video_clip():
     return clip
 
 
-def test_get_font_family(sample_text_overlay):
-    """Test font family mapping."""
-    font = _get_font_family(sample_text_overlay)
-    assert isinstance(font, str)
-    assert len(font) > 0
+def test_get_font_path():
+    """Test font path retrieval."""
+    font = _get_font_path()
+    # Font path can be None (fallback to MoviePy default) or a string path
+    assert font is None or isinstance(font, str)
+    if font:
+        assert len(font) > 0
 
 
 def test_get_shadow_color():
