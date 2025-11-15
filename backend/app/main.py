@@ -2,8 +2,10 @@
 FastAPI application entry point.
 """
 import logging
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import auth, generations
 from app.core.config import settings
@@ -19,6 +21,11 @@ app = FastAPI(
 # Include routers
 app.include_router(auth.router)
 app.include_router(generations.router)
+
+# Mount static files for serving videos and thumbnails
+output_dir = Path("output")
+if output_dir.exists():
+    app.mount("/output", StaticFiles(directory="output"), name="output")
 
 # CORS middleware configuration
 # Note: CORS middleware should handle preflight OPTIONS requests automatically
