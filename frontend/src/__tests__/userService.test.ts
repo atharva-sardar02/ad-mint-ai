@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { getUserProfile } from "../lib/userService";
 import apiClient from "../lib/apiClient";
+import { API_ENDPOINTS } from "../lib/config";
 import { AuthError } from "../lib/types/api";
 
 // Mock apiClient
@@ -20,7 +21,7 @@ describe("userService", () => {
     vi.clearAllMocks();
   });
 
-  it("should call GET /user/profile and return user profile data", async () => {
+  it("should call GET /api/user/profile and return user profile data", async () => {
     const mockProfile = {
       id: "user-123",
       username: "testuser",
@@ -37,7 +38,7 @@ describe("userService", () => {
 
     const result = await getUserProfile();
 
-    expect(apiClient.get).toHaveBeenCalledWith("/user/profile");
+    expect(apiClient.get).toHaveBeenCalledWith(API_ENDPOINTS.USER.PROFILE);
     expect(result).toEqual(mockProfile);
   });
 

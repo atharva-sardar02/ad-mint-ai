@@ -9,6 +9,8 @@ import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { ProgressBar } from "../components/ProgressBar";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse } from "../lib/generationService";
+import { getUserProfile } from "../lib/userService";
+import type { UserProfile } from "../lib/types/api";
 
 const MIN_PROMPT_LENGTH = 10;
 const MAX_PROMPT_LENGTH = 500;
@@ -28,9 +30,46 @@ export const Dashboard: React.FC = () => {
   const [apiError, setApiError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeGeneration, setActiveGeneration] = useState<StatusResponse | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
+
+  /**
+   * Fetch latest user profile data on mount and when generation completes.
+   */
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const profile = await getUserProfile();
+        setUserProfile(profile);
+      } catch (error) {
+        // Silently fail - user data from auth store will be used as fallback
+        console.warn("Failed to fetch user profile:", error);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  /**
+   * Refresh user profile when generation completes.
+   */
+  useEffect(() => {
+    if (activeGeneration?.status === "completed") {
+      const fetchProfile = async () => {
+        try {
+          const profile = await getUserProfile();
+          setUserProfile(profile);
+        } catch (error) {
+          // Silently fail - existing profile data will remain
+          console.warn("Failed to refresh user profile:", error);
+        }
+      };
+
+      fetchProfile();
+    }
+  }, [activeGeneration?.status]);
 
   /**
    * Real-time validation as user types.
@@ -225,25 +264,25 @@ export const Dashboard: React.FC = () => {
           <p className="text-gray-600 mb-6">
             Create professional video ads from simple text prompts.
           </p>
-          {user && (
+          {(user || userProfile) && (
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-2">
                 User Information
               </h2>
               <div className="space-y-2 text-sm text-gray-600">
                 <p>
-                  <strong>Username:</strong> {user.username}
+                  <strong>Username:</strong> {userProfile?.username || user?.username}
                 </p>
-                {user.email && (
+                {(userProfile?.email || user?.email) && (
                   <p>
-                    <strong>Email:</strong> {user.email}
+                    <strong>Email:</strong> {userProfile?.email || user?.email}
                   </p>
                 )}
                 <p>
-                  <strong>Total Generations:</strong> {user.total_generations}
+                  <strong>Total Generations:</strong> {userProfile?.total_generations ?? user?.total_generations ?? 0}
                 </p>
                 <p>
-                  <strong>Total Cost:</strong> ${user.total_cost.toFixed(2)}
+                  <strong>Total Cost:</strong> ${((userProfile?.total_cost ?? user?.total_cost ?? 0)).toFixed(2)}
                 </p>
               </div>
             </div>

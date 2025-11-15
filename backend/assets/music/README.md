@@ -36,3 +36,5 @@ The audio service (`backend/app/services/pipeline/audio.py`) selects music based
 - Volume is adjusted to 30% to avoid overwhelming video content
 - Music can be looped if shorter than video duration
 
+
+

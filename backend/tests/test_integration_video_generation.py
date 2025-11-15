@@ -218,3 +218,5 @@ async def test_cancellation_during_video_generation(sample_scene_plan, tmp_path)
                 cancellation_check=cancellation_check
             )
 
+
+
