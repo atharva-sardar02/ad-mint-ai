@@ -176,4 +176,4 @@ docs/.doctrees/
 *.pkg
 *.deb
 *.rpm
-**.pyc
+*.pyc*
