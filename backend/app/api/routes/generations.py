@@ -24,7 +24,11 @@ from app.schemas.generation import (
     ScenePlan,
     StatusResponse,
 )
-from app.services.cost_tracking import track_video_generation_cost, track_complete_generation_cost
+from app.services.cost_tracking import (
+    track_video_generation_cost,
+    track_complete_generation_cost,
+    update_user_statistics_on_completion,
+)
 from app.services.cancellation import request_cancellation, handle_cancellation
 from app.services.pipeline.progress_tracking import update_generation_progress, update_generation_status
 from app.services.pipeline.llm_enhancement import enhance_prompt_with_llm
@@ -395,6 +399,13 @@ async def process_generation(generation_id: str, prompt: str):
                     generation_id=generation_id,
                     video_cost=total_video_cost,
                     llm_cost=0.01  # Approximate LLM cost
+                )
+                
+                # Update user statistics (total_generations and total_cost)
+                # This must be called after track_complete_generation_cost() to ensure generation.cost is set
+                update_user_statistics_on_completion(
+                    db=db,
+                    generation_id=generation_id
                 )
                 
                 logger.info(

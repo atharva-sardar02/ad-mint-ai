@@ -1,0 +1,465 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>5</epicId>
+    <storyId>1</storyId>
+    <title>Profile Display</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15T01:01:52Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/5-1-profile-display.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to view my profile page with statistics</iWant>
+    <soThat>I can see my account information and usage</soThat>
+    <tasks>
+- Task 1: Create Backend Profile Endpoint (AC: 1)
+  - Create `GET /api/user/profile` endpoint in `backend/app/api/routes/users.py` or create new route file
+  - Use authentication dependency to get current user
+  - Query user from database with all required fields (id, username, email, total_generations, total_cost, created_at, last_login)
+  - Return user data in response schema
+  - Add proper error handling (401 if not authenticated, 404 if user not found)
+  - Add endpoint to main FastAPI app router
+
+- Task 2: Create User Profile Response Schema (AC: 1)
+  - Create or update `backend/app/schemas/user.py` with `UserProfile` schema
+  - Include fields: id, username, email (optional), total_generations, total_cost, created_at, last_login
+  - Use Pydantic for validation and serialization
+  - Ensure proper date/time serialization (ISO format)
+
+- Task 3: Create Profile Page Component (AC: 2, 3)
+  - Create `frontend/src/routes/Profile.tsx` component
+  - Add route to React Router configuration
+  - Implement page layout with sections for user info and statistics
+  - Display username and email (if provided)
+  - Format account creation date as "Member since: {month} {year}"
+  - Display statistics: Total Videos Generated, Total Cost Spent (formatted as currency), Last Login (relative time)
+  - Include logout button (can reference existing Navbar component or add to page)
+  - Use Tailwind CSS for styling
+  - Ensure responsive design (mobile, tablet, desktop)
+
+- Task 4: Implement Profile Data Fetching (AC: 3)
+  - Create or update `frontend/src/lib/apiClient.ts` or create `userService.ts` for profile API call
+  - Implement `getUserProfile()` function that calls `GET /api/user/profile`
+  - Handle authentication token in request headers
+  - Return typed response matching backend schema
+
+- Task 5: Implement Loading and Error States (AC: 3)
+  - Add loading state to Profile component (show spinner or skeleton while fetching)
+  - Add error state handling (display error message if API call fails)
+  - Handle 401 errors (should redirect to login via existing interceptor)
+  - Handle network errors gracefully
+
+- Task 6: Implement Date and Currency Formatting (AC: 2)
+  - Format account creation date: "Member since: {month} {year}" (e.g., "Member since: Nov 2025")
+  - Format total_cost as currency: ${amount} (e.g., "$24.50")
+  - Format last_login as relative time (e.g., "2 hours ago", "3 days ago")
+  - Use JavaScript Date methods or date formatting library (e.g., date-fns) for relative time
+
+- Task 7: Add Profile Route to Navigation (AC: 2, 3)
+  - Update `frontend/src/components/layout/Navbar.tsx` to include Profile link
+  - Ensure Profile link is visible when authenticated
+  - Style Profile link consistently with other navigation items
+  - Ensure mobile-responsive navigation includes Profile link
+
+- Task 8: Testing (AC: 1, 2, 3)
+  - Create backend unit tests for profile endpoint (test authentication, data retrieval, error cases)
+  - Create backend integration tests for profile endpoint (test with authenticated user)
+  - Create frontend unit tests for Profile component (test rendering, data display, formatting)
+  - Create frontend integration tests for profile page (test API call, loading state, error handling)
+  - Test responsive design on different screen sizes
+  - Test profile page with missing email field
+  - Test profile page with zero generations and zero cost
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Backend Profile Endpoint:**
+   **Given** I am logged in
+   **When** I request my profile via GET `/api/user/profile`
+   **Then** the system returns user information and statistics (total_generations, total_cost, created_at, last_login, username, email)
+
+2. **Frontend Profile Page Display:**
+   **Given** I am logged in
+   **When** I navigate to the profile page
+   **Then** I see:
+   - Username and email (if provided)
+   - Account creation date: "Member since: {month} {year}"
+   - Statistics section:
+     - Total Videos Generated: {total_generations}
+     - Total Cost Spent: ${total_cost} (formatted as currency)
+     - Last Login: {last_login} (formatted as relative time, e.g., "2 hours ago")
+   - Logout button
+
+3. **Profile Page Behavior:**
+   **Given** I am on the profile page
+   **When** the page loads
+   **Then** it makes an API call to `/api/user/profile` on mount
+   **And** shows a loading state while fetching
+   **And** displays error message if fetch fails
+   **And** has responsive design (works on mobile, tablet, desktop)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Story 5.1: Profile Display</section>
+        <snippet>As a user, I want to view my profile page with statistics, so that I can see my account information and usage. Includes backend profile endpoint and frontend profile page with user info, statistics, and responsive design.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR-022: Profile Display</section>
+        <snippet>System shall show user statistics: Total videos generated, Total cost spent, Account creation date, Last login timestamp. Display username and email (if provided).</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>14.4 User Profile Endpoints</section>
+        <snippet>GET /api/user/profile endpoint specification. Returns user information with id, username, email, total_generations, total_cost, created_at, last_login. Requires JWT authentication via Authorization header.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>15.1 User Model</title>
+        <snippet>User model schema with fields: id (UUID), username (unique, indexed), password_hash, email (optional), total_generations, total_cost, created_at, last_login. Includes relationship to generations.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>13.2 Page Layouts - Profile Page</title>
+        <snippet>Profile page UI design showing username, member since date, statistics section with total videos, total cost, success rate, and logout button. Clean, minimal design with responsive layout.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Epic to Architecture Mapping</section>
+        <snippet>User Profile & Stats: Backend GET /api/user/profile endpoint. Frontend Profile.tsx component and optional userStore.ts for state management. Uses existing authentication patterns.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Implementation Patterns</section>
+        <snippet>Error handling follows PRD JSON structure with top-level error key containing code and message fields. Backend uses FastAPI exception handlers. Frontend uses feature-oriented routing with minimal global state via Zustand.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/2-4-logout-functionality.md</path>
+        <title>Story 2.4: Logout Functionality</title>
+        <section>Dev Notes - Learnings from Previous Story</section>
+        <snippet>Authentication dependency get_current_user already implemented in backend/app/api/deps.py. Frontend API client configured with request interceptor. ProtectedRoute component exists. Navbar component includes logout functionality.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/api/deps.py</path>
+        <kind>FastAPI dependency</kind>
+        <symbol>get_current_user</symbol>
+        <lines>16-66</lines>
+        <reason>Authentication dependency to get current authenticated user from JWT token. Use this for the profile endpoint to ensure only authenticated users can access their profile.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/auth.py</path>
+        <kind>FastAPI route</kind>
+        <symbol>get_current_user_info</symbol>
+        <lines>152-171</lines>
+        <reason>Existing /api/auth/me endpoint returns UserResponse but missing created_at and last_login. Profile endpoint should follow similar pattern but include all required fields. Can reference this implementation pattern.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/db/models/user.py</path>
+        <kind>SQLAlchemy model</kind>
+        <symbol>User</symbol>
+        <lines>13-28</lines>
+        <reason>User model already has all required fields: id, username, email, total_generations, total_cost, created_at, last_login. No model changes needed.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/schemas/auth.py</path>
+        <kind>Pydantic schema</kind>
+        <symbol>UserResponse</symbol>
+        <lines>26-36</lines>
+        <reason>Existing UserResponse schema missing created_at and last_login. Need to create new UserProfile schema or extend UserResponse to include these fields for profile endpoint.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/main.py</path>
+        <kind>FastAPI application</kind>
+        <symbol>app</symbol>
+        <lines>1-39</lines>
+        <reason>Main FastAPI app where routers are included. Need to create users router and include it here for /api/user/profile endpoint.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/routes/Profile.tsx</path>
+        <kind>React component</kind>
+        <symbol>Profile</symbol>
+        <lines>1-49</lines>
+        <reason>Placeholder Profile component exists but needs enhancement. Currently shows basic user info from authStore. Need to fetch full profile data from API, add loading/error states, format dates and currency, display all statistics.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/layout/Navbar.tsx</path>
+        <kind>React component</kind>
+        <symbol>Navbar</symbol>
+        <lines>52-57, 156-162</lines>
+        <reason>Navbar already includes Profile link in both desktop and mobile menus. No changes needed for navigation, but Profile component itself needs implementation.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/lib/apiClient.ts</path>
+        <kind>API client</kind>
+        <symbol>apiClient</symbol>
+        <lines>1-105</lines>
+        <reason>Axios instance with request/response interceptors already configured. Request interceptor adds JWT token automatically. Response interceptor handles 401 errors. Use this for profile API calls.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/ProtectedRoute.tsx</path>
+        <kind>React component</kind>
+        <symbol>ProtectedRoute</symbol>
+        <lines>1-32</lines>
+        <reason>ProtectedRoute component already wraps Profile route in App.tsx. Ensures only authenticated users can access profile page. No changes needed.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/App.tsx</path>
+        <kind>React component</kind>
+        <symbol>App</symbol>
+        <lines>73-79</lines>
+        <reason>Profile route already configured with ProtectedRoute wrapper. Route is set up correctly, just needs Profile component implementation.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/store/authStore.ts</path>
+        <kind>Zustand store</kind>
+        <symbol>authStore</symbol>
+        <lines>1-116</lines>
+        <reason>Auth store pattern established. Consider creating userStore for profile data, but local component state is acceptable for MVP. Auth store already has user object but may not have all profile fields.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <node>
+        <package>react</package>
+        <version>^19.2.0</version>
+      </package>
+      <package>react-dom</package>
+        <version>^19.2.0</version>
+      </package>
+      <package>react-router-dom</package>
+        <version>^7.9.6</version>
+      </package>
+      <package>axios</package>
+        <version>^1.13.2</version>
+      </package>
+      <package>zustand</package>
+        <version>^5.0.8</version>
+      </package>
+      <package>tailwindcss</package>
+        <version>^4.1.17</version>
+      </package>
+      <package>typescript</package>
+        <version>~5.9.3</version>
+      </package>
+      <package>vitest</package>
+        <version>^2.1.8</version>
+      </package>
+      <package>@testing-library/react</package>
+        <version>^16.1.0</version>
+      </package>
+      </node>
+      <python>
+        <package>fastapi</package>
+        <version>>=0.104.0</version>
+      </package>
+      <package>uvicorn</package>
+        <version>>=0.24.0</version>
+      </package>
+      <package>sqlalchemy</package>
+        <version>>=2.0.0</version>
+      </package>
+      <package>pydantic</package>
+        <version>>=2.0.0</version>
+      </package>
+      <package>pytest</package>
+        <version>>=7.4.0</version>
+      </package>
+      <package>httpx</package>
+        <version>>=0.24.0</version>
+      </package>
+      <package>PyJWT</package>
+        <version>>=2.8.0</version>
+      </package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <type>Architecture Pattern</type>
+      <description>Backend uses FastAPI with SQLAlchemy ORM. Profile endpoint must use get_current_user dependency for authentication. Follow existing route patterns in auth.py.</description>
+    </constraint>
+    <constraint>
+      <type>API Design</type>
+      <description>All API errors must follow PRD JSON structure: { "error": { "code": "...", "message": "..." } }. Use FastAPI exception handlers for consistent error responses.</description>
+    </constraint>
+    <constraint>
+      <type>Frontend Framework</type>
+      <description>React 18 + TypeScript + Vite. Use Tailwind CSS for styling. Profile component should use local state for MVP (Zustand userStore optional).</description>
+    </constraint>
+    <constraint>
+      <type>Routing</type>
+      <description>Profile route already protected with ProtectedRoute component. Route is /profile. No routing changes needed.</description>
+    </constraint>
+    <constraint>
+      <type>Authentication</type>
+      <description>Profile endpoint requires JWT authentication. Frontend API client automatically adds Authorization header via request interceptor. 401 errors automatically redirect to login.</description>
+    </constraint>
+    <constraint>
+      <type>Data Formatting</type>
+      <description>Date and currency formatting done on frontend. Backend returns raw ISO datetime strings. Use JavaScript Date API or date-fns for relative time. Use Intl.NumberFormat for currency.</description>
+    </constraint>
+    <constraint>
+      <type>Responsive Design</type>
+      <description>Profile page must work on mobile, tablet, and desktop. Use Tailwind responsive classes. Follow existing component patterns for consistency.</description>
+    </constraint>
+    <constraint>
+      <type>Testing</type>
+      <description>Backend tests in backend/tests/ using pytest. Frontend tests in frontend/src/__tests__/ using vitest and @testing-library/react. Test authentication, data retrieval, error handling, and UI rendering.</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GET /api/user/profile</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /api/user/profile
+Headers: Authorization: Bearer {jwt_token}
+Response: 200 OK {
+  "id": "user_id",
+  "username": "string",
+  "email": "string | null",
+  "total_generations": 0,
+  "total_cost": 0.0,
+  "created_at": "2025-11-10T08:30:00Z",
+  "last_login": "2025-11-14T10:15:00Z | null"
+}
+Error: 401 Unauthorized { "error": { "code": "INVALID_TOKEN", "message": "Invalid or expired token" } }
+Error: 404 Not Found { "error": { "code": "USER_NOT_FOUND", "message": "User not found" } }</signature>
+      <path>backend/app/api/routes/users.py (to be created)</path>
+    </interface>
+    <interface>
+      <name>get_current_user</name>
+      <kind>FastAPI dependency</kind>
+      <signature>def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> User
+Extracts JWT token from Authorization header (Bearer format)
+Verifies token signature and expiration
+Queries database for user by user_id from token
+Returns User object or raises HTTPException(401) if invalid/expired</signature>
+      <path>backend/app/api/deps.py</path>
+    </interface>
+    <interface>
+      <name>UserProfile</name>
+      <kind>Pydantic schema</kind>
+      <signature>class UserProfile(BaseModel):
+    id: str
+    username: str
+    email: Optional[str]
+    total_generations: int
+    total_cost: float
+    created_at: datetime
+    last_login: Optional[datetime]
+    
+    class Config:
+        from_attributes = True</signature>
+      <path>backend/app/schemas/user.py (to be created or updated)</path>
+    </interface>
+    <interface>
+      <name>apiClient</name>
+      <kind>Axios instance</kind>
+      <signature>const apiClient: AxiosInstance
+Request interceptor: Adds JWT token from localStorage to Authorization header
+Response interceptor: Handles 401 errors (clears token, redirects to login)
+Base URL: API_BASE_URL from config
+Timeout: 30000ms</signature>
+      <path>frontend/src/lib/apiClient.ts</path>
+    </interface>
+    <interface>
+      <name>ProtectedRoute</name>
+      <kind>React component</kind>
+      <signature>export const ProtectedRoute: React.FC&lt;ProtectedRouteProps&gt;
+Props: { children: React.ReactNode }
+Checks isAuthenticated from authStore
+Redirects to /login if not authenticated
+Saves original URL in location state for post-login redirect</signature>
+      <path>frontend/src/components/ProtectedRoute.tsx</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>Backend testing uses pytest with httpx for API testing. Test files in backend/tests/ directory. Use dependency overrides for database session and authentication. Test authentication requirements, data retrieval, error cases (401, 404). Frontend testing uses vitest with @testing-library/react. Test files in frontend/src/__tests__/ directory. Test component rendering, API calls (mocked), loading states, error handling, data formatting, and responsive design. Follow existing test patterns from authentication stories.</standards>
+    <locations>
+      <location>backend/tests/</location>
+      <location>frontend/src/__tests__/</location>
+    </locations>
+    <ideas>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test GET /api/user/profile with valid JWT token returns user data with all fields (id, username, email, total_generations, total_cost, created_at, last_login)</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test GET /api/user/profile without token returns 401 Unauthorized</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test GET /api/user/profile with invalid/expired token returns 401 Unauthorized</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component renders username and email (when provided)</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component formats account creation date as "Member since: {month} {year}"</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component displays total_generations, total_cost (formatted as currency), and last_login (formatted as relative time)</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component shows logout button</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Frontend: Test Profile component makes API call to /api/user/profile on mount</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Frontend: Test Profile component shows loading state while fetching data</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Frontend: Test Profile component displays error message when API call fails</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Frontend: Test Profile component handles 401 error (should redirect via interceptor)</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Frontend: Test Profile component is responsive (mobile, tablet, desktop layouts)</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component handles missing email field gracefully</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component displays zero values correctly (0 generations, $0.00 cost)</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Frontend: Test Profile component handles null last_login (user never logged in)</description>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

@@ -496,6 +496,49 @@ def test_cost_calculation_and_user_total_cost_update(test_user, db_session: Sess
     assert test_user.total_cost == pytest.approx(initial_cost + video_cost + llm_cost, abs=0.001)
 
 
+def test_generation_completion_updates_user_statistics(test_user, db_session: Session):
+    """Integration test: Generation completion updates both total_generations and total_cost (AC-5.2.1)."""
+    from app.services.cost_tracking import track_complete_generation_cost, update_user_statistics_on_completion
+    
+    # Create generation
+    generation = Generation(
+        user_id=test_user.id,
+        prompt="Test prompt",
+        status="processing",
+    )
+    db_session.add(generation)
+    db_session.commit()
+    
+    # Initial user statistics
+    initial_generations = test_user.total_generations or 0
+    initial_cost = test_user.total_cost or 0.0
+    
+    # Track complete generation cost (sets generation.cost)
+    video_cost = 0.15
+    llm_cost = 0.01
+    track_complete_generation_cost(
+        db=db_session,
+        generation_id=generation.id,
+        video_cost=video_cost,
+        llm_cost=llm_cost
+    )
+    
+    # Update user statistics (increments total_generations and adds cost)
+    update_user_statistics_on_completion(
+        db=db_session,
+        generation_id=generation.id
+    )
+    
+    # Verify generation cost
+    db_session.refresh(generation)
+    assert generation.cost == pytest.approx(video_cost + llm_cost, abs=0.001)
+    
+    # Verify user statistics updated correctly
+    db_session.refresh(test_user)
+    assert test_user.total_generations == initial_generations + 1
+    assert test_user.total_cost == pytest.approx(initial_cost + video_cost + llm_cost, abs=0.001)
+
+
 def test_cancellation_flow_request_stop_cleanup(test_user, db_session: Session, tmp_path, monkeypatch):
     """Integration test: Complete cancellation flow (request → stop → cleanup)."""
     from app.services.cancellation import request_cancellation, handle_cancellation, cleanup_generation_temp_files

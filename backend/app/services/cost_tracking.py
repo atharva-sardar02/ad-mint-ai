@@ -128,6 +128,75 @@ def update_user_total_cost(
     )
 
 
+def update_user_statistics_on_completion(
+    db: Session,
+    generation_id: str
+) -> None:
+    """
+    Update user statistics (total_generations and total_cost) when generation completes.
+    
+    This function increments user.total_generations by 1 and adds generation.cost
+    to user.total_cost atomically within a single database transaction.
+    
+    Args:
+        db: Database session
+        generation_id: Generation ID that completed
+    
+    Raises:
+        Logs errors but does not raise exceptions to avoid breaking generation completion flow
+    """
+    try:
+        # Get generation record to find user_id and cost
+        generation = db.query(Generation).filter(Generation.id == generation_id).first()
+        if not generation:
+            logger.error(f"Generation {generation_id} not found for statistics update")
+            return
+        
+        if generation.cost is None:
+            logger.warning(
+                f"Generation {generation_id} has no cost set. "
+                f"Statistics update skipped. Cost should be set before calling this function."
+            )
+            return
+        
+        # Get user record
+        user = db.query(User).filter(User.id == generation.user_id).first()
+        if not user:
+            logger.error(f"User {generation.user_id} not found for statistics update")
+            return
+        
+        # Store initial values for logging
+        initial_generations = user.total_generations or 0
+        initial_cost = user.total_cost or 0.0
+        
+        # Update statistics atomically within transaction
+        if user.total_generations is None:
+            user.total_generations = 0
+        user.total_generations += 1
+        
+        if user.total_cost is None:
+            user.total_cost = 0.0
+        user.total_cost += generation.cost
+        
+        # Commit transaction (atomic update)
+        db.commit()
+        
+        logger.info(
+            f"User statistics updated for user {user.id}: "
+            f"total_generations {initial_generations} → {user.total_generations}, "
+            f"total_cost ${initial_cost:.4f} → ${user.total_cost:.4f} "
+            f"(added ${generation.cost:.4f} from generation {generation_id})"
+        )
+    except Exception as e:
+        # Log error but don't raise - statistics update failure shouldn't break generation completion
+        logger.error(
+            f"Error updating user statistics for generation {generation_id}: {e}",
+            exc_info=True
+        )
+        # Rollback transaction on error
+        db.rollback()
+
+
 def track_complete_generation_cost(
     db: Session,
     generation_id: str,

@@ -64,7 +64,7 @@ development_status:
   4-4-video-search-optional: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-profile-display: backlog
-  5-2-user-stats-update: backlog
+  epic-5: contexted
+  5-1-profile-display: done
+  5-2-user-stats-update: done
   epic-5-retrospective: optional
