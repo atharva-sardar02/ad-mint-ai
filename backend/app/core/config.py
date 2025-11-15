@@ -41,6 +41,11 @@ class Settings:
         ).split(",")
     ]
 
+    # Static file serving configuration
+    STATIC_BASE_URL: str = os.getenv(
+        "STATIC_BASE_URL", "http://localhost:8000/output"
+    )
+
 
 settings = Settings()
 

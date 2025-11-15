@@ -5,8 +5,14 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+# Import all models to ensure they're registered with Base.metadata
 from app.db.base import Base
-from app.db.models import Generation, User
+from app.db.models.generation import Generation
+from app.db.models.user import User
+
+# Ensure models are registered (explicit import)
+_ = Generation
+_ = User
 
 
 @pytest.fixture(scope="function")
