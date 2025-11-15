@@ -4,7 +4,7 @@ FastAPI application entry point.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth
+from app.api.routes import auth, generations
 from app.core.config import settings
 
 app = FastAPI(
@@ -15,6 +15,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(generations.router)
 
 # CORS middleware configuration
 app.add_middleware(

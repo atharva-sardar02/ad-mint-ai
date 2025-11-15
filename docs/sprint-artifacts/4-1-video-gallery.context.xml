@@ -1,0 +1,273 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>epic-4</epicId>
+    <storyId>4.1</storyId>
+    <title>Video Gallery</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14T19:51:02</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/4-1-video-gallery.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a user</asA>
+    <iWant>I want to see all my generated videos in a grid layout</iWant>
+    <soThat>So that I can quickly browse and select videos</soThat>
+    <tasks>
+      - Task 1: Create Backend Gallery Endpoint (AC: 1)
+        - Create `app/api/routes/generations.py` file (if not exists)
+        - Implement `GET /api/generations` endpoint with JWT authentication
+        - Add query parameter validation (limit, offset, status, q, sort)
+        - Implement database query with user_id filtering
+        - Add pagination logic (calculate total, apply limit/offset)
+        - Implement status filtering (if status parameter provided)
+        - Implement search filtering (if q parameter provided, case-insensitive)
+        - Return response with GenerationListItem schema
+        - Add error handling (401, 422, 500)
+      - Task 2: Create Pydantic Schemas for Gallery (AC: 1)
+        - Create or update `app/schemas/generation.py`
+        - Define `GenerationListItem` schema with required fields
+        - Define `GenerationListResponse` schema (total, limit, offset, generations)
+        - Add proper field types and optional fields
+      - Task 3: Create Frontend Gallery Component (AC: 2, 5, 6)
+        - Create `frontend/src/routes/Gallery.tsx` component
+        - Implement responsive grid layout (Tailwind CSS)
+        - Create `frontend/src/components/ui/VideoCard.tsx` component
+        - Display video thumbnail, status badge, prompt preview, cost, date
+        - Implement empty state UI
+        - Add click handler to navigate to video detail page
+        - Add loading state while fetching videos
+      - Task 4: Implement Pagination (AC: 3)
+        - Add "Load More" button to Gallery component
+        - Implement pagination state management (offset, hasMore)
+        - Handle "Load More" click to fetch next page
+        - Append new videos to existing list
+        - Hide "Load More" button when no more videos
+      - Task 5: Implement Status Filtering (AC: 4)
+        - Add status filter dropdown to Gallery component
+        - Implement filter state management
+        - Update API call to include status parameter
+        - Reset pagination when filter changes
+        - Persist filter when loading more pages
+      - Task 6: Create API Client Function (AC: 1, 3, 4)
+        - Create `getGenerations` function in API client or service
+        - Accept query parameters (limit, offset, status, q)
+        - Make authenticated API call to `/api/generations`
+        - Return typed response (GenerationListResponse)
+        - Handle errors appropriately
+      - Task 7: Testing (AC: 1, 2, 3, 4, 5, 6)
+        - Create backend unit tests for gallery endpoint
+        - Test pagination logic
+        - Test status filtering
+        - Test search filtering
+        - Test user ownership verification
+        - Create frontend unit tests for Gallery component
+        - Create frontend unit tests for VideoCard component
+        - Create integration tests for gallery page load
+        - Test pagination flow
+        - Test status filtering flow
+        - Test empty state display
+        - Test video card navigation
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Backend Gallery Endpoint:
+       Given I am logged in
+       When I request `GET /api/generations?limit=20&offset=0`
+       Then I receive a response with `total`, `limit`, `offset`, and `generations` array
+       And only my videos are returned (user_id matches JWT token)
+       And results are sorted by `created_at DESC` (newest first)
+
+    2. Frontend Gallery Display:
+       Given I am on the gallery page
+       When the page loads with video data
+       Then I see a grid layout (1 column mobile, 2-3 tablet, 4+ desktop)
+       And each video card shows thumbnail, status badge, prompt preview, cost, and date
+
+    3. Gallery Pagination:
+       Given I have more than 20 videos
+       When I view the gallery
+       Then I see a "Load More" button or pagination controls
+       And clicking loads the next page of results
+
+    4. Status Filtering:
+       Given I have videos with different statuses
+       When I select a status filter (All, Completed, Processing, Failed)
+       Then the gallery shows only videos matching that status
+       And the filter persists when loading more pages
+
+    5. Empty State:
+       Given I have no videos generated
+       When I navigate to the gallery page
+       Then I see an empty state message indicating no videos exist
+
+    6. Video Card Navigation:
+       Given I am viewing the gallery
+       When I click on a video thumbnail or card
+       Then I navigate to the video detail page for that video
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Functional Requirements FR-017">
+        Video Gallery requirement: System shall display all user's generated videos in grid layout. Part of Epic 4 (Video Management) covering FR-017 through FR-021.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications">
+        API specifications for GET /api/generations endpoint with pagination, filtering, and search support. Response format includes total, limit, offset, and generations array.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Non-Functional Requirements">
+        Performance requirement NFR-002: Gallery page load time must be less than 1 second. Database query with filters should complete in under 200ms.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Overview">
+        Epic 4: Video Management enables users to view, play, download, search, and delete their generated videos. Story 4.1 covers the gallery interface with pagination, filtering, and search capabilities.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="APIs and Interfaces">
+        GET /api/generations endpoint specification with query parameters (limit, offset, status, q, sort), response schema (GenerationListResponse), and error codes (401, 422).
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Workflows and Sequencing">
+        Gallery Page Load Flow: User navigates to /gallery, component calls GET /api/generations, backend verifies JWT and queries database, frontend renders grid layout with video cards.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Data Models and Contracts">
+        Generation model structure with all required fields (id, user_id, prompt, status, video_url, thumbnail_url, duration, cost, created_at, completed_at). Pydantic schemas: GenerationListItem and GenerationListResponse.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary">
+        Backend: FastAPI 0.104+ with SQLAlchemy 2.0+. Frontend: React 18 + TypeScript + Vite. Styling: Tailwind CSS 3.3+. State management: Zustand for auth, local state for gallery.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Backend routes in `app/api/routes/`, schemas in `app/schemas/`, models in `app/db/models/`. Frontend routes in `src/routes/`, components in `src/components/ui/`, API client in `src/lib/apiClient.ts`.
+      </doc>
+      <doc path="docs/epics.md" title="Epics Document" section="Epic 4: Video Management">
+        Story 4.1 goal: Enable users to see all generated videos in grid layout with responsive design, pagination, search, and status filtering. Prerequisites: Stories 1.2, 1.3, 2.3, 1.4.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-38" reason="Existing Generation ORM model with all required fields (id, user_id, prompt, status, video_url, thumbnail_url, duration, cost, created_at, completed_at). No changes needed for this story." />
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_current_user" lines="16-66" reason="JWT authentication dependency for FastAPI routes. Use `Depends(get_current_user)` to get authenticated user in gallery endpoint." />
+      <artifact path="backend/app/api/routes/auth.py" kind="route" symbol="router" lines="20-156" reason="Example FastAPI route structure with JWT authentication. Follow this pattern for creating generations.py router with authenticated endpoints." />
+      <artifact path="backend/app/core/security.py" kind="utility" symbol="decode_access_token" lines="76-94" reason="JWT token decoding utility used by get_current_user dependency. Already integrated, no changes needed." />
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="apiClient" lines="1-106" reason="Axios instance with JWT token interceptors. Reuse for authenticated API calls to /api/generations. Token automatically added to Authorization header." />
+      <artifact path="frontend/src/store/authStore.ts" kind="store" symbol="useAuthStore" lines="1-122" reason="Zustand auth store with user state and token. Use `useAuthStore()` hook to check authentication state. Token stored in localStorage and automatically used by apiClient." />
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="Dashboard" lines="1-63" reason="Example React component with TypeScript, Tailwind CSS styling, and useAuthStore hook. Follow this pattern for Gallery component structure and styling." />
+      <artifact path="frontend/src/components/layout/Navbar.tsx" kind="component" symbol="Navbar" lines="1-100" reason="Example component structure and Tailwind CSS patterns. Reference for component organization and styling approach." />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="tailwindcss" version="^4.1.17" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="PyJWT" version=">=2.8.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="httpx" version=">=0.24.0" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Backend Framework: FastAPI 0.104+ with SQLAlchemy 2.0+ (from Epic 1)
+    - Authentication: JWT-based authentication via dependency injection using `get_current_user` from `app/api/deps.py` (from Epic 2)
+    - Database: PostgreSQL (production) or SQLite (development) with existing Generation model - no model changes needed
+    - Frontend Framework: React 18 + TypeScript + Vite (from Epic 1)
+    - State Management: Local component state for gallery (no global Zustand store needed for MVP)
+    - Routing: React Router 6+ for navigation to `/gallery` and `/gallery/:id` routes
+    - Styling: Tailwind CSS 3.3+ for responsive grid layout (follow existing component patterns)
+    - API Client: Axios with interceptors (from Epic 2) - reuse existing apiClient instance
+    - Error Handling: User-friendly error messages following PRD error structure with `error.code` and `error.message` format
+    - Testing: Backend uses pytest with FastAPI TestClient, frontend uses Vitest with React Testing Library
+    - File Paths: All paths must be project-relative (not absolute) in documentation and code references
+    - Component Structure: Follow existing patterns from Navbar and Dashboard components
+    - API Response Format: Follow existing auth routes pattern with proper status codes and error responses
+  </constraints>
+
+  <interfaces>
+    <interface name="GET /api/generations" kind="REST endpoint" signature="GET /api/generations?limit={int}&amp;offset={int}&amp;status={string}&amp;q={string}&amp;sort={string}" path="backend/app/api/routes/generations.py">
+      Query Parameters:
+      - limit (int, default: 20, max: 100): Number of results per page
+      - offset (int, default: 0): Pagination offset
+      - status (string, optional): Filter by status (completed, processing, failed, pending)
+      - q (string, optional): Search term for prompt text (case-insensitive substring match)
+      - sort (string, default: "created_at_desc"): Sort order
+      
+      Response (200 OK):
+      {
+        "total": int,
+        "limit": int,
+        "offset": int,
+        "generations": [
+          {
+            "id": string,
+            "prompt": string,
+            "status": string,
+            "video_url": string | null,
+            "thumbnail_url": string | null,
+            "duration": int,
+            "cost": float | null,
+            "created_at": datetime,
+            "completed_at": datetime | null
+          }
+        ]
+      }
+      
+      Errors:
+      - 401: Unauthorized (invalid/missing token)
+      - 422: Validation error (invalid query parameters)
+    </interface>
+    <interface name="get_current_user" kind="FastAPI dependency" signature="get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -&gt; User" path="backend/app/api/deps.py">
+      FastAPI dependency that extracts JWT token from Authorization header, verifies it, and returns User object. Raises HTTPException(401) if token is invalid, expired, or user not found. Use with `Depends(get_current_user)` in route handlers.
+    </interface>
+    <interface name="apiClient" kind="Axios instance" signature="apiClient: AxiosInstance" path="frontend/src/lib/apiClient.ts">
+      Pre-configured Axios instance with base URL, timeout, and interceptors. Request interceptor automatically adds JWT token from localStorage to Authorization header. Response interceptor handles 401 errors by clearing token and redirecting to login. Use for all authenticated API calls.
+    </interface>
+    <interface name="useAuthStore" kind="Zustand store hook" signature="useAuthStore(): AuthState" path="frontend/src/store/authStore.ts">
+      Zustand authentication store hook. Returns { user, token, isAuthenticated, login, register, logout, loadUser }. Token is automatically stored in localStorage and used by apiClient interceptors. Use to check authentication state in components.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend testing uses pytest with FastAPI TestClient for integration tests. Test structure follows existing patterns in `backend/tests/test_auth_routes.py` with dependency overrides for database session. Unit tests should test query building logic, pagination calculations, and filtering logic in isolation. Frontend testing uses Vitest with React Testing Library following patterns in `frontend/src/__tests__/authStore.test.ts`. Component tests should verify rendering, user interactions, state management, and API call handling with mocked responses. Integration tests verify complete flows: page load → API call → display → pagination → filtering. All tests should use proper mocking of dependencies (API calls, localStorage, navigation).
+    </standards>
+    <locations>
+      Backend tests: `backend/tests/test_generations.py` (new file to create)
+      Frontend tests: `frontend/src/__tests__/Gallery.test.tsx` (new file to create), `frontend/src/__tests__/VideoCard.test.tsx` (new file to create)
+      Test setup: `backend/tests/conftest.py` (existing), `frontend/src/__tests__/setup.ts` (existing)
+    </locations>
+    <ideas>
+      <test acId="AC-4.1.1" idea="Test GET /api/generations returns paginated list with correct structure (total, limit, offset, generations array)" />
+      <test acId="AC-4.1.1" idea="Test GET /api/generations only returns videos for authenticated user (user_id filtering)" />
+      <test acId="AC-4.1.1" idea="Test GET /api/generations sorts results by created_at DESC (newest first)" />
+      <test acId="AC-4.1.1" idea="Test GET /api/generations returns 401 if JWT token is missing or invalid" />
+      <test acId="AC-4.1.1" idea="Test GET /api/generations validates query parameters (limit max 100, offset >= 0, status enum)" />
+      <test acId="AC-4.1.4" idea="Test GET /api/generations with status filter returns only videos matching that status" />
+      <test acId="AC-4.1.4" idea="Test GET /api/generations with q parameter performs case-insensitive search on prompt field" />
+      <test acId="AC-4.1.2" idea="Test Gallery component renders grid layout with correct responsive classes (1 col mobile, 2-3 tablet, 4+ desktop)" />
+      <test acId="AC-4.1.2" idea="Test VideoCard component displays thumbnail, status badge, prompt preview, cost, and date" />
+      <test acId="AC-4.1.2" idea="Test Gallery component shows loading state while fetching videos" />
+      <test acId="AC-4.1.5" idea="Test Gallery component displays empty state message when no videos exist" />
+      <test acId="AC-4.1.3" idea="Test Gallery component shows 'Load More' button when hasMore is true" />
+      <test acId="AC-4.1.3" idea="Test clicking 'Load More' button fetches next page and appends to existing list" />
+      <test acId="AC-4.1.3" idea="Test 'Load More' button is hidden when no more videos available" />
+      <test acId="AC-4.1.4" idea="Test status filter dropdown updates API call with status parameter" />
+      <test acId="AC-4.1.4" idea="Test status filter persists when loading more pages" />
+      <test acId="AC-4.1.4" idea="Test changing status filter resets pagination (offset to 0)" />
+      <test acId="AC-4.1.6" idea="Test clicking video card navigates to video detail page with correct generation_id" />
+      <test acId="AC-4.1.6" idea="Test video card click handler uses React Router navigate function" />
+      <test acId="Integration" idea="Integration test: User logs in → navigates to /gallery → sees video grid → clicks 'Load More' → sees more videos → filters by status → sees filtered results" />
+      <test acId="Integration" idea="Integration test: User with no videos → navigates to /gallery → sees empty state message" />
+      <test acId="Error Handling" idea="Test Gallery component handles API errors gracefully (network errors, 401, 500) and displays user-friendly error messages" />
+      <test acId="Error Handling" idea="Test apiClient interceptor handles 401 by clearing token and redirecting to login when gallery API call fails" />
+    </ideas>
+  </tests>
+</story-context>
+
