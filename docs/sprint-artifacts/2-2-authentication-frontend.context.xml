@@ -1,0 +1,157 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>2</storyId>
+    <title>Authentication Frontend</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/2-2-authentication-frontend.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>registration and login forms</iWant>
+    <soThat>I can create an account and authenticate through the web interface</soThat>
+    <tasks>
+      <task id="1" ac="1,3">Create Registration Page Component - Create Register.tsx, implement form with validation, loading states, error handling, mobile-responsive design</task>
+      <task id="2" ac="2,3">Create Login Page Component - Create Login.tsx, implement form with validation, token storage, auth store update, redirect to dashboard</task>
+      <task id="3" ac="1,2">Create Auth Service Module - Create authService.ts with register, login, logout, getCurrentUser functions, TypeScript types, error handling</task>
+      <task id="4" ac="2">Create Zustand Auth Store - Create authStore.ts with AuthState interface, login/register/logout/loadUser actions, localStorage persistence</task>
+      <task id="5" ac="2">Configure API Client with Interceptors - Update apiClient.ts request interceptor for token, response interceptor for 401 handling</task>
+      <task id="6" ac="1,2">Set Up React Router Routes - Add /login and /register routes in App.tsx, navigation links</task>
+      <task id="7" ac="1,2,3">Create Reusable Form Components - Create Input.tsx, Button.tsx, ErrorMessage.tsx with Tailwind styling, TypeScript props, accessibility</task>
+      <task id="8" ac="1,2,3">Testing - Unit tests for authStore, authService, form validation; integration tests for registration/login flows; E2E tests; mobile responsiveness</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <ac id="1">
+      <given>I am on the registration page</given>
+      <when>I view and submit the registration form</when>
+      <then>I see real-time validation feedback, can successfully create an account, form shows loading state, success message appears and redirects to login</then>
+    </ac>
+    <ac id="2">
+      <given>I am on the login page</given>
+      <when>I submit valid credentials</when>
+      <then>I am authenticated and redirected to dashboard, token is stored in localStorage, auth state is updated in Zustand store</then>
+    </ac>
+    <ac id="3">
+      <given>I am on registration or login form</given>
+      <when>I enter invalid data</when>
+      <then>validation errors appear in real-time, submit button is disabled until form is valid, error messages are clear and actionable</then>
+    </ac>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="User Authentication (Section 8.1), User Interface Design (Section 13), Non-Functional Requirements (Section 9)">
+        <snippet>User registration with username and password, JWT-based authentication with 7-day expiration, protected routes, user-friendly error messages. Frontend uses React 18 + TypeScript + Vite + Tailwind CSS, mobile-responsive design, clean minimal UI.</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 2: User Authentication, Story 2.2">
+        <snippet>Story 2.2 implements registration and login forms with client-side validation, loading states, success/error feedback, mobile-responsive design. Uses Zustand for auth state, stores token in localStorage, uses Tailwind CSS.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-2.md" title="Epic Technical Specification: User Authentication" section="AC-2.2.1, AC-2.2.2, AC-2.2.3, Frontend API Client Interface, Frontend Zustand Auth Store, Workflows and Sequencing">
+        <snippet>Frontend registration form with real-time validation, login form with token storage and Zustand store update, form validation with clear error messages. Auth service interface: register(username, password, email?), login(username, password), logout(), getCurrentUser(). Zustand store interface: user, token, isAuthenticated, login(), register(), logout(), loadUser().</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Decision Summary, Project Structure, Technology Stack Details">
+        <snippet>Frontend: React 18 + TypeScript + Vite + Tailwind CSS, React Router for routing, Zustand for lightweight state management. Project structure: frontend/src/routes/Auth/, frontend/src/store/, frontend/src/lib/, frontend/src/components/ui/.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/2-1-authentication-backend.md" title="Story 2.1: Authentication Backend" section="Dev Agent Record, Completion Notes List, File List">
+        <snippet>Backend endpoints ready: POST /api/auth/register, POST /api/auth/login, GET /api/auth/me. Error response format: {"error": {"code": "...", "message": "..."}}. JWT token in TokenResponse.access_token, user object in TokenResponse.user. Validation rules: username 3-50 chars (regex: ^[a-zA-Z0-9_]+$), password min 8 chars.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="apiClient" lines="1-87" reason="Axios instance with request/response interceptors. Request interceptor already adds JWT token from localStorage. Response interceptor handles 401 errors but needs redirect to /login implementation. Update needed for Epic 2." />
+      <artifact path="frontend/src/lib/config.ts" kind="config" symbol="API_ENDPOINTS" lines="1-36" reason="Centralized API endpoint constants including AUTH.LOGIN, AUTH.REGISTER, AUTH.ME. Ready to use in authService." />
+      <artifact path="frontend/src/lib/types/api.ts" kind="types" symbol="ApiError, AuthError, ValidationError, NetworkError" lines="1-64" reason="TypeScript error types for API error handling. ApiError interface matches PRD error structure. Ready for use in authService error handling." />
+      <artifact path="frontend/src/App.tsx" kind="component" symbol="App" lines="1-36" reason="Main App component currently has default Vite template. Needs React Router setup with /login and /register routes." />
+      <artifact path="backend/app/api/routes/auth.py" kind="controller" symbol="register, login, me endpoints" reason="Backend authentication endpoints fully implemented. POST /api/auth/register creates user, POST /api/auth/login returns JWT token, GET /api/auth/me returns current user. Error responses follow PRD structure." />
+      <artifact path="backend/app/schemas/auth.py" kind="schema" symbol="UserRegister, UserLogin, TokenResponse, UserResponse" reason="Pydantic schemas for authentication. UserRegister: username 3-50 chars (regex), password min 8 chars, optional email. TokenResponse: access_token, token_type, user. UserResponse: id, username, email, total_generations, total_cost." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="axios" version="^1.13.2" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="tailwindcss" version="^4.1.17" />
+        <package name="vite" version="^7.2.2" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Framework: React 18 + TypeScript + Vite (from Epic 1)</constraint>
+    <constraint>State Management: Zustand for auth state (lightweight, as per architecture)</constraint>
+    <constraint>Routing: React Router 6+ for page-based routing structure</constraint>
+    <constraint>Styling: Tailwind CSS 3.3+ for utility-first styling, mobile-responsive design</constraint>
+    <constraint>API Client: Axios with interceptors for token injection and 401 handling (already partially implemented in apiClient.ts)</constraint>
+    <constraint>Token Storage: localStorage for JWT tokens (acceptable for MVP, consider httpOnly cookies post-MVP)</constraint>
+    <constraint>Form Validation: Client-side validation with real-time feedback, server-side validation via API</constraint>
+    <constraint>Error Handling: User-friendly error messages (no technical jargon), follow PRD error structure with {"error": {"code": "...", "message": "..."}}</constraint>
+    <constraint>Username Validation: 3-50 characters, alphanumeric with underscores (regex: ^[a-zA-Z0-9_]+$)</constraint>
+    <constraint>Password Validation: Minimum 8 characters</constraint>
+    <constraint>Mobile Responsive: Design must work on mobile, tablet, desktop (Tailwind breakpoints: 640px, 1024px, 1280px)</constraint>
+    <constraint>Accessibility: Keyboard navigation support, screen reader compatibility, sufficient color contrast ratios</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/auth/register" kind="REST endpoint" signature="POST /api/auth/register
+Request: {username: string, password: string, email?: string}
+Response (201): {message: string, user_id: string}
+Response (400): {error: {code: string, message: string}}
+Response (422): {error: {code: string, message: string}}" path="backend/app/api/routes/auth.py" />
+    <interface name="POST /api/auth/login" kind="REST endpoint" signature="POST /api/auth/login
+Request: {username: string, password: string}
+Response (200): {access_token: string, token_type: 'bearer', user: {id: string, username: string, email?: string, total_generations: number, total_cost: number}}
+Response (401): {error: {code: 'INVALID_CREDENTIALS', message: 'Invalid username or password'}}" path="backend/app/api/routes/auth.py" />
+    <interface name="GET /api/auth/me" kind="REST endpoint" signature="GET /api/auth/me
+Headers: Authorization: Bearer {token}
+Response (200): {id: string, username: string, email?: string, total_generations: number, total_cost: number, created_at: string, last_login: string}
+Response (401): {error: {code: 'INVALID_TOKEN', message: 'Invalid or expired token'}}" path="backend/app/api/routes/auth.py" />
+    <interface name="authService" kind="TypeScript module" signature="export const authService = {
+  register: async (username: string, password: string, email?: string) => Promise&lt;{message: string, user_id: string}&gt;,
+  login: async (username: string, password: string) => Promise&lt;{access_token: string, token_type: string, user: User}&gt;,
+  logout: () => void,
+  getCurrentUser: async () => Promise&lt;User&gt;
+}" path="frontend/src/lib/authService.ts" />
+    <interface name="authStore" kind="Zustand store" signature="interface AuthState {
+  user: User | null,
+  token: string | null,
+  isAuthenticated: boolean,
+  login: (username: string, password: string) => Promise&lt;void&gt;,
+  register: (username: string, password: string, email?: string) => Promise&lt;void&gt;,
+  logout: () => void,
+  loadUser: () => Promise&lt;void&gt;
+}" path="frontend/src/store/authStore.ts" />
+    <interface name="apiClient" kind="Axios instance" signature="const apiClient: AxiosInstance
+Request interceptor: Adds Authorization: Bearer {token} from localStorage
+Response interceptor: Handles 401 errors, clears token, redirects to /login" path="frontend/src/lib/apiClient.ts" />
+  </interfaces>
+
+  <tests>
+    <standards>Frontend testing should follow similar patterns to backend testing. Use Vitest or React Testing Library for unit and integration tests. Test components in isolation, test user interactions, test API integration. E2E tests optional but recommended for critical flows. Test mobile responsiveness using viewport testing. All tests should verify error handling, loading states, and user feedback.</standards>
+    <locations>frontend/tests/ or frontend/src/__tests__/ - Unit and integration tests for auth components</locations>
+    <ideas>
+      <test ac="1">Unit test: Registration form validates username format (regex), password length, shows errors in real-time, disables submit button when invalid</test>
+      <test ac="1">Unit test: Registration form shows loading state during API call, displays success message on success, redirects to /login after 2 seconds</test>
+      <test ac="1">Integration test: Complete registration flow - fill form, submit, verify API call to POST /api/auth/register, verify success message, verify redirect</test>
+      <test ac="2">Unit test: Login form validates non-empty fields, shows errors in real-time, disables submit button when invalid</test>
+      <test ac="2">Unit test: Login form stores token in localStorage on success, updates Zustand auth store, redirects to /dashboard</test>
+      <test ac="2">Integration test: Complete login flow - fill form, submit, verify API call to POST /api/auth/login, verify token stored, verify auth store updated, verify redirect</test>
+      <test ac="2">Unit test: authStore.login() calls authService.login(), stores token in localStorage, updates store state</test>
+      <test ac="2">Unit test: authStore.logout() clears token from localStorage, clears user state, updates isAuthenticated</test>
+      <test ac="2">Unit test: apiClient request interceptor adds Authorization header with token from localStorage</test>
+      <test ac="2">Unit test: apiClient response interceptor handles 401 errors, clears token, redirects to /login</test>
+      <test ac="3">Unit test: Form validation shows errors in real-time as user types, submit button disabled until valid</test>
+      <test ac="3">Unit test: Error messages are clear and actionable (e.g., 'Username must be 3-50 characters', 'Password must be at least 8 characters')</test>
+      <test>E2E test: User can register new account, then login with credentials, access protected routes</test>
+      <test>E2E test: User sees validation errors when entering invalid data, cannot submit invalid form</test>
+      <test>Mobile responsiveness: Test forms on mobile viewport (640px), tablet (1024px), desktop (1280px)</test>
+    </ideas>
+  </tests>
+</story-context>
+

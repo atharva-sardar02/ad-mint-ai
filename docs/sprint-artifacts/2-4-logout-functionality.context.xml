@@ -1,0 +1,151 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>4</storyId>
+    <title>Logout Functionality</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/2-4-logout-functionality.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to log out of my account</iWant>
+    <soThat>my session is cleared and I return to the login page</soThat>
+    <tasks>
+      - Task 1: Implement Logout Function in Auth Service (AC: 1)
+      - Task 2: Update Zustand Auth Store Logout Action (AC: 1)
+      - Task 3: Add Logout Button to Navigation (AC: 1)
+      - Task 4: Implement Redirect After Logout (AC: 1)
+      - Task 5: Verify Protected Route Redirect After Logout (AC: 2)
+      - Task 6: Verify API Client Interceptor Behavior (AC: 2, 3)
+      - Task 7: Testing (AC: 1, 2, 3)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. **Logout Functionality:**
+       **Given** I am logged in
+       **When** I click the logout button
+       **Then** the system clears JWT token from localStorage
+       **And** clears user state from Zustand store
+       **And** redirects to login page
+
+    2. **Post-Logout State:**
+       **Given** I have logged out
+       **When** I try to access a protected route
+       **Then** I am redirected to login page
+       **And** API requests no longer include Authorization header
+
+    3. **401 Error Handling:**
+       **Given** I have an expired or invalid token
+       **When** I make an API request
+       **Then** the response interceptor catches 401 error
+       **And** token is cleared from localStorage
+       **And** I am redirected to login page
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 2.4: Logout Functionality">
+        Story requirements: As a user, I want to log out of my account, so that my session is cleared and I return to the login page. Acceptance criteria include clearing JWT token from localStorage, clearing user state from Zustand store, redirecting to login page, and ensuring protected routes redirect after logout.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-2.md" title="Epic 2 Technical Specification" section="AC-2.4.1, AC-2.4.2, AC-2.4.3">
+        Detailed acceptance criteria for logout: Logout functionality should clear JWT token from localStorage, clear user state from Zustand store, redirect to login page. Post-logout state should ensure protected routes redirect and API requests no longer include Authorization header. 401 error handling should trigger logout-like behavior.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-2.md" title="Epic 2 Technical Specification" section="Logout Workflow">
+        Logout workflow: User clicks logout button, frontend calls authStore.logout(), frontend removes token from localStorage, frontend clears auth state in Zustand store, frontend redirects to login page, subsequent API requests no longer include Authorization header.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary, Project Structure">
+        Frontend uses React 18 + TypeScript + Vite, Zustand for auth state, React Router 6+ for routing, Tailwind CSS for styling. Project structure: frontend/src/components/ for components, frontend/src/routes/ for page components, frontend/src/store/ for Zustand stores, frontend/src/lib/ for API client and services.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="User Interface Design, Non-Functional Requirements">
+        UI design principles: Google-style minimalism, mobile-responsive design, maximum 3 clicks to any feature. Navigation should show username when authenticated, logout button, protected links only when authenticated. Error messages should be user-friendly (NFR-013).
+      </doc>
+      <doc path="docs/sprint-artifacts/2-2-authentication-frontend.md" title="Story 2.2: Authentication Frontend" section="Dev Agent Record, Tasks">
+        Previous story implementation details: Auth store structure, token storage patterns, API client interceptors, navigation patterns, protected route implementation. Logout action exists but needs enhancement for redirect logic.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="frontend/src/lib/authService.ts" kind="service" symbol="logout" lines="123-125" reason="Logout function that clears token from localStorage - needs enhancement to ensure proper cleanup">
+        Current implementation: `logout(): void { localStorage.removeItem("token"); }`
+      </artifact>
+      <artifact path="frontend/src/store/authStore.ts" kind="store" symbol="logout" lines="74-81" reason="Zustand logout action that clears token and user state - needs redirect logic">
+        Current implementation clears token and state but doesn't handle redirect
+      </artifact>
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="response interceptor" lines="44-73" reason="401 error handling already implemented - clears token, clears auth state, redirects to login - logout should follow similar pattern">
+        Response interceptor handles 401 errors by clearing token, calling logout, and redirecting
+      </artifact>
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="request interceptor" lines="27-38" reason="Request interceptor reads token from localStorage and adds to Authorization header - after logout, token should be null, so no header added">
+        Request interceptor adds token to Authorization header if token exists in localStorage
+      </artifact>
+      <artifact path="frontend/src/components/ProtectedRoute.tsx" kind="component" symbol="ProtectedRoute" lines="14-31" reason="Protected route component checks authStore.isAuthenticated and redirects if false - logout should set this to false">
+        ProtectedRoute component redirects unauthenticated users to login page
+      </artifact>
+      <artifact path="frontend/src/components/layout/Navbar.tsx" kind="component" symbol="handleLogout" lines="21-25" reason="Navbar has placeholder logout handler - needs to call authStore.logout() and handle redirect">
+        Placeholder logout handler in Navbar component
+      </artifact>
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="handleLogout" lines="17-20" reason="Dashboard has logout handler that calls logout and navigates - pattern to follow for Navbar">
+        Dashboard logout handler demonstrates pattern: logout() then navigate("/login")
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="axios" version="^1.13.2" />
+      </ecosystem>
+      <ecosystem name="dev">
+        <package name="vitest" version="^2.1.8" />
+        <package name="@testing-library/react" version="^16.1.0" />
+        <package name="@testing-library/jest-dom" version="^6.6.3" />
+        <package name="typescript" version="~5.9.3" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Frontend Framework: React 18 + TypeScript + Vite (from Epic 1)
+    - State Management: Zustand for auth state (lightweight, as per architecture)
+    - Routing: React Router 6+ for page-based routing structure
+    - Token Management: localStorage for JWT tokens (acceptable for MVP, consider httpOnly cookies post-MVP)
+    - Error Handling: User-friendly error messages (no technical jargon), follow PRD error structure
+    - API Client: Axios interceptors already configured in Story 2.2 for token injection and 401 handling
+    - Logout should be a simple action that clears state and redirects - no API call needed (JWT tokens are stateless)
+    - After logout, user should be redirected to login page - do not save return URL (unlike protected route redirect)
+    - 401 error handling already triggers logout-like behavior - ensure logout action is consistent with this
+  </constraints>
+
+  <interfaces>
+    <interface name="authStore.logout" kind="function signature" signature="logout(): void" path="frontend/src/store/authStore.ts">
+      Zustand store logout action that clears token and user state
+    </interface>
+    <interface name="authService.logout" kind="function signature" signature="logout(): void" path="frontend/src/lib/authService.ts">
+      Auth service logout function that clears token from localStorage
+    </interface>
+    <interface name="useNavigate" kind="React Router hook" signature="const navigate = useNavigate(); navigate(path: string)" path="react-router-dom">
+      React Router hook for programmatic navigation - use for redirect after logout
+    </interface>
+    <interface name="ProtectedRoute" kind="React component" signature="&lt;ProtectedRoute&gt;{children}&lt;/ProtectedRoute&gt;" path="frontend/src/components/ProtectedRoute.tsx">
+      Protected route component that checks authentication and redirects if not authenticated
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing uses Vitest with React Testing Library. Unit tests for authStore and authService should test logout action. Integration tests should verify complete logout flow: click logout → state cleared → redirect → protected route blocks access. Test logout from different pages to ensure consistent behavior. Follow existing test patterns from Story 2.2 authentication frontend tests.
+    </standards>
+    <locations>
+      - frontend/src/__tests__/ - Unit tests for stores and services
+      - frontend/tests/ - Integration tests (if exists)
+    </locations>
+    <ideas>
+      - AC-2.4.1: Unit test authStore.logout() clears token and state, unit test authService.logout() removes token from localStorage, integration test logout flow (click logout → state cleared → redirect)
+      - AC-2.4.2: Integration test protected route access after logout, test that API requests no longer include Authorization header after logout
+      - AC-2.4.3: Integration test 401 error handling (already implemented in Story 2.2, verify it works correctly), test logout with expired token scenario
+    </ideas>
+  </tests>
+</story-context>
+

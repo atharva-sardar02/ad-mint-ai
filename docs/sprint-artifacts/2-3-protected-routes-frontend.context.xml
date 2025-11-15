@@ -1,0 +1,123 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>2.3</storyId>
+    <title>Protected Routes Frontend</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/2-3-protected-routes-frontend.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>protected pages that require authentication</iWant>
+    <soThat>only logged-in users can access video generation features</soThat>
+    <tasks>
+      <task id="1" ac="1,2,5">Create ProtectedRoute Component</task>
+      <task id="2" ac="2,4">Create Navigation Component with Auth State</task>
+      <task id="3" ac="1,2">Update App Router with Protected Routes</task>
+      <task id="4" ac="5">Implement Token Validation on App Initialization</task>
+      <task id="5" ac="5">Enhance API Client Interceptor for 401 Handling</task>
+      <task id="6" ac="2">Create Placeholder Protected Page Components</task>
+      <task id="7" ac="1">Implement Post-Login Redirect</task>
+      <task id="8" ac="1,2,3,4,5">Testing</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <ac id="1">Protected Route Redirect: Given I am not logged in, When I try to access a protected route, Then I am redirected to /login page, And the original URL is saved for redirect after login</ac>
+    <ac id="2">Protected Route Access: Given I am logged in, When I access a protected route, Then the page loads normally, And I can see my username in the navigation</ac>
+    <ac id="3">Token in API Requests: Given I am logged in, When I make an API request, Then the JWT token is included in Authorization header, And format is: Authorization: Bearer {token}</ac>
+    <ac id="4">Navigation with Auth State: Given I am logged in, When I view the navigation bar, Then I see my username displayed, And I see a logout button, And protected links are visible</ac>
+    <ac id="5">Token Expiration Handling: Given I have an expired or invalid token, When I make an API request or navigate to a protected route, Then the system detects the expired token, And I am redirected to login page, And a user-friendly message is displayed</ac>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 2.3: Protected Routes Frontend">
+        Story requirements: As a user, I want protected pages that require authentication, so that only logged-in users can access video generation features. Acceptance criteria include redirect to login when not authenticated, normal page load when authenticated, token in API requests, navigation with auth state, and token expiration handling.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-2.md" title="Epic 2 Technical Specification" section="AC-2.3.1, AC-2.3.2, AC-2.3.3, AC-2.4.3">
+        Detailed acceptance criteria for protected routes: ProtectedRoute component should check authStore.isAuthenticated, redirect to /login with saved original URL, React Router Navigate component for redirects, token validation on app initialization, 401 error handling in API client interceptor.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary, Project Structure">
+        Frontend uses React 18 + TypeScript + Vite, Zustand for auth state, React Router 6+ for routing, Tailwind CSS for styling. Project structure: frontend/src/components/ for components, frontend/src/routes/ for page components, frontend/src/store/ for Zustand stores, frontend/src/lib/ for API client and services.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="User Interface Design, Non-Functional Requirements">
+        UI design principles: Google-style minimalism, mobile-responsive design, maximum 3 clicks to any feature. Navigation should show username when authenticated, logout button, protected links only when authenticated. Error messages should be user-friendly (NFR-013).
+      </doc>
+      <doc path="docs/sprint-artifacts/2-2-authentication-frontend.md" title="Story 2.2: Authentication Frontend" section="Dev Agent Record, Tasks">
+        Previous story created authStore with isAuthenticated, user, token, login, register, logout, loadUser actions. Created Login and Register components. Set up API client with request interceptor for token. Token stored in localStorage. React Router routes for /login and /register already exist.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="frontend/src/App.tsx" kind="component" symbol="ProtectedRoute" lines="16-26" reason="ProtectedRoute component already exists but needs enhancement: currently redirects to /login without saving original URL. Needs to save location.state.from for post-login redirect." />
+      <artifact path="frontend/src/App.tsx" kind="component" symbol="App" lines="31-57" reason="App component already has loadUser on initialization and ProtectedRoute wrapping /dashboard. Needs additional protected routes (/gallery, /profile) and Navigation component integration." />
+      <artifact path="frontend/src/store/authStore.ts" kind="store" symbol="useAuthStore" lines="25-116" reason="Auth store provides isAuthenticated, user, token, loadUser actions. loadUser already validates token on app initialization and clears state if invalid. Use isAuthenticated and user in ProtectedRoute and Navigation components." />
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="apiClient" lines="26-86" reason="API client has request interceptor for adding token (lines 26-37) and response interceptor for 401 handling (lines 43-86). Response interceptor needs enhancement: should clear auth store state, show user-friendly message, preserve route for post-login redirect." />
+      <artifact path="frontend/src/routes/Auth/Login.tsx" kind="component" symbol="Login" lines="23-163" reason="Login component exists and redirects to /dashboard after successful login (line 84). Needs update to check location.state.from and redirect to saved URL instead of default /dashboard." />
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="Dashboard" lines="13-62" reason="Dashboard placeholder component exists and displays user information. Can be used as reference for creating Gallery and Profile placeholder components." />
+      <artifact path="frontend/src/lib/authService.ts" kind="service" symbol="authService" reason="Auth service provides login, register, logout, getCurrentUser functions. Used by authStore. getCurrentUser is called by loadUser to validate token." />
+      <artifact path="frontend/src/components/ui/Input.tsx" kind="component" symbol="Input" reason="Reusable Input component available from Story 2.2. Can be reused in Navigation component if needed." />
+      <artifact path="frontend/src/components/ui/Button.tsx" kind="component" symbol="Button" reason="Reusable Button component available from Story 2.2. Can be used for logout button in Navigation component." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="axios" version="^1.13.2" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="tailwindcss" version="^4.1.17" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Framework: React 18 + TypeScript + Vite (from Epic 1). Use React 19.2.0 as installed.</constraint>
+    <constraint>State Management: Zustand for auth state. Access authStore.isAuthenticated and authStore.user in components. Do not create new state management solution.</constraint>
+    <constraint>Routing: React Router 6+ (version 7.9.6 installed). Use Navigate component for redirects, useLocation hook for accessing location.state, useNavigate for programmatic navigation.</constraint>
+    <constraint>Styling: Tailwind CSS 4.1.17 for utility-first styling. Ensure mobile-responsive design. Follow existing component styling patterns from Story 2.2.</constraint>
+    <constraint>Protected Routes Pattern: Wrapper component that checks auth state before rendering children. Must save original URL in location.state for post-login redirect.</constraint>
+    <constraint>Token Validation: Validate token on app initialization using authStore.loadUser(). Already implemented in App.tsx useEffect. Ensure it runs before rendering protected routes.</constraint>
+    <constraint>Error Handling: User-friendly error messages for expired tokens. Follow PRD error structure. Show message: "Your session has expired. Please log in again."</constraint>
+    <constraint>API Client: Enhance existing apiClient.ts response interceptor. Must clear auth store state (not just localStorage) on 401. Use React Router navigate instead of window.location.href for better UX.</constraint>
+    <constraint>Navigation Component: Must display username from authStore.user, show logout button (will be implemented in Story 2.4), show login/register links when not authenticated, show protected links (Dashboard, Gallery, Profile) only when authenticated.</constraint>
+    <constraint>Placeholder Components: Create Gallery.tsx and Profile.tsx placeholders similar to Dashboard.tsx. Display "Welcome to [Page Name]" and user information. Will be fully implemented in Epic 4 and Epic 5.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="ProtectedRoute Component" kind="React Component" signature="const ProtectedRoute: React.FC&lt;{ children: React.ReactNode }&gt;" path="frontend/src/App.tsx" />
+    <interface name="authStore" kind="Zustand Store" signature="useAuthStore: { isAuthenticated: boolean, user: User | null, token: string | null, loadUser: () =&gt; Promise&lt;void&gt;, logout: () =&gt; void }" path="frontend/src/store/authStore.ts" />
+    <interface name="apiClient" kind="Axios Instance" signature="apiClient: AxiosInstance with request/response interceptors" path="frontend/src/lib/apiClient.ts" />
+    <interface name="React Router Navigate" kind="React Component" signature="&lt;Navigate to="/login" state={{ from: location.pathname }} replace /&gt;" path="react-router-dom" />
+    <interface name="React Router useLocation" kind="React Hook" signature="const location = useLocation(); const from = location.state?.from;" path="react-router-dom" />
+    <interface name="React Router useNavigate" kind="React Hook" signature="const navigate = useNavigate(); navigate(path, { state: { from: originalPath } });" path="react-router-dom" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing framework: Use Vitest or React Testing Library (check frontend test setup). Follow patterns from existing tests in frontend/src/__tests__/ (authStore.test.ts, authService.test.ts). Test both unit tests (components, stores) and integration tests (complete flows). Test mobile responsiveness manually or with viewport testing.
+    </standards>
+    <locations>
+      frontend/src/__tests__/ - Unit and integration tests
+      frontend/src/components/__tests__/ - Component tests (if exists)
+      frontend/src/routes/__tests__/ - Route component tests (if exists)
+    </locations>
+    <ideas>
+      <test ac="1">Unit test: ProtectedRoute redirects to /login with location.state.from when isAuthenticated is false. Verify Navigate component is rendered with correct props.</test>
+      <test ac="1">Integration test: Navigate to /dashboard when not logged in, verify redirect to /login, verify location.state.from is /dashboard, login successfully, verify redirect back to /dashboard.</test>
+      <test ac="2">Unit test: ProtectedRoute renders children when isAuthenticated is true. Verify component renders without redirect.</test>
+      <test ac="2">Unit test: Navigation component displays username from authStore.user when authenticated. Verify username is rendered in UI.</test>
+      <test ac="3">Unit test: API client request interceptor adds Authorization header with Bearer token. Mock localStorage.getItem, verify header is set correctly.</test>
+      <test ac="4">Unit test: Navigation component shows logout button and protected links when authenticated. Verify conditional rendering based on isAuthenticated.</test>
+      <test ac="4">Unit test: Navigation component shows login/register links when not authenticated. Verify conditional rendering.</test>
+      <test ac="5">Integration test: Mock expired token, make API request, verify 401 response, verify token cleared from localStorage, verify auth store state cleared, verify redirect to /login with message.</test>
+      <test ac="5">Integration test: App initialization with invalid token, verify loadUser clears state, verify redirect to login.</test>
+      <test ac="5">Unit test: API client response interceptor handles 401 error, clears auth store, shows user-friendly message. Mock 401 response, verify interceptor behavior.</test>
+    </ideas>
+  </tests>
+</story-context>
+

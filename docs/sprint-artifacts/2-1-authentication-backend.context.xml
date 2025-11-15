@@ -1,0 +1,338 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>1</storyId>
+    <title>Authentication Backend</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14T17:59:55</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/2-1-authentication-backend.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>register, log in, and have my requests authenticated</iWant>
+    <soThat>I can securely access the video generation features</soThat>
+    <tasks>
+- Task 1: Create Authentication Route Handlers (AC: 1, 3, 4)
+  - Create `backend/app/api/routes/auth.py` with register, login, and me endpoints
+  - Implement POST `/api/auth/register` endpoint with UserRegister schema validation
+  - Implement POST `/api/auth/login` endpoint with UserLogin schema validation
+  - Implement GET `/api/auth/me` endpoint with authentication dependency
+  - Add proper error handling with structured error responses
+  - Add logging for authentication events (successful login, failed login, registration)
+
+- Task 2: Create Authentication Schemas (AC: 1, 2, 3, 4)
+  - Create `backend/app/schemas/auth.py` with Pydantic models
+  - Implement UserRegister schema (username: 3-50 chars, regex validation, password: min 8 chars, optional email)
+  - Implement UserLogin schema (username: 3-50 chars, password: min 8 chars)
+  - Implement TokenResponse schema (access_token, token_type, user)
+  - Implement UserResponse schema (id, username, email, total_generations, total_cost)
+
+- Task 3: Implement Password Hashing and JWT Security (AC: 1, 3, 5, 6)
+  - Create `backend/app/core/security.py` module
+  - Implement password hashing using Passlib with bcrypt (cost factor 12)
+  - Implement password verification function (bcrypt.compare)
+  - Implement JWT token generation (PyJWT with HS256, 7-day expiration)
+  - Implement JWT token validation function
+  - Add SECRET_KEY configuration from environment variables
+
+- Task 4: Create Authentication Dependency (AC: 5, 6)
+  - Create `backend/app/api/deps.py` module (if not exists)
+  - Implement `get_current_user` FastAPI dependency
+  - Extract JWT token from Authorization header (Bearer token format)
+  - Verify token signature and expiration
+  - Query database for user by user_id from token
+  - Return user object or raise HTTPException(401) if invalid/expired
+  - Handle missing token, invalid format, expired token, and user not found cases
+
+- Task 5: Update User Model (if needed) (AC: 3)
+  - Verify User model has `last_login` field (from Epic 1)
+  - Update `last_login` timestamp on successful login in login endpoint
+
+- Task 6: Add Dependencies to requirements.txt (AC: 1, 3)
+  - Add `passlib[bcrypt]` 1.7.4+ to requirements.txt
+  - Add `python-jose[cryptography]` 3.3.0+ or `PyJWT` 2.8.0+ to requirements.txt
+
+- Task 7: Testing (AC: 1, 2, 3, 4, 5, 6)
+  - Create unit tests for password hashing (verify cost factor 12)
+  - Create unit tests for JWT token generation and validation
+  - Create unit tests for username uniqueness validation
+  - Create unit tests for Pydantic schema validation
+  - Create integration tests for registration flow (POST /api/auth/register)
+  - Create integration tests for login flow (POST /api/auth/login)
+  - Create integration tests for protected route access (GET /api/auth/me with valid token)
+  - Create integration tests for protected route rejection (GET /api/auth/me with invalid/expired token)
+  - Test error responses (422 for validation errors, 401 for auth failures)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Registration:**
+   **Given** I submit a registration form with valid username and password
+   **When** the system processes the request
+   **Then** a new user account is created with hashed password and unique username validation
+   **And** password is hashed using bcrypt with cost factor 12
+   **And** response returns 201 Created with user_id
+
+2. **Registration Validation:**
+   **Given** I submit a registration request with invalid data
+   **When** the system validates the request
+   **Then** validation errors are returned (username too short, password too weak, etc.)
+   **And** response returns 422 Unprocessable Entity with error details
+
+3. **Login:**
+   **Given** I have a registered account
+   **When** I submit valid login credentials
+   **Then** the system generates a JWT token with 7-day expiration
+   **And** user.last_login timestamp is updated
+   **And** response returns 200 OK with token and user information
+
+4. **Login Failure:**
+   **Given** I submit a login request with invalid credentials
+   **When** the system attempts authentication
+   **Then** response returns 401 Unauthorized with error message
+   **And** error message is user-friendly ("Invalid username or password")
+
+5. **Protected Routes:**
+   **Given** a protected API endpoint
+   **When** a request includes a valid JWT token
+   **Then** the middleware verifies the token and allows the request
+   **And** current user object is available to the route handler
+
+6. **Protected Route Unauthorized:**
+   **Given** a protected API endpoint
+   **When** a request includes an invalid or expired token
+   **Then** response returns 401 Unauthorized with error message
+   **And** error message indicates token is invalid or expired
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>Section 8.1: User Authentication</section>
+        <snippet>System shall allow users to create accounts with username and password. Username must be unique (3-50 characters). Password must be hashed using bcrypt. System shall authenticate users via username/password and generate JWT token.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>Section 16.1: Authentication Security</section>
+        <snippet>Passwords hashed using bcrypt with cost factor 12. JWT tokens signed with 256-bit secret key, expiration: 7 days. Payload: user_id, username, issued_at, expiration. Verified on every protected endpoint.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Decision Summary</section>
+        <snippet>Backend uses FastAPI as HTTP API layer. Auth: JWT-based auth using PyJWT and bcrypt via Passlib. Backend responsibilities separated into api (routing), schemas (Pydantic contracts), db (SQLAlchemy models), core (config, security, logging).</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Project Structure</section>
+        <snippet>Backend structure includes app/api/routes/auth.py for authentication route handlers, app/core/security.py for password hashing and JWT utilities, app/api/deps.py for FastAPI dependency for authentication, app/schemas/auth.py for Pydantic request/response schemas.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Services and Modules</section>
+        <snippet>Module table lists backend/app/api/routes/auth.py for authentication route handlers, backend/app/core/security.py for password hashing and JWT token generation/validation, backend/app/api/deps.py for FastAPI dependency for JWT authentication, backend/app/schemas/auth.py for Pydantic schemas.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>APIs and Interfaces</section>
+        <snippet>Backend API endpoints: POST /api/auth/register (create new user account), POST /api/auth/login (authenticate user and get JWT token), GET /api/auth/me (get current authenticated user info). All endpoints include request/response examples with status codes.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Data Models and Contracts</section>
+        <snippet>User Model includes id (UUID), username (unique, indexed), password_hash (bcrypt), email (optional), total_generations, total_cost, created_at, last_login. Pydantic schemas: UserRegister (username 3-50 chars with regex, password min 8 chars, optional email), UserLogin, TokenResponse, UserResponse.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Epic 2: User Authentication - Story 2.1</section>
+        <snippet>As a user, I want to register, log in, and have my requests authenticated, so that I can securely access the video generation features. Prerequisites: Story 1.2, Story 1.3. Technical Notes: Use Pydantic for validation, bcrypt for password hashing, PyJWT for token generation.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/db/models/user.py</path>
+        <kind>model</kind>
+        <symbol>User</symbol>
+        <lines>13-28</lines>
+        <reason>User ORM model from Epic 1, used in this story. Contains username (unique, indexed), password_hash, email, total_generations, total_cost, created_at, last_login fields. Relationship to Generation model.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/config.py</path>
+        <kind>config</kind>
+        <symbol>Settings</symbol>
+        <lines>12-42</lines>
+        <reason>Application settings including SECRET_KEY, ALGORITHM (HS256), ACCESS_TOKEN_EXPIRE_MINUTES. Currently defaults to 30 minutes but should be updated to 7 days (10080 minutes) for this story. Environment variables loaded via python-dotenv.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes</path>
+        <kind>directory</kind>
+        <symbol>routes</symbol>
+        <lines>N/A</lines>
+        <reason>Directory exists but auth.py does not exist yet. This is where authentication route handlers will be created (register, login, me endpoints).</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="uvicorn" version=">=0.24.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="python-dotenv" version=">=1.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="httpx" version=">=0.24.0" />
+        <package name="passlib" version="1.7.4+" note="Required for bcrypt password hashing" />
+        <package name="python-jose" version="3.3.0+" note="Alternative: PyJWT 2.8.0+ for JWT token generation" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+- **Authentication Pattern:** JWT-based authentication using FastAPI dependency injection pattern. Use FastAPI dependency (`get_current_user`) for protected routes, injectable into route handlers.
+
+- **Password Security:** bcrypt hashing with cost factor 12 (PRD Section 16.1, NFR-009). Use Passlib with bcrypt backend, cost factor 12. Verify hashed passwords are never stored in plain text.
+
+- **JWT Configuration:** HS256 algorithm, 7-day expiration (10080 minutes), secret key from environment variable. Use PyJWT with HS256 algorithm. Tokens expire after 7 days, invalid tokens rejected.
+
+- **Error Handling:** All API errors follow PRD's JSON structure with top-level `error` key containing `code` and `message` fields. Backend raises structured exceptions that are converted to this format via FastAPI exception handlers.
+
+- **Validation:** Use Pydantic schemas for request/response validation. Enforce username format (regex: `^[a-zA-Z0-9_]+$`). Username: 3-50 characters. Password: minimum 8 characters.
+
+- **Database:** Use existing User model from Epic 1. Update `last_login` timestamp on successful login. Username uniqueness enforced at database level (unique constraint).
+
+- **API Endpoint Pattern:** Follow `/api/auth/*` pattern (consistent with `/api/health` endpoint from Epic 1). Endpoints: POST `/api/auth/register`, POST `/api/auth/login`, GET `/api/auth/me`.
+
+- **Logging:** Structured logging in auth routes. Log level INFO for success, WARNING for failures. Log format: `{"event": "login_success", "username": "...", "timestamp": "..."}`.
+
+- **CORS:** CORS middleware already configured in FastAPI app from Epic 1 - no changes needed.
+
+- **Environment Variables:** Use `.env` file for configuration (SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES). Already set up in Epic 1 via config.py.
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>POST /api/auth/register</name>
+      <kind>REST endpoint</kind>
+      <signature>POST /api/auth/register
+Request Body: UserRegister { username: str (3-50 chars, regex: ^[a-zA-Z0-9_]+$), password: str (min 8 chars), email?: str (optional, max 255 chars) }
+Response: 201 Created { "message": "User created successfully", "user_id": "..." }
+Error: 400 Bad Request { "error": { "code": "USERNAME_EXISTS", "message": "Username already exists" } }
+Error: 422 Unprocessable Entity { validation errors }</signature>
+      <path>backend/app/api/routes/auth.py</path>
+    </interface>
+    <interface>
+      <name>POST /api/auth/login</name>
+      <kind>REST endpoint</kind>
+      <signature>POST /api/auth/login
+Request Body: UserLogin { username: str (3-50 chars), password: str (min 8 chars) }
+Response: 200 OK { "access_token": "jwt_token", "token_type": "bearer", "user": UserResponse }
+Error: 401 Unauthorized { "error": { "code": "INVALID_CREDENTIALS", "message": "Invalid username or password" } }</signature>
+      <path>backend/app/api/routes/auth.py</path>
+    </interface>
+    <interface>
+      <name>GET /api/auth/me</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /api/auth/me
+Headers: Authorization: Bearer {jwt_token}
+Response: 200 OK { "id": "user_id", "username": "...", "email": "...", "total_generations": 0, "total_cost": 0.0 }
+Error: 401 Unauthorized { "error": { "code": "INVALID_TOKEN", "message": "Invalid or expired token" } }</signature>
+      <path>backend/app/api/routes/auth.py</path>
+    </interface>
+    <interface>
+      <name>get_current_user</name>
+      <kind>FastAPI dependency</kind>
+      <signature>def get_current_user(token: str = Depends(oauth2_scheme)) -> User
+Extracts JWT token from Authorization header (Bearer format)
+Verifies token signature and expiration
+Queries database for user by user_id from token
+Returns User object or raises HTTPException(401) if invalid/expired</signature>
+      <path>backend/app/api/deps.py</path>
+    </interface>
+    <interface>
+      <name>UserRegister</name>
+      <kind>Pydantic schema</kind>
+      <signature>class UserRegister(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, regex="^[a-zA-Z0-9_]+$")
+    password: str = Field(..., min_length=8, max_length=100)
+    email: Optional[str] = Field(None, max_length=255)</signature>
+      <path>backend/app/schemas/auth.py</path>
+    </interface>
+    <interface>
+      <name>UserLogin</name>
+      <kind>Pydantic schema</kind>
+      <signature>class UserLogin(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8, max_length=100)</signature>
+      <path>backend/app/schemas/auth.py</path>
+    </interface>
+    <interface>
+      <name>TokenResponse</name>
+      <kind>Pydantic schema</kind>
+      <signature>class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse</signature>
+      <path>backend/app/schemas/auth.py</path>
+    </interface>
+    <interface>
+      <name>UserResponse</name>
+      <kind>Pydantic schema</kind>
+      <signature>class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: Optional[str]
+    total_generations: int
+    total_cost: float</signature>
+      <path>backend/app/schemas/auth.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>Backend testing uses pytest with FastAPI TestClient. Test coverage goals: 80%+ for auth routes and security utilities. Unit tests for password hashing (verify cost factor 12), JWT token generation/validation, username uniqueness validation, Pydantic schema validation. Integration tests for complete registration flow, login flow, protected route access/rejection. All tests should verify proper error responses (422 for validation errors, 401 for auth failures).</standards>
+    <locations>backend/tests/ - Unit and integration tests for authentication. Test files should follow naming convention: test_auth_routes.py, test_security.py, test_schemas.py, test_deps.py.</locations>
+    <ideas>
+      <test ac="AC-2.1.1">
+        <description>Test user registration with valid data</description>
+        <steps>POST request to /api/auth/register with valid username and password. Verify 201 response, check user created in database with hashed password (not plain text), verify username uniqueness constraint.</steps>
+      </test>
+      <test ac="AC-2.1.2">
+        <description>Test user registration validation errors</description>
+        <steps>POST request with invalid data (username too short, password too weak, invalid username format). Verify 422 response with validation error details.</steps>
+      </test>
+      <test ac="AC-2.1.3">
+        <description>Test user login with valid credentials</description>
+        <steps>POST request to /api/auth/login with valid credentials. Verify 200 response with JWT token, verify token contains user_id and username, verify user.last_login timestamp updated, verify token expiration is 7 days.</steps>
+      </test>
+      <test ac="AC-2.1.4">
+        <description>Test user login with invalid credentials</description>
+        <steps>POST request with invalid username or password. Verify 401 response with user-friendly error message ("Invalid username or password").</steps>
+      </test>
+      <test ac="AC-2.1.5">
+        <description>Test protected route access with valid token</description>
+        <steps>GET request to /api/auth/me with valid JWT token in Authorization header. Verify 200 response with user information, verify user object available to route handler.</steps>
+      </test>
+      <test ac="AC-2.1.6">
+        <description>Test protected route access with invalid/expired token</description>
+        <steps>GET request with invalid token, expired token, or missing token. Verify 401 response with error message indicating token is invalid or expired.</steps>
+      </test>
+      <test ac="Security">
+        <description>Test password hashing security</description>
+        <steps>Verify passwords are hashed using bcrypt with cost factor 12. Verify plain text passwords are never stored. Test password verification with correct and incorrect passwords.</steps>
+      </test>
+      <test ac="Security">
+        <description>Test JWT token security</description>
+        <steps>Test JWT token generation with HS256 algorithm. Verify token expiration (7 days). Test token tampering (modify token, verify rejection). Test expired token handling.</steps>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

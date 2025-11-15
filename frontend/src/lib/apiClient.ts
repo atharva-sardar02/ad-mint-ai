@@ -7,6 +7,7 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL } from "./config";
 import type { ApiError } from "./types/api";
 import { AuthError, NetworkError, ValidationError } from "./types/api";
+import { useAuthStore } from "../store/authStore";
 
 /**
  * Create Axios instance with base configuration.
@@ -38,20 +39,37 @@ apiClient.interceptors.request.use(
 
 /**
  * Response interceptor: Handles errors and 401 authentication failures.
- * On 401, clears token and redirects to login (placeholder for Epic 2).
+ * On 401, clears token, clears auth store state, and redirects to login.
  */
 apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
   (error: AxiosError<ApiError>) => {
-    // Handle 401 Unauthorized - clear token and redirect to login
+    // Handle 401 Unauthorized - clear token, clear auth store, and redirect to login
     if (error.response?.status === 401) {
+      // Clear token from localStorage
       localStorage.removeItem("token");
-      // TODO: Redirect to login page (Epic 2)
-      // For now, we'll just clear the token
-      // In Epic 2, we'll add: window.location.href = '/login';
-      return Promise.reject(new AuthError("Authentication required"));
+      
+      // Clear auth store state (access store directly, not via hook)
+      const logout = useAuthStore.getState().logout;
+      logout();
+      
+      // Show user-friendly error message
+      // Note: We can't show a toast/notification here since we're not in a React component
+      // The error will be caught by the component making the request
+      
+      // Redirect to login page, preserving current route for post-login redirect
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/login" && currentPath !== "/register") {
+        // Store the current path in sessionStorage for potential post-login redirect
+        // (though the ProtectedRoute component already handles this via location.state)
+        window.location.href = "/login";
+      }
+      
+      return Promise.reject(
+        new AuthError("Your session has expired. Please log in again.")
+      );
     }
 
     // Handle network errors

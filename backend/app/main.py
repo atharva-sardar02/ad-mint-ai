@@ -4,6 +4,7 @@ FastAPI application entry point.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes import auth
 from app.core.config import settings
 
 app = FastAPI(
@@ -11,6 +12,9 @@ app = FastAPI(
     description="AI Video Ad Generator API",
     version="0.1.0",
 )
+
+# Include routers
+app.include_router(auth.router)
 
 # CORS middleware configuration
 app.add_middleware(
