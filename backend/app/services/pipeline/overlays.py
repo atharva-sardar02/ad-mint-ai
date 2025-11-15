@@ -111,13 +111,16 @@ def _create_text_clip(
     """
     font_path = _get_font_path()
     
+    # Calculate text width (90% of video width, must be integer)
+    text_width = int(video_size[0] * 0.9)
+    
     # Create text clip
     text_clip = TextClip(
         text=text_overlay.text,
         font=font_path,
         font_size=text_overlay.font_size,
         color=text_overlay.color,
-        size=(video_size[0] * 0.9, None),  # 90% of video width
+        size=(text_width, None),  # 90% of video width
         method='caption',  # Auto-wrap text
         text_align='center'
     ).with_duration(duration)
@@ -130,7 +133,7 @@ def _create_text_clip(
         font=font_path,
         font_size=text_overlay.font_size,
         color=shadow_color,
-        size=(video_size[0] * 0.9, None),
+        size=(text_width, None),
         method='caption',
         text_align='center'
     ).with_duration(duration).with_position((2, 2))  # Slight offset for shadow
@@ -255,26 +258,39 @@ def _position_text_clip(
     width, height = video_size
     text_height = text_clip.h
     
+    # Ensure text_height is valid (handle CompositeVideoClip)
+    if text_height is None or text_height <= 0:
+        logger.warning(f"Invalid text height ({text_height}), using default calculation")
+        text_height = int(height * 0.1)  # Fallback to 10% of video height
+    
     if position == "top":
         # Position at top with margin
         y_pos = int(height * 0.1)  # 10% from top
-        return text_clip.set_position(('center', y_pos))
+        return text_clip.with_position(('center', y_pos))
     
     elif position == "center":
         # Center vertically
         y_pos = int((height - text_height) / 2)
-        return text_clip.set_position(('center', y_pos))
+        return text_clip.with_position(('center', y_pos))
     
     elif position == "bottom":
-        # Position at bottom with margin
-        y_pos = int(height - text_height - height * 0.1)  # 10% from bottom
-        return text_clip.set_position(('center', y_pos))
+        # Position at bottom with margin - ensure text is fully visible
+        # Calculate margin (10% of video height, minimum 20 pixels)
+        margin = max(int(height * 0.1), 20)
+        # Position so bottom of text is at (height - margin)
+        # y_pos is the top edge of the text, so: y_pos + text_height = height - margin
+        y_pos = int(height - text_height - margin)
+        # Safety check: ensure text doesn't go off-screen
+        if y_pos < 0:
+            logger.warning(f"Text height ({text_height}) exceeds available space, positioning at minimum margin")
+            y_pos = max(0, int(height - text_height - 10))  # Minimum 10px margin
+        return text_clip.with_position(('center', y_pos))
     
     else:
         # Default to center
         logger.warning(f"Unknown position '{position}', defaulting to center")
         y_pos = int((height - text_height) / 2)
-        return text_clip.set_position(('center', y_pos))
+        return text_clip.with_position(('center', y_pos))
 
 
 def add_overlays_to_clips(
