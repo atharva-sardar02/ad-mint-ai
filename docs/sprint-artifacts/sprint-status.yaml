@@ -54,7 +54,7 @@ development_status:
   3-1-prompt-processing-and-planning: done
   3-2-video-generation-and-text-overlays: done
   3-3-video-assembly-and-export: done
-  3-4-progress-tracking-and-management: backlog
+  3-4-progress-tracking-and-management: done
   epic-3-retrospective: optional
 
   epic-4: contexted

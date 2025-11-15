@@ -25,6 +25,8 @@ from app.schemas.generation import (
     StatusResponse,
 )
 from app.services.cost_tracking import track_video_generation_cost, track_complete_generation_cost
+from app.services.cancellation import request_cancellation, handle_cancellation
+from app.services.pipeline.progress_tracking import update_generation_progress, update_generation_status
 from app.services.pipeline.llm_enhancement import enhance_prompt_with_llm
 from app.services.pipeline.overlays import add_overlays_to_clips
 from app.services.pipeline.scene_planning import plan_scenes
@@ -62,10 +64,13 @@ async def process_generation(generation_id: str, prompt: str):
         
         try:
             # Update status to processing
-            generation.status = "processing"
-            generation.progress = 10
-            generation.current_step = "LLM Enhancement"
-            db.commit()
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=10,
+                current_step="LLM Enhancement",
+                status="processing"
+            )
             logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
             
             # Call LLM enhancement service
@@ -76,9 +81,13 @@ async def process_generation(generation_id: str, prompt: str):
             # Store LLM specification
             generation.llm_specification = ad_spec.model_dump()
             generation.framework = ad_spec.framework
-            generation.progress = 20
-            generation.current_step = "Scene Planning"
             db.commit()
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=20,
+                current_step="Scene Planning"
+            )
             logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
             
             # Call scene planning module
@@ -124,16 +133,22 @@ async def process_generation(generation_id: str, prompt: str):
                     # Check cancellation before each scene
                     if check_cancellation():
                         logger.info(f"[{generation_id}] Generation cancelled before scene {i}")
-                        generation.status = "failed"
-                        generation.error_message = "Cancelled by user"
-                        db.commit()
+                        update_generation_status(
+                            db=db,
+                            generation_id=generation_id,
+                            status="failed",
+                            error_message="Cancelled by user"
+                        )
                         return
                     
-                    # Update progress
+                    # Update progress at start of clip generation
                     progress = int(progress_start + (i - 1) * progress_per_scene)
-                    generation.progress = progress
-                    generation.current_step = f"Generating video clip {i} of {num_scenes}"
-                    db.commit()
+                    update_generation_progress(
+                        db=db,
+                        generation_id=generation_id,
+                        progress=progress,
+                        current_step=f"Generating video clip {i} of {num_scenes}"
+                    )
                     
                     logger.info(f"[{generation_id}] Generating clip {i}/{num_scenes} - Scene type: {scene.scene_type}, Duration: {scene.duration}s")
                     logger.info(f"[{generation_id}] Visual prompt: {scene.visual_prompt[:80]}...")
@@ -148,6 +163,14 @@ async def process_generation(generation_id: str, prompt: str):
                         clip_path = cached_clip
                         clip_cost = 0.0  # Cached clips are free
                     else:
+                        # Update progress to show we're calling the API (this can take 30-60+ seconds)
+                        update_generation_progress(
+                            db=db,
+                            generation_id=generation_id,
+                            progress=progress,
+                            current_step=f"Calling API for clip {i} of {num_scenes} (this may take 30-60 seconds)"
+                        )
+                        
                         # Generate video clip
                         logger.info(f"[{generation_id}] Calling Replicate API for clip {i}...")
                         clip_path = await generate_video_clip(
@@ -169,6 +192,16 @@ async def process_generation(generation_id: str, prompt: str):
                     
                     clip_paths.append(clip_path)
                     total_video_cost += clip_cost
+                    
+                    # Update progress after clip completion (mid-point between start and next)
+                    progress_after_clip = int(progress_start + i * progress_per_scene)
+                    update_generation_progress(
+                        db=db,
+                        generation_id=generation_id,
+                        progress=progress_after_clip,
+                        current_step=f"Completed clip {i} of {num_scenes}"
+                    )
+                    
                     logger.info(f"[{generation_id}] Clip {i} cost: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f}")
                     
                     track_video_generation_cost(
@@ -181,9 +214,13 @@ async def process_generation(generation_id: str, prompt: str):
                 
                 # Store temp clip paths
                 generation.temp_clip_paths = clip_paths
-                generation.progress = 70
-                generation.current_step = "Adding text overlays"
                 db.commit()
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=70,
+                    current_step="Adding text overlays"
+                )
                 logger.info(f"[{generation_id}] All {len(clip_paths)} video clips generated, progress: 70% - Adding text overlays")
                 
                 if TEXT_OVERLAYS_ENABLED:
@@ -205,17 +242,24 @@ async def process_generation(generation_id: str, prompt: str):
                 
                 # Update temp_clip_paths with overlay paths
                 generation.temp_clip_paths = overlay_paths
-                generation.progress = 80
-                generation.current_step = "Stitching video clips"
                 db.commit()
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=80,
+                    current_step="Stitching video clips"
+                )
                 logger.info(f"[{generation_id}] Progress: 80% - Stitching video clips")
                 
                 # Check cancellation before stitching
                 if check_cancellation():
                     logger.info(f"[{generation_id}] Generation cancelled before stitching")
-                    generation.status = "failed"
-                    generation.error_message = "Cancelled by user"
-                    db.commit()
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
                     return
                 
                 # Video Stitching Stage (80% progress)
@@ -231,17 +275,23 @@ async def process_generation(generation_id: str, prompt: str):
                 )
                 logger.info(f"[{generation_id}] Video stitching completed: {stitched_video_path}")
                 
-                generation.progress = 85
-                generation.current_step = "Adding audio layer"
-                db.commit()
-                logger.info(f"[{generation_id}] Progress: 85% - Adding audio layer")
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=90,
+                    current_step="Adding audio layer"
+                )
+                logger.info(f"[{generation_id}] Progress: 90% - Adding audio layer")
                 
                 # Check cancellation before audio
                 if check_cancellation():
                     logger.info(f"[{generation_id}] Generation cancelled before audio")
-                    generation.status = "failed"
-                    generation.error_message = "Cancelled by user"
-                    db.commit()
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
                     return
                 
                 # Audio Layer Stage (85-90% progress)
@@ -270,20 +320,18 @@ async def process_generation(generation_id: str, prompt: str):
                 )
                 logger.info(f"[{generation_id}] Audio layer added successfully: {video_with_audio}")
                 
-                generation.progress = 90
-                generation.current_step = "Post-processing and export"
-                db.commit()
-                logger.info(f"[{generation_id}] Progress: 90% - Post-processing and export")
-                
                 # Check cancellation before export
                 if check_cancellation():
                     logger.info(f"[{generation_id}] Generation cancelled before export")
-                    generation.status = "failed"
-                    generation.error_message = "Cancelled by user"
-                    db.commit()
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
                     return
                 
-                # Post-Processing and Export Stage (90-95% progress)
+                # Post-Processing and Export Stage
                 logger.info(f"[{generation_id}] Starting final video export...")
                 # Extract brand style from LLM specification
                 brand_style = "default"  # Default
@@ -306,19 +354,20 @@ async def process_generation(generation_id: str, prompt: str):
                 )
                 logger.info(f"[{generation_id}] Final video exported - Video URL: {video_url}, Thumbnail URL: {thumbnail_url}")
                 
-                generation.progress = 95
-                generation.current_step = "Finalizing"
-                db.commit()
-                logger.info(f"[{generation_id}] Progress: 95% - Finalizing")
-                
                 # Update Generation record with final URLs
                 generation.video_url = video_url
                 generation.thumbnail_url = thumbnail_url
-                generation.status = "completed"
-                generation.progress = 100
-                generation.current_step = "Complete"
                 generation.completed_at = datetime.utcnow()
                 db.commit()
+                
+                # Mark as completed
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=100,
+                    current_step="Complete",
+                    status="completed"
+                )
                 logger.info(f"[{generation_id}] Generation marked as completed in database")
                 
                 # Clean up temp files
@@ -358,22 +407,41 @@ async def process_generation(generation_id: str, prompt: str):
                     # Already handled above
                     return
                 logger.error(f"Video generation failed for {generation_id}: {e}", exc_info=True)
-                generation.status = "failed"
-                generation.error_message = str(e)
-                db.commit()
+                update_generation_status(
+                    db=db,
+                    generation_id=generation_id,
+                    status="failed",
+                    error_message=str(e)
+                )
                 
         except ValueError as e:
             logger.error(f"Validation error in generation {generation_id}: {e}")
-            generation.status = "failed"
-            generation.error_message = str(e)
-            generation.progress = 0
-            db.commit()
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=0,
+                status="failed"
+            )
+            update_generation_status(
+                db=db,
+                generation_id=generation_id,
+                status="failed",
+                error_message=str(e)
+            )
         except Exception as e:
             logger.error(f"Unexpected error in generation {generation_id}: {e}", exc_info=True)
-            generation.status = "failed"
-            generation.error_message = str(e)
-            generation.progress = 0
-            db.commit()
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=0,
+                status="failed"
+            )
+            update_generation_status(
+                db=db,
+                generation_id=generation_id,
+                status="failed",
+                error_message=str(e)
+            )
     finally:
         db.close()
 
@@ -498,6 +566,102 @@ async def get_generation_status(
         progress=generation.progress,
         current_step=generation.current_step,
         video_url=get_full_url(generation.video_url),
+        cost=generation.cost,
+        error=generation.error_message,
+        num_scenes=generation.num_scenes,
+        available_clips=available_clips
+    )
+
+
+@router.post("/generations/{generation_id}/cancel", status_code=status.HTTP_200_OK)
+async def cancel_generation(
+    generation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> StatusResponse:
+    """
+    Cancel an in-progress video generation.
+    
+    Args:
+        generation_id: UUID of the generation
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        StatusResponse with updated status
+    
+    Raises:
+        HTTPException: 404 if generation not found
+        HTTPException: 403 if user doesn't own the generation
+        HTTPException: 400 if generation cannot be cancelled
+    """
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Check authorization - user can only cancel their own generations
+    if generation.user_id != current_user.id:
+        logger.warning(f"User {current_user.id} attempted to cancel generation {generation_id} owned by {generation.user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to cancel this generation"
+                }
+            }
+        )
+    
+    # Check if generation can be cancelled
+    if generation.status not in ["pending", "processing"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "CANNOT_CANCEL",
+                    "message": f"Cannot cancel generation with status '{generation.status}'"
+                }
+            }
+        )
+    
+    # Request cancellation
+    if not request_cancellation(db, generation_id):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "CANCELLATION_FAILED",
+                    "message": "Failed to request cancellation"
+                }
+            }
+        )
+    
+    # Handle cancellation (update status, cleanup)
+    handle_cancellation(db, generation_id, cleanup_temp_files=True)
+    
+    # Refresh generation to get updated status
+    db.refresh(generation)
+    
+    # Count available clips
+    available_clips = len(generation.temp_clip_paths) if generation.temp_clip_paths else 0
+    
+    logger.info(f"User {current_user.id} cancelled generation {generation_id}")
+    
+    return StatusResponse(
+        generation_id=generation.id,
+        status=generation.status,
+        progress=generation.progress,
+        current_step=generation.current_step,
+        video_url=generation.video_url,
         cost=generation.cost,
         error=generation.error_message,
         num_scenes=generation.num_scenes,

@@ -52,10 +52,23 @@ export const getGenerationStatus = async (
 };
 
 /**
+ * Cancel an in-progress video generation.
+ */
+export const cancelGeneration = async (
+  generationId: string
+): Promise<StatusResponse> => {
+  const response = await apiClient.post<StatusResponse>(
+    API_ENDPOINTS.GENERATIONS.CANCEL(generationId)
+  );
+  return response.data;
+};
+
+/**
  * Generation service object with all methods.
  */
 export const generationService = {
   startGeneration,
   getGenerationStatus,
+  cancelGeneration,
 };
 

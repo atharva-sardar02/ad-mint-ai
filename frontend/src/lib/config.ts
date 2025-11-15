@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
     CREATE: "/api/generate",
     LIST: "/api/generations",
     STATUS: (id: string) => `/api/status/${id}`,
+    CANCEL: (id: string) => `/api/generations/${id}/cancel`,
     DELETE: (id: string) => `/api/generations/${id}`,
   },
   VIDEO: {

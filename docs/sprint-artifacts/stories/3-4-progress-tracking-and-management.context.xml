@@ -1,0 +1,195 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>4</storyId>
+    <title>Progress Tracking and Management</title>
+    <status>drafted</status>
+    <generatedAt>2025-01-27</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/3-4-progress-tracking-and-management.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a user</asA>
+    <iWant>I want to see real-time progress, track costs, and cancel if needed</iWant>
+    <soThat>so that I know the status of my video generation and can manage it</soThat>
+    <tasks>
+- Task 1: Create Progress Tracking Service (AC: 1)
+- Task 2: Create Status Endpoint (AC: 1, 4)
+- Task 3: Create Cost Tracking Service (AC: 2)
+- Task 4: Create Cancellation Service (AC: 3)
+- Task 5: Create Cancel Endpoint (AC: 3)
+- Task 6: Create Frontend Progress Display (AC: 4)
+- Task 7: Implement Frontend Status Polling (AC: 4)
+- Task 8: Integrate Progress Display into Dashboard (AC: 4)
+- Task 9: Update Generation Model Schema (AC: 1, 2, 3)
+- Task 10: Testing (AC: 1, 2, 3, 4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Progress Tracking:**
+   **Given** I have started a video generation
+   **When** I check the generation status
+   **Then** I see current status (pending, processing, completed, failed)
+   **And** progress percentage (0-100)
+   **And** current step description
+   **And** progress updates occur at: 10% (LLM), 20% (Scene Planning), 30-70% (Video Generation), 80% (Stitching), 90% (Audio), 100% (Complete)
+
+2. **Cost Calculation:**
+   **Given** a video generation completes
+   **When** the cost calculation service processes it
+   **Then** it calculates total cost (LLM + video generation API costs)
+   **And** stores cost per generation in database
+   **And** updates user's total_cost field atomically
+
+3. **Cancel Generation:**
+   **Given** I have a video generation in progress
+   **When** I click the cancel button
+   **Then** the system sets cancellation_requested flag
+   **And** checks flag at start of each pipeline stage
+   **And** stops processing if flag is True
+   **And** updates status to failed with error="Cancelled by user"
+   **And** cleans up temp files
+
+4. **Frontend Progress Display:**
+   **Given** I am on the dashboard with an active generation
+   **When** the frontend polls status endpoint
+   **Then** progress bar updates every 2 seconds
+   **And** current step description is displayed
+   **And** cancel button is available during processing
+   **And** video player appears when status=completed
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-014: Progress Tracking">
+        System shall update database with current status and progress % at each pipeline stage. Status values: pending, processing, completed, failed. Progress steps: 10% (LLM), 20% (Scene Planning), 30-70% (Video Generation), 80% (Stitching), 90% (Audio), 100% (Complete).
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-015: Cost Calculation">
+        System shall track total cost per generation, store final per-generation cost in database, and update user's total_cost field on generation completion.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-016: Cancel Generation">
+        System shall allow users to request cancellation of in-progress generation from UI. Best-effort attempt to stop processing. If cancellation succeeds, status updated to failed with error="Cancelled by user".
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications - GET /api/status/{generation_id}">
+        Returns StatusResponse with generation_id, status, progress (0-100), current_step, video_url, cost, error. Status values: pending, processing, completed, failed. Response time target: &lt;200ms.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="AC-3.4.1: Progress Tracking">
+        Progress updates occur at: 10% (LLM), 20% (Scene Planning), 30-70% (Video Generation), 80% (Stitching), 90% (Audio), 100% (Complete). Status endpoint returns current status, progress percentage, and current step description.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="AC-3.4.2: Cost Calculation">
+        Cost calculation service calculates total cost (LLM + video generation API costs), stores cost per generation in database, and updates user's total_cost field atomically.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="AC-3.4.3: Cancel Generation">
+        System sets cancellation_requested flag, checks flag at start of each pipeline stage, stops processing if flag is True, updates status to failed with error="Cancelled by user", and cleans up temp files.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="AC-3.4.4: Frontend Progress Display">
+        Frontend polls status endpoint every 2 seconds, progress bar updates, current step description displayed, cancel button available during processing, video player appears when status=completed.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Pipeline Orchestration">
+        Generation record created at start with status=pending and updated step-by-step to drive user-facing progress. Single orchestration function coordinates all seven pipeline stages sequentially.
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 3.4: Progress Tracking and Management">
+        Update generation record at each pipeline stage, create status endpoint, frontend polls every 2 seconds. Track API costs at each stage, store cost per generation, update user.total_cost atomically. Add cancellation flag to generation record, check flag at each pipeline stage.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/api/routes/generations.py" kind="endpoint" symbol="get_generation_status" lines="430-490" reason="Status endpoint that returns current generation progress, status, and metadata. Includes authorization check to ensure users can only access their own generations." />
+      <artifact path="backend/app/api/routes/generations.py" kind="service" symbol="process_generation" lines="44-380" reason="Main pipeline orchestration function that updates progress at each stage (10%, 20%, 30-70%, 80%, 90%, 100%). Includes cancellation checks before each pipeline stage." />
+      <artifact path="backend/app/api/routes/generations.py" kind="function" symbol="check_cancellation" lines="104-106" reason="Cancellation check function that queries database for cancellation_requested flag on generation record." />
+      <artifact path="backend/app/services/cost_tracking.py" kind="service" symbol="track_complete_generation_cost" lines="131-170" reason="Complete cost tracking service that accumulates generation cost and updates user's total_cost field atomically." />
+      <artifact path="backend/app/services/cost_tracking.py" kind="service" symbol="accumulate_generation_cost" lines="53-93" reason="Accumulates total cost for a generation (LLM + video costs) and updates Generation record." />
+      <artifact path="backend/app/services/cost_tracking.py" kind="service" symbol="update_user_total_cost" lines="96-129" reason="Updates user's total_cost field atomically using database transaction." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_video_clip" lines="43-150" reason="Video clip generation service that accepts cancellation_check callback and checks cancellation before each model attempt." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_all_clips" lines="457-513" reason="Generates all video clips sequentially, checks cancellation before each scene, handles cancellation errors." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-42" reason="Generation model with fields: status (indexed), progress (0-100), current_step, cost, cancellation_requested, error_message. All required fields already exist." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="StatusResponse" lines="15-27" reason="Pydantic schema for status endpoint response including generation_id, status, progress, current_step, video_url, cost, error, num_scenes, available_clips." />
+      <artifact path="frontend/src/routes/GenerationStatus.tsx" kind="component" symbol="GenerationStatus" lines="1-258" reason="Frontend component that displays generation status with progress bar. Currently navigates to separate status page but needs polling integration into Dashboard." />
+      <artifact path="frontend/src/lib/generationService.ts" kind="service" symbol="getGenerationStatus" lines="45-52" reason="Frontend API service function for polling status endpoint. Returns StatusResponse with all progress information." />
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="Dashboard" lines="1-195" reason="Main dashboard component with prompt input form. Currently navigates to GenerationStatus page but needs progress display and polling integration." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="pytest-asyncio" version=">=0.21.0" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Backend Framework: FastAPI + Python 3.11 (from Epic 1)</constraint>
+    <constraint>Progress Tracking: Update Generation model at each pipeline stage with status, progress, and current_step</constraint>
+    <constraint>Cost Tracking: Track API costs at each stage (LLM enhancement, video generation), calculate total, update user.total_cost atomically</constraint>
+    <constraint>Cancellation: Best-effort cancellation using cancellation_requested flag checked at start of each pipeline stage</constraint>
+    <constraint>Status Endpoint: FastAPI endpoint that returns current generation state with proper authorization</constraint>
+    <constraint>Frontend Polling: React useEffect with setInterval to poll status endpoint every 2 seconds</constraint>
+    <constraint>Error Handling: Graceful error handling for polling failures, cancellation errors, cost calculation errors</constraint>
+    <constraint>Logging: Structured logging at INFO level for progress updates, WARNING for cancellation, ERROR for failures</constraint>
+    <constraint>Database Transactions: Use SQLAlchemy transactions for atomic updates (user.total_cost, generation.cost)</constraint>
+    <constraint>Progress Updates: Must occur at specific percentages: 10% (LLM), 20% (Scene Planning), 30-70% (Video Generation), 80% (Stitching), 90% (Audio), 100% (Complete)</constraint>
+    <constraint>Status Endpoint Performance: Response time target &lt;200ms (PRD NFR-002)</constraint>
+    <constraint>Authorization: Users can only access their own generation status (check generation.user_id == current_user.id)</constraint>
+  </constraints>
+  <interfaces>
+    <interface name="GET /api/status/{generation_id}" kind="REST endpoint" signature="GET /api/status/{generation_id}
+Headers: Authorization: Bearer {jwt_token}
+Response: StatusResponse {
+  generation_id: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress: number (0-100)
+  current_step: string | null
+  video_url: string | null
+  cost: number | null
+  error: string | null
+  num_scenes: number | null
+  available_clips: number
+}" path="backend/app/api/routes/generations.py" />
+    <interface name="POST /api/generations/{id}/cancel" kind="REST endpoint" signature="POST /api/generations/{id}/cancel
+Headers: Authorization: Bearer {jwt_token}
+Response: StatusResponse (updated status with error='Cancelled by user')" path="backend/app/api/routes/generations.py" />
+    <interface name="cancellation_check callback" kind="function signature" signature="def check_cancellation() -> bool
+Returns True if generation should be cancelled, False otherwise" path="backend/app/api/routes/generations.py" />
+    <interface name="generationService.getGenerationStatus" kind="TypeScript function" signature="async function getGenerationStatus(generationId: string): Promise&lt;StatusResponse&gt;" path="frontend/src/lib/generationService.ts" />
+  </interfaces>
+  <tests>
+    <standards>
+      Backend testing uses pytest with FastAPI TestClient. Mock external APIs in tests. Integration tests verify complete flow. Unit tests for each service module. Frontend testing uses Vitest with React Testing Library. Test polling logic, progress display, cancel button functionality. All tests should verify proper error handling, authorization checks, and atomic database updates.
+    </standards>
+    <locations>
+      <location>backend/tests/test_cost_tracking.py - Unit tests for cost tracking service</location>
+      <location>backend/tests/test_video_generation.py - Unit tests for video generation with cancellation</location>
+      <location>backend/tests/test_integration_video_generation.py - Integration tests for cancellation during video generation</location>
+      <location>backend/tests/test_integration_complete_pipeline.py - Integration tests for complete pipeline with cancellation</location>
+      <location>frontend/src/**/*.test.tsx - Frontend unit tests</location>
+      <location>frontend/src/**/*.test.ts - Frontend service tests</location>
+    </locations>
+    <ideas>
+      <idea acId="AC-3.4.1">Unit test: Progress tracking service with various progress states (10%, 20%, 30-70%, 80%, 90%, 100%)</idea>
+      <idea acId="AC-3.4.1">Integration test: Status endpoint with various generation states (pending, processing, completed, failed)</idea>
+      <idea acId="AC-3.4.1">Integration test: Progress updates throughout pipeline at each stage</idea>
+      <idea acId="AC-3.4.2">Unit test: Cost tracking service with various cost scenarios (LLM cost, video cost, total cost)</idea>
+      <idea acId="AC-3.4.2">Integration test: Cost calculation and user.total_cost update (verify atomic transaction)</idea>
+      <idea acId="AC-3.4.3">Unit test: Cancellation service with cancellation flag logic</idea>
+      <idea acId="AC-3.4.3">Integration test: Cancellation flow (request → stop → cleanup) at various pipeline stages</idea>
+      <idea acId="AC-3.4.3">Integration test: Cancellation during video generation (test cancellation_check callback)</idea>
+      <idea acId="AC-3.4.4">Frontend test: ProgressBar component with various states (pending, processing, completed, failed)</idea>
+      <idea acId="AC-3.4.4">Frontend test: Polling logic and cleanup (verify polling stops when status is completed/failed)</idea>
+      <idea acId="AC-3.4.4">E2E test: User submits prompt → sees progress → can cancel → sees final result</idea>
+      <idea acId="AC-3.4.1">Performance test: Status endpoint response time (&lt;200ms target)</idea>
+      <idea acId="AC-3.4.4">Frontend test: Polling interval verification (every 2 seconds)</idea>
+      <idea acId="AC-3.4.1">Authorization test: Verify users can only access their own generation status (403 Forbidden for other users)</idea>
+    </ideas>
+  </tests>
+</story-context>
+

@@ -9,13 +9,16 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from app.schemas.generation import ScenePlan
 
-from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip
+from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip, afx
 
 logger = logging.getLogger(__name__)
 
 # Music library directory structure
-MUSIC_LIBRARY_DIR = Path("backend/assets/music")
-SFX_LIBRARY_DIR = Path("backend/assets/sfx")
+# Resolve path relative to this file's location (backend/app/services/pipeline/)
+# Go up 4 levels: pipeline -> services -> app -> backend, then into assets/music
+_BASE_DIR = Path(__file__).parent.parent.parent.parent
+MUSIC_LIBRARY_DIR = _BASE_DIR / "assets" / "music"
+SFX_LIBRARY_DIR = _BASE_DIR / "assets" / "sfx"
 
 # Music style mapping (maps style keywords to music file names)
 # For MVP, we'll use simple keyword matching
@@ -69,7 +72,12 @@ def add_audio_layer(
         video_duration = video.duration
         
         # Select music file based on style (graceful fallback if not found)
+        logger.info(f"Selecting music file for style: '{music_style}'")
         music_file = _select_music_file(music_style)
+        if music_file:
+            logger.info(f"Music file selected: {music_file.name} (path: {music_file.absolute()})")
+        else:
+            logger.warning(f"No music file found for style '{music_style}' - video will be exported without background music")
         
         # Check cancellation before loading music
         if cancellation_check and cancellation_check():
@@ -87,17 +95,17 @@ def add_audio_layer(
             # Trim music to video duration
             if music_clip.duration > video_duration:
                 logger.debug(f"Trimming music from {music_clip.duration}s to {video_duration}s")
-                music_clip = music_clip.subclip(0, video_duration)
+                music_clip = music_clip.subclipped(0, video_duration)
             elif music_clip.duration < video_duration:
                 # Loop music if shorter than video (for MVP, just repeat once)
                 logger.debug(f"Music ({music_clip.duration}s) shorter than video ({video_duration}s), looping")
                 loops_needed = int(video_duration / music_clip.duration) + 1
                 music_clips = [music_clip] * loops_needed
-                music_clip = CompositeAudioClip(music_clips).subclip(0, video_duration)
+                music_clip = CompositeAudioClip(music_clips).subclipped(0, video_duration)
             
             # Adjust music volume to 30%
             logger.debug("Adjusting music volume to 30%")
-            music_clip = music_clip.volumex(0.3)
+            music_clip = music_clip.with_effects([afx.MultiplyVolume(0.3)])
         else:
             logger.info("No music file available - video will be exported without background music")
         
@@ -127,7 +135,7 @@ def add_audio_layer(
                     base_sfx = AudioFileClip(str(sfx_file))
                     # Trim SFX to 0.5s (transition duration)
                     if base_sfx.duration > 0.5:
-                        base_sfx = base_sfx.subclip(0, 0.5)
+                        base_sfx = base_sfx.subclipped(0, 0.5)
                     
                     # Create SFX clips at each transition point
                     for transition_time in transition_times:
@@ -148,7 +156,7 @@ def add_audio_layer(
                     logger.debug("Adding sound effect at start (no scene plan available)")
                     sfx_clip = AudioFileClip(str(sfx_file))
                     if sfx_clip.duration > 0.5:
-                        sfx_clip = sfx_clip.subclip(0, 0.5)
+                        sfx_clip = sfx_clip.subclipped(0, 0.5)
                     sfx_clip = sfx_clip.set_start(0)
                     sfx_clips.append(sfx_clip)
             except Exception as e:
@@ -186,7 +194,7 @@ def add_audio_layer(
         # Attach composite audio to video (if available)
         if final_audio:
             logger.debug("Attaching audio to video")
-            final_video = video.set_audio(final_audio)
+            final_video = video.with_audio(final_audio)
         else:
             logger.debug("No audio to attach - video will be silent")
             final_video = video
@@ -244,22 +252,76 @@ def _select_music_file(style: str) -> Optional[Path]:
     # Map style to filename
     filename = MUSIC_STYLE_MAP.get(style_lower, MUSIC_STYLE_MAP["default"])
     
+    # Ensure music directory exists
+    if not MUSIC_LIBRARY_DIR.exists():
+        logger.warning(f"Music library directory does not exist: {MUSIC_LIBRARY_DIR}")
+        return None
+    
     # Try exact match first
     music_file = MUSIC_LIBRARY_DIR / filename
     
-    # If not found, try default
+    # If not found, try case-insensitive match and different extensions
     if not music_file.exists():
-        logger.warning(f"Music file not found: {music_file}, trying default")
-        music_file = MUSIC_LIBRARY_DIR / MUSIC_STYLE_MAP["default"]
+        logger.debug(f"Music file not found: {music_file}, trying case-insensitive and alternative extensions")
+        
+        # Extract base name (without extension) - handle double extensions like .mp3.mp3
+        expected_base = filename.replace(".mp3", "").lower()
+        
+        # Try case-insensitive match - check if filename starts with expected base
+        for file in MUSIC_LIBRARY_DIR.iterdir():
+            if file.is_file():
+                # Get base name by removing all extensions (handle .mp3.mp3 case)
+                file_base = file.name
+                while '.' in file_base:
+                    file_base = file_base.rsplit('.', 1)[0]
+                
+                if file_base.lower() == expected_base:
+                    # Found a match (might have different extension or case)
+                    logger.info(f"Found music file with different case/extension: {file.name} (looking for {filename})")
+                    music_file = file
+                    break
+        else:
+            # If still not found, try default
+            logger.warning(f"Music file not found: {music_file}, trying default")
+            default_filename = MUSIC_STYLE_MAP["default"]
+            music_file = MUSIC_LIBRARY_DIR / default_filename
+            expected_base_default = default_filename.replace(".mp3", "").lower()
+            
+            # Try case-insensitive for default too
+            if not music_file.exists():
+                for file in MUSIC_LIBRARY_DIR.iterdir():
+                    if file.is_file():
+                        # Get base name by removing all extensions
+                        file_base = file.name
+                        while '.' in file_base:
+                            file_base = file_base.rsplit('.', 1)[0]
+                        
+                        if file_base.lower() == expected_base_default:
+                            logger.info(f"Found default music file with different case/extension: {file.name}")
+                            music_file = file
+                            break
+                
+                # If default not found either, try to use ANY available MP3 file as fallback
+                if not music_file.exists():
+                    logger.warning(f"Default music file also not found, trying to use any available MP3 file")
+                    for file in MUSIC_LIBRARY_DIR.iterdir():
+                        if file.is_file() and file.suffix.lower() in ['.mp3', '.wav', '.m4a']:
+                            logger.info(f"Using any available music file as fallback: {file.name}")
+                            music_file = file
+                            break
     
     if not music_file.exists():
+        # List available files for debugging
+        available_files = [f.name for f in MUSIC_LIBRARY_DIR.iterdir() if f.is_file()]
         logger.warning(
-            f"Music library is empty. No music files found in {MUSIC_LIBRARY_DIR}. "
-            f"Video will be exported without background music. "
-            f"Please add music files to enable audio layer."
+            f"Music library is empty or file not found. "
+            f"Looking for: {filename} in {MUSIC_LIBRARY_DIR} (resolved: {music_file.absolute()}). "
+            f"Available files: {available_files}. "
+            f"Video will be exported without background music."
         )
         return None
     
+    logger.info(f"Selected music file: {music_file} (absolute: {music_file.absolute()})")
     return music_file
 
 
