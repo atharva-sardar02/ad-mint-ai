@@ -4,13 +4,10 @@ Password hashing and JWT token utilities.
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
-
-# Password hashing context with bcrypt (cost factor 12)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
 
 def hash_password(password: str) -> str:
@@ -21,9 +18,13 @@ def hash_password(password: str) -> str:
         password: Plain text password
 
     Returns:
-        Hashed password string
+        Hashed password string (UTF-8 encoded)
     """
-    return pwd_context.hash(password)
+    # Generate salt with cost factor 12
+    salt = bcrypt.gensalt(rounds=12)
+    # Hash password and return as UTF-8 string
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -37,7 +38,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

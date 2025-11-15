@@ -10,7 +10,7 @@ import { useAuthStore } from "../../store/authStore";
 import { Button } from "../ui/Button";
 
 export const Navbar: React.FC = () => {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -19,9 +19,10 @@ export const Navbar: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Logout functionality will be fully implemented in Story 2.4
-    // For now, this is a placeholder
-    navigate("/login");
+    // Clear authentication state
+    logout();
+    // Redirect to login page after state is cleared
+    navigate("/login", { replace: true });
   };
 
   return (

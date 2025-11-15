@@ -71,6 +71,57 @@ describe("Navbar", () => {
     });
   });
 
+  describe("logout functionality", () => {
+    beforeEach(() => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: "1",
+          username: "testuser",
+          email: "test@example.com",
+          total_generations: 5,
+          total_cost: 10.5,
+        },
+        token: "test-token",
+      });
+      localStorage.setItem("token", "test-token");
+    });
+
+    it("should call logout and navigate to login when logout button is clicked", () => {
+      const store = useAuthStore.getState();
+      const logoutSpy = vi.spyOn(store, "logout");
+
+      render(
+        <MemoryRouter>
+          <Navbar />
+        </MemoryRouter>
+      );
+
+      const logoutButton = screen.getByText("Logout");
+      logoutButton.click();
+
+      expect(logoutSpy).toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith("/login", { replace: true });
+    });
+
+    it("should clear auth state before navigating", () => {
+      render(
+        <MemoryRouter>
+          <Navbar />
+        </MemoryRouter>
+      );
+
+      const logoutButton = screen.getByText("Logout");
+      logoutButton.click();
+
+      // Verify state is cleared
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(useAuthStore.getState().token).toBeNull();
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(localStorage.getItem("token")).toBeNull();
+    });
+  });
+
   describe("when authenticated", () => {
     beforeEach(() => {
       useAuthStore.setState({

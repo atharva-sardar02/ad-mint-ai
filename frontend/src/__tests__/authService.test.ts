@@ -132,6 +132,30 @@ describe("authService", () => {
       authService.logout();
       expect(localStorage.getItem("token")).toBeNull();
     });
+
+    it("should handle localStorage errors gracefully", () => {
+      // Mock localStorage.removeItem to throw an error
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      
+      // Create a spy that throws when called
+      const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+        throw new Error("localStorage error");
+      });
+
+      // Should not throw, even if localStorage fails
+      expect(() => authService.logout()).not.toThrow();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      // Restore
+      removeItemSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("should work when token does not exist", () => {
+      localStorage.removeItem("token");
+      expect(() => authService.logout()).not.toThrow();
+      expect(localStorage.getItem("token")).toBeNull();
+    });
   });
 
   describe("getCurrentUser", () => {

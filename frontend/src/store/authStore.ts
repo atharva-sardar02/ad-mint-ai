@@ -70,9 +70,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   /**
    * Logout action: clears token and user state.
+   * Atomically resets all authentication state to null/false.
+   * Note: Components should handle navigation after calling logout.
    */
   logout: () => {
+    // Clear token from localStorage first
     authService.logout();
+    
+    // Atomically reset all auth state
     set({
       token: null,
       user: null,

@@ -47,7 +47,7 @@ development_status:
   2-1-authentication-backend: done
   2-2-authentication-frontend: done
   2-3-protected-routes-frontend: done
-  2-4-logout-functionality: ready-for-dev
+  2-4-logout-functionality: done
   epic-2-retrospective: optional
 
   epic-3: backlog

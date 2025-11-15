@@ -103,12 +103,13 @@ describe("authStore", () => {
   });
 
   describe("logout", () => {
-    it("should clear token and user state", () => {
+    it("should clear token and user state atomically", () => {
       // Set initial state
       localStorage.setItem("token", "test-token");
+      const mockUser = { id: "1", username: "test", total_generations: 0, total_cost: 0 };
       useAuthStore.setState({
         token: "test-token",
-        user: { id: "1", username: "test", total_generations: 0, total_cost: 0 },
+        user: mockUser,
         isAuthenticated: true,
       });
 
@@ -117,9 +118,28 @@ describe("authStore", () => {
 
       expect(authService.logout).toHaveBeenCalled();
       expect(localStorage.getItem("token")).toBeNull();
-      expect(useAuthStore.getState().token).toBeNull();
-      expect(useAuthStore.getState().user).toBeNull();
-      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      
+      // Verify all state is cleared atomically
+      const state = useAuthStore.getState();
+      expect(state.token).toBeNull();
+      expect(state.user).toBeNull();
+      expect(state.isAuthenticated).toBe(false);
+    });
+
+    it("should work even when already logged out", () => {
+      useAuthStore.setState({
+        token: null,
+        user: null,
+        isAuthenticated: false,
+      });
+
+      const store = useAuthStore.getState();
+      expect(() => store.logout()).not.toThrow();
+      
+      const state = useAuthStore.getState();
+      expect(state.token).toBeNull();
+      expect(state.user).toBeNull();
+      expect(state.isAuthenticated).toBe(false);
     });
   });
 
