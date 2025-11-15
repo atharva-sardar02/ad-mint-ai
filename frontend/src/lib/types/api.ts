@@ -61,3 +61,44 @@ export class ValidationError extends Error {
  */
 export type ApiErrorType = NetworkError | AuthError | ValidationError;
 
+/**
+ * Generation status types.
+ */
+export type GenerationStatus = "pending" | "processing" | "completed" | "failed";
+
+/**
+ * Generation list item.
+ */
+export interface GenerationListItem {
+  id: string;
+  prompt: string;
+  status: GenerationStatus;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  duration: number;
+  cost: number | null;
+  created_at: string; // ISO datetime string
+  completed_at: string | null; // ISO datetime string
+}
+
+/**
+ * Generation list response with pagination.
+ */
+export interface GenerationListResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  generations: GenerationListItem[];
+}
+
+/**
+ * Query parameters for getGenerations API call.
+ */
+export interface GetGenerationsParams {
+  limit?: number;
+  offset?: number;
+  status?: GenerationStatus;
+  q?: string;
+  sort?: "created_at_desc" | "created_at_asc";
+}
+
