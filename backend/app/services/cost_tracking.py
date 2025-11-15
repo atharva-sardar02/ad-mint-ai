@@ -63,13 +63,13 @@ def accumulate_generation_cost(
         db: Database session
         generation_id: Generation ID
         video_cost: Total video generation cost
-        llm_cost: Optional LLM cost (default: 0.01 for GPT-4)
+        llm_cost: Optional LLM cost (default: 0.01 for GPT-4 Turbo)
     
     Returns:
         float: Total accumulated cost
     """
     if llm_cost is None:
-        llm_cost = 0.01  # Default LLM cost per generation (GPT-4)
+        llm_cost = 0.01  # Default LLM cost per generation (GPT-4 Turbo)
     
     total_cost = video_cost + llm_cost
     

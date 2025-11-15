@@ -6,6 +6,7 @@ import React from "react";
 export interface ErrorMessageProps {
   message: string;
   className?: string;
+  debugInfo?: any; // Optional debug information to display
 }
 
 /**
@@ -15,7 +16,10 @@ export interface ErrorMessageProps {
 export const ErrorMessage: React.FC<ErrorMessageProps> = ({
   message,
   className = "",
+  debugInfo,
 }) => {
+  const [showDebug, setShowDebug] = React.useState(false);
+
   if (!message) return null;
 
   return (
@@ -41,7 +45,24 @@ export const ErrorMessage: React.FC<ErrorMessageProps> = ({
             clipRule="evenodd"
           />
         </svg>
-        <span>{message}</span>
+        <div className="flex-1">
+          <span>{message}</span>
+          {debugInfo && (
+            <div className="mt-2">
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-xs text-red-600 hover:text-red-800 underline"
+              >
+                {showDebug ? "Hide" : "Show"} Debug Info
+              </button>
+              {showDebug && (
+                <pre className="mt-2 p-2 bg-red-100 rounded text-xs overflow-auto max-h-64">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

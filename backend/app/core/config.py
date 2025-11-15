@@ -34,9 +34,12 @@ class Settings:
     PROJECT_NAME: str = "Ad Mint AI"
 
     # CORS configuration
-    CORS_ALLOWED_ORIGINS: list[str] = os.getenv(
-        "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
-    ).split(",")
+    CORS_ALLOWED_ORIGINS: list[str] = [
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
+        ).split(",")
+    ]
 
 
 settings = Settings()

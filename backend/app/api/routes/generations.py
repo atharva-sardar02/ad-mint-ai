@@ -7,13 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.models.generation import Generation
 from app.db.models.user import User
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.schemas.generation import (
     GenerateRequest,
     GenerateResponse,
@@ -26,15 +27,360 @@ from app.services.cost_tracking import track_video_generation_cost, track_comple
 from app.services.pipeline.llm_enhancement import enhance_prompt_with_llm
 from app.services.pipeline.overlays import add_overlays_to_clips
 from app.services.pipeline.scene_planning import plan_scenes
+from app.services.pipeline.stitching import stitch_video_clips
+from app.services.pipeline.audio import add_audio_layer
+from app.services.pipeline.export import export_final_video
+from app.services.pipeline.cache import get_cached_clip, cache_clip, should_cache_prompt
+from app.services.pipeline.video_generation import generate_video_clip, MODEL_COSTS, REPLICATE_MODELS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["generations"])
 
+# Temporary flag: text overlays are disabled due to ongoing font issues (see #TODO)
+TEXT_OVERLAYS_ENABLED = False
+
+
+async def process_generation(generation_id: str, prompt: str):
+    """
+    Background task to process video generation.
+    This runs asynchronously after the API returns a response.
+    """
+    logger.info(f"[{generation_id}] Starting background generation task")
+    logger.info(f"[{generation_id}] User prompt: {prompt[:100]}...")
+    
+    # Create a new database session for the background task
+    db = SessionLocal()
+    try:
+        generation = db.query(Generation).filter(Generation.id == generation_id).first()
+        if not generation:
+            logger.error(f"[{generation_id}] Generation not found in background task")
+            return
+        
+        logger.info(f"[{generation_id}] Generation record found, starting processing")
+        
+        try:
+            # Update status to processing
+            generation.status = "processing"
+            generation.progress = 10
+            generation.current_step = "LLM Enhancement"
+            db.commit()
+            logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
+            
+            # Call LLM enhancement service
+            logger.info(f"[{generation_id}] Calling LLM enhancement service...")
+            ad_spec = await enhance_prompt_with_llm(prompt)
+            logger.info(f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}")
+            
+            # Store LLM specification
+            generation.llm_specification = ad_spec.model_dump()
+            generation.framework = ad_spec.framework
+            generation.progress = 20
+            generation.current_step = "Scene Planning"
+            db.commit()
+            logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
+            
+            # Call scene planning module
+            logger.info(f"[{generation_id}] Calling scene planning module...")
+            scene_plan = plan_scenes(ad_spec, target_duration=15)
+            logger.info(f"[{generation_id}] Scene planning completed - {len(scene_plan.scenes)} scenes planned, total duration: {scene_plan.total_duration}s")
+            
+            # Store scene plan
+            generation.scene_plan = scene_plan.model_dump()
+            generation.num_scenes = len(scene_plan.scenes)
+            db.commit()
+            logger.info(f"[{generation_id}] Scene plan stored in database")
+            
+            # Video Generation Stage (30-70% progress)
+            logger.info(f"[{generation_id}] Starting video generation stage (30-70% progress)")
+            logger.info(f"[{generation_id}] Will generate {len(scene_plan.scenes)} video clips")
+            
+            # Setup temp storage directory
+            temp_dir = Path("output/temp")
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_output_dir = str(temp_dir / generation_id)
+            
+            # Create cancellation check function
+            def check_cancellation() -> bool:
+                db.refresh(generation)
+                return generation.cancellation_requested if generation else False
+            
+            try:
+                # Generate all video clips
+                num_scenes = len(scene_plan.scenes)
+                progress_start = 30
+                progress_end = 70
+                progress_per_scene = (progress_end - progress_start) / num_scenes if num_scenes > 0 else 0
+                
+                clip_paths = []
+                total_video_cost = 0.0
+                use_cache = should_cache_prompt(prompt)
+                
+                if use_cache:
+                    logger.info(f"[{generation_id}] Cache enabled for this prompt")
+                
+                for i, scene in enumerate(scene_plan.scenes, start=1):
+                    # Check cancellation before each scene
+                    if check_cancellation():
+                        logger.info(f"[{generation_id}] Generation cancelled before scene {i}")
+                        generation.status = "failed"
+                        generation.error_message = "Cancelled by user"
+                        db.commit()
+                        return
+                    
+                    # Update progress
+                    progress = int(progress_start + (i - 1) * progress_per_scene)
+                    generation.progress = progress
+                    generation.current_step = f"Generating video clip {i} of {num_scenes}"
+                    db.commit()
+                    
+                    logger.info(f"[{generation_id}] Generating clip {i}/{num_scenes} - Scene type: {scene.scene_type}, Duration: {scene.duration}s")
+                    logger.info(f"[{generation_id}] Visual prompt: {scene.visual_prompt[:80]}...")
+                    
+                    # Check cache first (scene index is 0-based)
+                    cached_clip = None
+                    if use_cache:
+                        cached_clip = get_cached_clip(prompt, i - 1)
+                    
+                    if cached_clip:
+                        logger.info(f"[{generation_id}] Using cached clip for scene {i}: {cached_clip}")
+                        clip_path = cached_clip
+                        clip_cost = 0.0  # Cached clips are free
+                    else:
+                        # Generate video clip
+                        logger.info(f"[{generation_id}] Calling Replicate API for clip {i}...")
+                        clip_path = await generate_video_clip(
+                            scene=scene,
+                            output_dir=temp_output_dir,
+                            generation_id=generation_id,
+                            scene_number=i,
+                            cancellation_check=check_cancellation
+                        )
+                        logger.info(f"[{generation_id}] Clip {i} generated successfully: {clip_path}")
+                        
+                        # Cache the clip if caching is enabled
+                        if use_cache:
+                            cache_clip(prompt, i - 1, clip_path)
+                        
+                        # Track cost per clip (approximate - actual cost from API response would be better)
+                        model_cost_per_sec = MODEL_COSTS.get(REPLICATE_MODELS["primary"], 0.05)
+                        clip_cost = model_cost_per_sec * scene.duration
+                    
+                    clip_paths.append(clip_path)
+                    total_video_cost += clip_cost
+                    logger.info(f"[{generation_id}] Clip {i} cost: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f}")
+                    
+                    track_video_generation_cost(
+                        db=db,
+                        generation_id=generation_id,
+                        scene_number=i,
+                        cost=clip_cost,
+                        model_name=REPLICATE_MODELS["primary"]
+                    )
+                
+                # Store temp clip paths
+                generation.temp_clip_paths = clip_paths
+                generation.progress = 70
+                generation.current_step = "Adding text overlays"
+                db.commit()
+                logger.info(f"[{generation_id}] All {len(clip_paths)} video clips generated, progress: 70% - Adding text overlays")
+                
+                if TEXT_OVERLAYS_ENABLED:
+                    # Normal overlay flow (disabled for now, see flag above)
+                    logger.info(f"[{generation_id}] Starting text overlay addition for {len(clip_paths)} clips...")
+                    scene_plan_obj = ScenePlan(**generation.scene_plan)
+                    overlay_output_dir = str(temp_dir / f"{generation_id}_overlays")
+                    logger.info(f"[{generation_id}] Overlay output directory: {overlay_output_dir}")
+                    overlay_paths = add_overlays_to_clips(
+                        clip_paths=clip_paths,
+                        scene_plan=scene_plan_obj,
+                        output_dir=overlay_output_dir
+                    )
+                    logger.info(f"[{generation_id}] Text overlays added successfully to all clips")
+                else:
+                    # TODO: Re-enable overlays once font loading issues are resolved (MoviePy/Pillow errors)
+                    overlay_paths = clip_paths
+                    logger.info(f"[{generation_id}] Text overlay stage temporarily disabled - using raw clips")
+                
+                # Update temp_clip_paths with overlay paths
+                generation.temp_clip_paths = overlay_paths
+                generation.progress = 80
+                generation.current_step = "Stitching video clips"
+                db.commit()
+                logger.info(f"[{generation_id}] Progress: 80% - Stitching video clips")
+                
+                # Check cancellation before stitching
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before stitching")
+                    generation.status = "failed"
+                    generation.error_message = "Cancelled by user"
+                    db.commit()
+                    return
+                
+                # Video Stitching Stage (80% progress)
+                logger.info(f"[{generation_id}] Stitching {len(overlay_paths)} video clips together...")
+                stitched_output_dir = str(temp_dir / f"{generation_id}_stitched")
+                stitched_output_path = str(Path(stitched_output_dir) / "stitched.mp4")
+                logger.info(f"[{generation_id}] Stitched video will be saved to: {stitched_output_path}")
+                stitched_video_path = stitch_video_clips(
+                    clip_paths=overlay_paths,
+                    output_path=stitched_output_path,
+                    transitions=True,
+                    cancellation_check=check_cancellation
+                )
+                logger.info(f"[{generation_id}] Video stitching completed: {stitched_video_path}")
+                
+                generation.progress = 85
+                generation.current_step = "Adding audio layer"
+                db.commit()
+                logger.info(f"[{generation_id}] Progress: 85% - Adding audio layer")
+                
+                # Check cancellation before audio
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before audio")
+                    generation.status = "failed"
+                    generation.error_message = "Cancelled by user"
+                    db.commit()
+                    return
+                
+                # Audio Layer Stage (85-90% progress)
+                logger.info(f"[{generation_id}] Starting audio layer addition...")
+                # Extract music style from LLM specification
+                music_style = "professional"  # Default
+                if generation.llm_specification:
+                    brand_guidelines = generation.llm_specification.get("brand_guidelines", {})
+                    mood = brand_guidelines.get("mood", "professional")
+                    music_style = mood.lower() if mood else "professional"
+                logger.info(f"[{generation_id}] Selected music style: {music_style}")
+                
+                audio_output_dir = str(temp_dir / f"{generation_id}_audio")
+                audio_output_path = str(Path(audio_output_dir) / "with_audio.mp4")
+                logger.info(f"[{generation_id}] Audio output path: {audio_output_path}")
+                
+                # Pass scene plan for transition detection
+                scene_plan_obj = ScenePlan(**generation.scene_plan) if generation.scene_plan else None
+                
+                video_with_audio = add_audio_layer(
+                    video_path=stitched_video_path,
+                    music_style=music_style,
+                    output_path=audio_output_path,
+                    scene_plan=scene_plan_obj,
+                    cancellation_check=check_cancellation
+                )
+                logger.info(f"[{generation_id}] Audio layer added successfully: {video_with_audio}")
+                
+                generation.progress = 90
+                generation.current_step = "Post-processing and export"
+                db.commit()
+                logger.info(f"[{generation_id}] Progress: 90% - Post-processing and export")
+                
+                # Check cancellation before export
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before export")
+                    generation.status = "failed"
+                    generation.error_message = "Cancelled by user"
+                    db.commit()
+                    return
+                
+                # Post-Processing and Export Stage (90-95% progress)
+                logger.info(f"[{generation_id}] Starting final video export...")
+                # Extract brand style from LLM specification
+                brand_style = "default"  # Default
+                if generation.llm_specification:
+                    brand_guidelines = generation.llm_specification.get("brand_guidelines", {})
+                    visual_style = brand_guidelines.get("visual_style_keywords", "default")
+                    brand_style = visual_style.lower() if visual_style else "default"
+                logger.info(f"[{generation_id}] Brand style: {brand_style}")
+                
+                # Use output directory from config or default
+                output_base_dir = "output"
+                logger.info(f"[{generation_id}] Exporting to: {output_base_dir}")
+                
+                video_url, thumbnail_url = export_final_video(
+                    video_path=video_with_audio,
+                    brand_style=brand_style,
+                    output_dir=output_base_dir,
+                    generation_id=generation_id,
+                    cancellation_check=check_cancellation
+                )
+                logger.info(f"[{generation_id}] Final video exported - Video URL: {video_url}, Thumbnail URL: {thumbnail_url}")
+                
+                generation.progress = 95
+                generation.current_step = "Finalizing"
+                db.commit()
+                logger.info(f"[{generation_id}] Progress: 95% - Finalizing")
+                
+                # Update Generation record with final URLs
+                generation.video_url = video_url
+                generation.thumbnail_url = thumbnail_url
+                generation.status = "completed"
+                generation.progress = 100
+                generation.current_step = "Complete"
+                generation.completed_at = datetime.utcnow()
+                db.commit()
+                logger.info(f"[{generation_id}] Generation marked as completed in database")
+                
+                # Clean up temp files
+                logger.info(f"[{generation_id}] Starting cleanup of temporary files...")
+                try:
+                    import shutil
+                    temp_gen_dir = temp_dir / generation_id
+                    if temp_gen_dir.exists():
+                        shutil.rmtree(temp_gen_dir)
+                    overlay_dir = temp_dir / f"{generation_id}_overlays"
+                    if overlay_dir.exists():
+                        shutil.rmtree(overlay_dir)
+                    stitched_dir = temp_dir / f"{generation_id}_stitched"
+                    if stitched_dir.exists():
+                        shutil.rmtree(stitched_dir)
+                    audio_dir = temp_dir / f"{generation_id}_audio"
+                    if audio_dir.exists():
+                        shutil.rmtree(audio_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp files: {e}")
+                
+                # Track complete generation cost
+                track_complete_generation_cost(
+                    db=db,
+                    generation_id=generation_id,
+                    video_cost=total_video_cost,
+                    llm_cost=0.01  # Approximate LLM cost
+                )
+                
+                logger.info(
+                    f"[{generation_id}] ✅ Generation completed successfully! "
+                    f"Video: {video_url}, Thumbnail: {thumbnail_url}, Total cost: ${total_video_cost:.4f}"
+                )
+                
+            except RuntimeError as e:
+                if "cancelled" in str(e).lower():
+                    # Already handled above
+                    return
+                logger.error(f"Video generation failed for {generation_id}: {e}", exc_info=True)
+                generation.status = "failed"
+                generation.error_message = str(e)
+                db.commit()
+                
+        except ValueError as e:
+            logger.error(f"Validation error in generation {generation_id}: {e}")
+            generation.status = "failed"
+            generation.error_message = str(e)
+            generation.progress = 0
+            db.commit()
+        except Exception as e:
+            logger.error(f"Unexpected error in generation {generation_id}: {e}", exc_info=True)
+            generation.status = "failed"
+            generation.error_message = str(e)
+            generation.progress = 0
+            db.commit()
+    finally:
+        db.close()
+
 
 @router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
 async def create_generation(
     request: GenerateRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> GenerateResponse:
@@ -70,197 +416,15 @@ async def create_generation(
     generation_id = generation.id
     logger.info(f"Created generation {generation_id}")
     
-    try:
-        # Update status to processing
-        generation.status = "processing"
-        generation.progress = 10
-        generation.current_step = "LLM Enhancement"
-        db.commit()
-        
-        # Call LLM enhancement service
-        logger.info(f"Calling LLM enhancement for generation {generation_id}")
-        ad_spec = await enhance_prompt_with_llm(request.prompt)
-        
-        # Store LLM specification
-        generation.llm_specification = ad_spec.model_dump()
-        generation.framework = ad_spec.framework
-        generation.progress = 20
-        generation.current_step = "Scene Planning"
-        db.commit()
-        
-        # Call scene planning module
-        logger.info(f"Calling scene planning for generation {generation_id}")
-        scene_plan = plan_scenes(ad_spec, target_duration=15)
-        
-        # Store scene plan
-        generation.scene_plan = scene_plan.model_dump()
-        generation.num_scenes = len(scene_plan.scenes)
-        db.commit()
-        
-        # Video Generation Stage (30-70% progress)
-        logger.info(f"Starting video generation for generation {generation_id}")
-        
-        # Setup temp storage directory
-        temp_dir = Path("output/temp")
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        temp_output_dir = str(temp_dir / generation_id)
-        
-        # Create cancellation check function
-        def check_cancellation() -> bool:
-            db.refresh(generation)
-            return generation.cancellation_requested if generation else False
-        
-        try:
-            # Generate all video clips
-            num_scenes = len(scene_plan.scenes)
-            progress_start = 30
-            progress_end = 70
-            progress_per_scene = (progress_end - progress_start) / num_scenes if num_scenes > 0 else 0
-            
-            clip_paths = []
-            total_video_cost = 0.0
-            
-            for i, scene in enumerate(scene_plan.scenes, start=1):
-                # Check cancellation before each scene
-                if check_cancellation():
-                    logger.info(f"Generation {generation_id} cancelled before scene {i}")
-                    generation.status = "failed"
-                    generation.error_message = "Cancelled by user"
-                    db.commit()
-                    raise RuntimeError("Generation cancelled by user")
-                
-                # Update progress
-                progress = int(progress_start + (i - 1) * progress_per_scene)
-                generation.progress = progress
-                generation.current_step = f"Generating video clip {i} of {num_scenes}"
-                db.commit()
-                
-                logger.info(f"Generating clip {i}/{num_scenes} for generation {generation_id}")
-                
-                # Generate video clip
-                from app.services.pipeline.video_generation import generate_video_clip, MODEL_COSTS, REPLICATE_MODELS
-                
-                clip_path = await generate_video_clip(
-                    scene=scene,
-                    output_dir=temp_output_dir,
-                    generation_id=generation_id,
-                    scene_number=i,
-                    cancellation_check=check_cancellation
-                )
-                clip_paths.append(clip_path)
-                
-                # Track cost per clip (approximate - actual cost from API response would be better)
-                model_cost_per_sec = MODEL_COSTS.get(REPLICATE_MODELS["primary"], 0.05)
-                clip_cost = model_cost_per_sec * scene.duration
-                total_video_cost += clip_cost
-                
-                track_video_generation_cost(
-                    db=db,
-                    generation_id=generation_id,
-                    scene_number=i,
-                    cost=clip_cost,
-                    model_name=REPLICATE_MODELS["primary"]
-                )
-            
-            # Store temp clip paths
-            generation.temp_clip_paths = clip_paths
-            generation.progress = 70
-            generation.current_step = "Adding text overlays"
-            db.commit()
-            
-            # Add text overlays to all clips
-            logger.info(f"Adding text overlays to {len(clip_paths)} clips")
-            scene_plan_obj = ScenePlan(**generation.scene_plan)
-            overlay_output_dir = str(temp_dir / f"{generation_id}_overlays")
-            overlay_paths = add_overlays_to_clips(
-                clip_paths=clip_paths,
-                scene_plan=scene_plan_obj,
-                output_dir=overlay_output_dir
-            )
-            
-            # Update temp_clip_paths with overlay paths
-            generation.temp_clip_paths = overlay_paths
-            generation.progress = 70  # Still at 70% - stitching comes next (in future story)
-            generation.current_step = "Video clips with overlays complete"
-            db.commit()
-            
-            # Track complete generation cost
-            track_complete_generation_cost(
-                db=db,
-                generation_id=generation_id,
-                video_cost=total_video_cost,
-                llm_cost=0.01  # Approximate LLM cost
-            )
-            
-            logger.info(
-                f"Generation {generation_id} video generation complete - "
-                f"{len(overlay_paths)} clips, cost: ${total_video_cost:.4f}"
-            )
-            
-        except RuntimeError as e:
-            if "cancelled" in str(e).lower():
-                # Already handled above
-                raise HTTPException(
-                    status_code=status.HTTP_200_OK,
-                    detail={
-                        "error": {
-                            "code": "GENERATION_CANCELLED",
-                            "message": "Generation was cancelled by user"
-                        }
-                    }
-                )
-            logger.error(f"Video generation failed for {generation_id}: {e}", exc_info=True)
-            generation.status = "failed"
-            generation.error_message = str(e)
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": {
-                        "code": "VIDEO_GENERATION_FAILED",
-                        "message": f"Video generation failed: {str(e)}"
-                    }
-                }
-            )
-        
-        logger.info(f"Generation {generation_id} initialized successfully - framework: {scene_plan.framework}, scenes: {generation.num_scenes}")
-        
-        return GenerateResponse(
-            generation_id=generation_id,
-            status="pending",
-            message="Video generation started"
-        )
-        
-    except ValueError as e:
-        logger.error(f"Validation error in generation {generation_id}: {e}")
-        generation.status = "failed"
-        generation.error_message = str(e)
-        generation.progress = 0
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": {
-                    "code": "GENERATION_FAILED",
-                    "message": f"Failed to process prompt: {str(e)}"
-                }
-            }
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error in generation {generation_id}: {e}", exc_info=True)
-        generation.status = "failed"
-        generation.error_message = str(e)
-        generation.progress = 0
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": {
-                    "code": "GENERATION_FAILED",
-                    "message": "An unexpected error occurred during generation"
-                }
-            }
-        )
+    # Add background task to process the generation
+    background_tasks.add_task(process_generation, generation_id, request.prompt)
+    
+    # Return immediately - processing happens in background
+    return GenerateResponse(
+        generation_id=generation_id,
+        status="pending",
+        message="Video generation started"
+    )
 
 
 @router.get("/status/{generation_id}", status_code=status.HTTP_200_OK)
@@ -310,6 +474,9 @@ async def get_generation_status(
             }
         )
     
+    # Count available clips
+    available_clips = len(generation.temp_clip_paths) if generation.temp_clip_paths else 0
+    
     return StatusResponse(
         generation_id=generation.id,
         status=generation.status,
@@ -317,7 +484,9 @@ async def get_generation_status(
         current_step=generation.current_step,
         video_url=generation.video_url,
         cost=generation.cost,
-        error=generation.error_message
+        error=generation.error_message,
+        num_scenes=generation.num_scenes,
+        available_clips=available_clips
     )
 
 
@@ -418,4 +587,93 @@ async def get_generations(
         limit=limit,
         offset=offset,
         generations=generation_items,
+    )
+
+
+@router.get("/clips/{generation_id}/{scene_number}")
+async def download_clip(
+    generation_id: str,
+    scene_number: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> FileResponse:
+    """
+    Download an individual scene clip from a generation.
+    
+    Args:
+        generation_id: UUID of the generation
+        scene_number: Scene number (1-based)
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        FileResponse: The video clip file
+    
+    Raises:
+        HTTPException: 404 if generation or clip not found
+        HTTPException: 403 if user doesn't own the generation
+    """
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Check authorization - user can only access their own generations
+    if generation.user_id != current_user.id:
+        logger.warning(f"User {current_user.id} attempted to download clip from generation {generation_id} owned by {generation.user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to access this generation"
+                }
+            }
+        )
+    
+    # Check if generation has temp clip paths
+    if not generation.temp_clip_paths or scene_number > len(generation.temp_clip_paths):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "CLIP_NOT_FOUND",
+                    "message": f"Clip {scene_number} not found for this generation"
+                }
+            }
+        )
+    
+    # Get the clip path (scene_number is 1-based, array is 0-based)
+    clip_path = generation.temp_clip_paths[scene_number - 1]
+    
+    # Check if file exists
+    clip_file = Path(clip_path)
+    if not clip_file.exists():
+        logger.error(f"Clip file not found: {clip_path}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "CLIP_FILE_NOT_FOUND",
+                    "message": f"Clip file not found on server"
+                }
+            }
+        )
+    
+    # Return the file
+    filename = f"{generation_id}_scene_{scene_number}.mp4"
+    logger.info(f"User {current_user.id} downloading clip {scene_number} from generation {generation_id}")
+    
+    return FileResponse(
+        path=clip_path,
+        media_type="video/mp4",
+        filename=filename
     )

@@ -168,3 +168,8 @@ secrets/
 *.crt
 *.cert
 
+# Video generation output
+output/temp/
+output/cache/
+output/videos/
+output/thumbnails/

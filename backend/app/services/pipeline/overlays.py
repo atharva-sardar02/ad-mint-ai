@@ -2,6 +2,7 @@
 Text overlay service for adding styled text overlays to video clips.
 """
 import logging
+import platform
 from pathlib import Path
 from typing import Optional
 
@@ -108,33 +109,31 @@ def _create_text_clip(
     Returns:
         TextClip: Styled text clip
     """
-    # Map style keywords to font families (using system fonts)
-    # For MVP, use common system fonts
-    font_family = _get_font_family(text_overlay)
+    font_path = _get_font_path()
     
     # Create text clip
     text_clip = TextClip(
-        text_overlay.text,
-        fontsize=text_overlay.font_size,
+        text=text_overlay.text,
+        font=font_path,
+        font_size=text_overlay.font_size,
         color=text_overlay.color,
-        font=font_family,
         size=(video_size[0] * 0.9, None),  # 90% of video width
         method='caption',  # Auto-wrap text
-        align='center'
-    ).set_duration(duration)
+        text_align='center'
+    ).with_duration(duration)
     
     # Add text shadow for readability
     # Create shadow clip (slightly offset, darker color)
     shadow_color = _get_shadow_color(text_overlay.color)
     shadow_clip = TextClip(
-        text_overlay.text,
-        fontsize=text_overlay.font_size,
+        text=text_overlay.text,
+        font=font_path,
+        font_size=text_overlay.font_size,
         color=shadow_color,
-        font=font_family,
         size=(video_size[0] * 0.9, None),
         method='caption',
-        align='center'
-    ).set_duration(duration).set_position((2, 2))  # Slight offset for shadow
+        text_align='center'
+    ).with_duration(duration).with_position((2, 2))  # Slight offset for shadow
     
     # Composite shadow and text
     text_with_shadow = CompositeVideoClip([shadow_clip, text_clip])
@@ -142,20 +141,44 @@ def _create_text_clip(
     return text_with_shadow
 
 
-def _get_font_family(text_overlay: TextOverlay) -> str:
+def _get_font_path() -> Optional[str]:
     """
-    Map style keywords to font families.
-    
-    Args:
-        text_overlay: TextOverlay specification
+    Locate a system font to ensure consistent rendering across platforms.
     
     Returns:
-        str: Font family name
+        Optional[str]: Path to a bold font file if available, None otherwise.
     """
-    # For MVP, use common system fonts
-    # Can be extended with custom font mapping based on brand guidelines
-    # Default to Arial (widely available)
-    return "Arial-Bold"
+    system = platform.system()
+    
+    font_candidates = []
+    if system == "Windows":
+        font_candidates = [
+            Path("C:/Windows/Fonts/arialbd.ttf"),
+            Path("C:/Windows/Fonts/ARIALBD.TTF"),
+            Path("C:/Windows/Fonts/Arial Bold.ttf"),
+            Path("C:/Windows/Fonts/arial.ttf"),
+        ]
+    elif system == "Darwin":  # macOS
+        font_candidates = [
+            Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+            Path("/System/Library/Fonts/Helvetica.ttc"),
+            Path("/Library/Fonts/Arial Bold.ttf"),
+        ]
+    else:  # Linux and others
+        font_candidates = [
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+            Path("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
+        ]
+    
+    for font_path in font_candidates:
+        if font_path.exists():
+            return str(font_path)
+    
+    logger.warning(
+        "No bold system font found in known locations. Falling back to MoviePy default font."
+    )
+    return None
 
 
 def _get_shadow_color(text_color: str) -> str:

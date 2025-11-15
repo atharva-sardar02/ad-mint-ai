@@ -11,4 +11,6 @@ PyJWT>=2.8.0
 openai>=1.0.0
 replicate>=0.22.0
 moviepy>=1.0.3
+opencv-python>=4.8.0
+pillow>=10.1.0
 

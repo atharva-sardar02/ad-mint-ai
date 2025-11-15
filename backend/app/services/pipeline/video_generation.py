@@ -16,17 +16,19 @@ from app.schemas.generation import Scene, ScenePlan
 logger = logging.getLogger(__name__)
 
 # Replicate model configurations
-# Primary model: Minimax Video-01 (cost-effective for MVP)
-# Fallback models: Kling 1.5, Runway Gen-3 Alpha Turbo
+# Primary model: Seedance-1-Lite (ByteDance)
+# Fallback models: Minimax Video-01, Kling 1.5, Runway Gen-3 Alpha Turbo
 REPLICATE_MODELS = {
-    "primary": "minimax-ai/minimax-video-01",
-    "fallback_1": "klingai/kling-video",
-    "fallback_2": "runway/gen3-alpha-turbo"
+    "primary": "bytedance/seedance-1-lite",
+    "fallback_1": "minimax-ai/minimax-video-01",
+    "fallback_2": "klingai/kling-video",
+    "fallback_3": "runway/gen3-alpha-turbo"
 }
 
 # Cost per second of video (approximate, varies by model)
-# Minimax: ~$0.05/sec, Kling: ~$0.06/sec, Runway: ~$0.08/sec
+# Seedance-1-Lite: ~$0.04/sec (estimated), Minimax: ~$0.05/sec, Kling: ~$0.06/sec, Runway: ~$0.08/sec
 MODEL_COSTS = {
+    "bytedance/seedance-1-lite": 0.04,
     "minimax-ai/minimax-video-01": 0.05,
     "klingai/kling-video": 0.06,
     "runway/gen3-alpha-turbo": 0.08
@@ -84,11 +86,12 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: primary -> fallback_1 -> fallback_2
+    # Try models in order: primary -> fallback_1 -> fallback_2 -> fallback_3
     models_to_try = [
         REPLICATE_MODELS["primary"],
         REPLICATE_MODELS["fallback_1"],
-        REPLICATE_MODELS["fallback_2"]
+        REPLICATE_MODELS["fallback_2"],
+        REPLICATE_MODELS["fallback_3"]
     ]
     
     last_error = None

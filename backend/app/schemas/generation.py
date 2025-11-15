@@ -21,6 +21,8 @@ class StatusResponse(BaseModel):
     video_url: Optional[str] = None
     cost: Optional[float] = None
     error: Optional[str] = None
+    num_scenes: Optional[int] = None  # Total number of scenes planned
+    available_clips: int = 0  # Number of clips currently available for download
 
 
 class GenerateResponse(BaseModel):

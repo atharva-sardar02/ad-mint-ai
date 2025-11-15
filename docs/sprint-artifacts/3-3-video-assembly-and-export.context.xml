@@ -1,0 +1,200 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>3</storyId>
+    <title>Video Assembly and Export</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/3-3-video-assembly-and-export.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a developer</asA>
+    <iWant>I want to stitch clips together, add audio, and export the final video</iWant>
+    <soThat>so that the output is professional-quality and ready for download</soThat>
+    <tasks>
+      - Task 1: Create Video Stitching Service (AC: 1)
+      - Task 2: Create Audio Layer Service (AC: 2)
+      - Task 3: Create Post-Processing and Export Service (AC: 3)
+      - Task 4: Integrate Stitching, Audio, and Export into Pipeline (AC: 1, 2, 3)
+      - Task 5: Update Generation Model Schema (AC: 3)
+      - Task 6: Create Music and Sound Effects Library (AC: 2)
+      - Task 7: Testing (AC: 1, 2, 3, 4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-3.3.1">
+      <title>Video Stitching</title>
+      <description>Given multiple video clips with text overlays, when the video stitching service processes them, then it concatenates clips in sequence, applies crossfade transitions (0.5s) between clips, adds fade in at start (0.3s) and fade out at end (0.3s), and maintains consistent frame rate (24-30 fps)</description>
+    </criterion>
+    <criterion id="AC-3.3.2">
+      <title>Audio Layer</title>
+      <description>Given a stitched video and music style specification, when the audio layer service processes it, then it selects background music from library based on style, trims music to video duration, adjusts music volume to 30%, adds sound effects at scene transitions, and composites audio (music + SFX) and attaches to video</description>
+    </criterion>
+    <criterion id="AC-3.3.3">
+      <title>Post-Processing and Export</title>
+      <description>Given a video with audio, when the post-processing service processes it, then it applies color grading based on brand style, exports final video as 1080p MP4 (H.264 codec), generates thumbnail from first frame, saves video to permanent storage (/output/videos/), and updates database with video_url and thumbnail_url</description>
+    </criterion>
+    <criterion id="AC-3.3.4">
+      <title>Final Video Quality</title>
+      <description>Given a completed video generation, when I examine the final video, then total duration matches sum of scene durations (accounting for transitions), frame rate is consistent (24 fps default), resolution is 1080p minimum, file size is reasonable (&lt;50MB for 15s video), and video plays correctly in HTML5 video players</description>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>Stage 5: Video Stitching, Stage 6: Audio Layer, Stage 7: Post-Processing and Export</section>
+        <snippet>Video stitching concatenates clips with crossfade transitions (0.5s), fade in/out effects. Audio layer selects music from library, trims to duration, adjusts volume to 30%, adds sound effects. Post-processing applies color grading, exports 1080p MP4 (H.264), generates thumbnail, saves to /output/videos/</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>AC-3.3.1, AC-3.3.2, AC-3.3.3, AC-3.3.4, Services and Modules, Dependencies and Integrations</section>
+        <snippet>Services: stitching.py (concatenate clips with transitions), audio.py (music selection and composition), export.py (color grading and final export). Uses MoviePy for video processing, OpenCV for color grading, Pillow for thumbnails. Dependencies: moviepy 1.0.3+, opencv-python 4.8+, pillow 10.1+</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Project Structure, Implementation Patterns, Pipeline Orchestration</section>
+        <snippet>Pipeline services organized under backend/app/services/pipeline/ as separate modules. Synchronous orchestration pattern for MVP. Services: stitching.py, audio.py, export.py. Storage: /output/videos/ for final videos, /output/thumbnails/ for thumbnails</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Story 3.3: Video Assembly and Export</section>
+        <snippet>Video stitching concatenates clips with crossfade transitions. Audio layer adds background music and sound effects. Post-processing applies color grading, exports 1080p MP4, generates thumbnail. Final video quality: consistent frame rate (24 fps), 1080p minimum, &lt;50MB for 15s video</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/pipeline/overlays.py</path>
+        <kind>service</kind>
+        <symbol>add_overlays_to_clips</symbol>
+        <lines>257-260</lines>
+        <reason>Shows MoviePy usage pattern for video processing. Outputs clips with text overlays that will be used as input for stitching service</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/video_generation.py</path>
+        <kind>service</kind>
+        <symbol>generate_all_clips</symbol>
+        <lines>454-510</lines>
+        <reason>Shows pattern for processing multiple clips sequentially. Stitching service will follow similar pattern for concatenating clips</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/generations.py</path>
+        <kind>route</kind>
+        <symbol>create_generation</symbol>
+        <lines>35-200</lines>
+        <reason>Generation endpoint that orchestrates pipeline. Will need to integrate stitching, audio, and export services after text overlays (currently stops at progress=70%)</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/db/models/generation.py</path>
+        <kind>model</kind>
+        <symbol>Generation</symbol>
+        <lines>1-100</lines>
+        <reason>Generation model that needs video_url and thumbnail_url fields added. Currently has temp_clip_paths JSON field storing array of temp clip file paths</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="moviepy" version=">=1.0.3" />
+        <package name="opencv-python" version=">=4.8.0" />
+        <package name="pillow" version=">=10.1.0" />
+        <package name="pydub" version=">=0.25.0" />
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+      </ecosystem>
+      <ecosystem name="system">
+        <package name="ffmpeg" version="4.4+" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <type>Architecture Pattern</type>
+      <description>Services are organized under backend/app/services/pipeline/ as separate modules. Follow same pattern for stitching.py, audio.py, and export.py</description>
+    </constraint>
+    <constraint>
+      <type>Storage Pattern</type>
+      <description>Temp clips stored in /output/temp/. Final videos in /output/videos/, thumbnails in /output/thumbnails/. Clean up temp files after successful export</description>
+    </constraint>
+    <constraint>
+      <type>Progress Tracking</type>
+      <description>Progress updates follow pattern: update progress percentage and current_step description at each stage. Continue pattern: 80% for stitching, 90% for audio, 95% for export, 100% for complete</description>
+    </constraint>
+    <constraint>
+      <type>Error Handling</type>
+      <description>Follow same error handling patterns: update status to failed, store error_message, log errors with structured logging. Use RuntimeError for service failures</description>
+    </constraint>
+    <constraint>
+      <type>MoviePy Usage</type>
+      <description>MoviePy is already used for text overlays. Reuse patterns for video stitching (concatenate_videoclips, CompositeVideoClip), audio composition (AudioFileClip, CompositeAudioClip), and export (write_videofile)</description>
+    </constraint>
+    <constraint>
+      <type>Cancellation Support</type>
+      <description>Cancellation checks occur before each pipeline stage. Continue this pattern for stitching, audio, and export stages. Check cancellation_requested flag before each stage</description>
+    </constraint>
+    <constraint>
+      <type>Video Quality</type>
+      <description>Final video must be 1080p minimum, H.264 codec, 24-30 fps, &lt;50MB for 15s video. Use FFmpeg encoding settings (bitrate, quality, preset) via MoviePy write_videofile</description>
+    </constraint>
+    <constraint>
+      <type>Music Library</type>
+      <description>Music library structure: /backend/assets/music/ organized by mood/style (e.g., energetic, calm, professional). Sound effects in /backend/assets/sfx/. Use royalty-free music files (MP3 format)</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Video Stitching Service</name>
+      <kind>function</kind>
+      <signature>def stitch_video_clips(clip_paths: List[str], output_path: str, transitions: bool = True) -&gt; str</signature>
+      <path>backend/app/services/pipeline/stitching.py</path>
+    </interface>
+    <interface>
+      <name>Audio Layer Service</name>
+      <kind>function</kind>
+      <signature>def add_audio_layer(video_path: str, music_style: str, output_path: str) -&gt; str</signature>
+      <path>backend/app/services/pipeline/audio.py</path>
+    </interface>
+    <interface>
+      <name>Post-Processing and Export Service</name>
+      <kind>function</kind>
+      <signature>def export_final_video(video_path: str, brand_style: str, output_dir: str, generation_id: str) -&gt; Tuple[str, str]</signature>
+      <path>backend/app/services/pipeline/export.py</path>
+    </interface>
+    <interface>
+      <name>Generation Model</name>
+      <kind>database model</kind>
+      <signature>class Generation: video_url: str, thumbnail_url: str</signature>
+      <path>backend/app/db/models/generation.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend testing uses pytest with FastAPI TestClient for integration tests. Test structure follows existing patterns in backend/tests/test_overlays.py and backend/tests/test_video_generation.py with proper mocking of MoviePy operations. Unit tests should test video stitching logic (concatenation, transitions, fade effects), audio layer logic (music selection, volume adjustment, SFX composition), and export logic (color grading, encoding settings, thumbnail generation) in isolation. Integration tests verify complete flow: clips → stitching → audio → export. All tests should use proper mocking of file I/O operations and MoviePy VideoFileClip/AudioFileClip. Test coverage goals: 80%+ for pipeline services.
+    </standards>
+    <locations>
+      Backend tests: backend/tests/test_stitching.py (new file to create), backend/tests/test_audio.py (new file to create), backend/tests/test_export.py (new file to create), backend/tests/test_integration_video_generation.py (update existing)
+      Test setup: backend/tests/conftest.py (existing)
+    </locations>
+    <ideas>
+      <test acId="AC-3.3.1" idea="Unit test: Video stitching with multiple clips - test concatenation of 3 clips, verify crossfade transitions (0.5s) between clips, verify fade in at start (0.3s) and fade out at end (0.3s), verify consistent frame rate (24-30 fps), test with clips of different durations (trim/pad handling)" />
+      <test acId="AC-3.3.2" idea="Unit test: Audio layer service - test music selection based on style keywords, test music trimming to video duration, test volume adjustment to 30%, test sound effect selection and placement at scene transitions, test audio composition (music + SFX), test audio attachment to video" />
+      <test acId="AC-3.3.3" idea="Unit test: Post-processing and export - test color grading based on brand style keywords (cinematic, luxury, vibrant), test video export as 1080p MP4 with H.264 codec, test thumbnail generation from first frame, test file saving to /output/videos/ and /output/thumbnails/, test database update with video_url and thumbnail_url" />
+      <test acId="AC-3.3.4" idea="Integration test: Final video quality - verify total duration matches sum of scene durations (accounting for transitions), verify frame rate is consistent (24 fps default), verify resolution is 1080p minimum, verify file size is reasonable (&lt;50MB for 15s video), verify video plays correctly (test with HTML5 video player or ffprobe validation)" />
+      <test acId="AC-3.3.1, AC-3.3.2, AC-3.3.3" idea="Integration test: Complete flow (clips → stitching → audio → export) - load temp clips from Generation.temp_clip_paths, call stitching service, verify stitched video created, call audio layer service, verify audio attached, call export service, verify final video and thumbnail saved, verify database updated with video_url and thumbnail_url, verify temp files cleaned up" />
+      <test acId="AC-3.3.1, AC-3.3.2, AC-3.3.3" idea="Integration test: Error handling - test stitching failure (invalid clip paths), test audio layer failure (music file not found), test export failure (encoding error), verify status updated to failed, verify error_message stored, verify temp files cleaned up on error" />
+      <test acId="AC-3.3.1, AC-3.3.2, AC-3.3.3" idea="Integration test: Cancellation during processing - test cancellation during stitching, test cancellation during audio layer, test cancellation during export, verify processing stops, verify status updated to failed with error='Cancelled by user', verify cleanup" />
+    </ideas>
+  </tests>
+</story-context>
+

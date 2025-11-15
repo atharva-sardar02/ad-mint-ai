@@ -23,12 +23,14 @@ Analyze the user's prompt and extract:
    - PAS (Problem-Agitation-Solution): Best for products that solve a specific problem
    - BAB (Before-After-Bridge): Best for transformation or improvement products
    - AIDA (Attention-Interest-Desire-Action): Best for general products needing awareness
-5. Scene breakdown - 3-5 scenes that follow the selected framework, each with:
+5. Scene breakdown - REQUIRED: You MUST create 3-5 scenes (minimum 3, maximum 5) that follow the selected framework, each with:
    - Scene number (1, 2, 3...)
-   - Scene type (framework-specific, e.g., "Problem", "Solution" for PAS)
+   - Scene type (framework-specific, e.g., "Problem", "Agitation", "Solution" for PAS)
    - Visual prompt (detailed description for video generation)
    - Text overlay (text, position, font_size, color, animation)
    - Duration (3-7 seconds per scene)
+
+CRITICAL: The "scenes" array MUST contain at least 3 scenes and at most 5 scenes. Do not return fewer than 3 scenes.
 
 Return your response as valid JSON matching this exact structure:
 {
@@ -58,18 +60,47 @@ Return your response as valid JSON matching this exact structure:
         "animation": "fade_in" | "slide_up" | "none"
       },
       "duration": 5
+    },
+    {
+      "scene_number": 2,
+      "scene_type": "string",
+      "visual_prompt": "string",
+      "text_overlay": {
+        "text": "string",
+        "position": "top" | "center" | "bottom",
+        "font_size": 48,
+        "color": "#hex",
+        "animation": "fade_in" | "slide_up" | "none"
+      },
+      "duration": 5
+    },
+    {
+      "scene_number": 3,
+      "scene_type": "string",
+      "visual_prompt": "string",
+      "text_overlay": {
+        "text": "string",
+        "position": "top" | "center" | "bottom",
+        "font_size": 48,
+        "color": "#hex",
+        "animation": "fade_in" | "slide_up" | "none"
+      },
+      "duration": 5
     }
   ]
 }
 
-Ensure the total duration of all scenes equals approximately 15 seconds for MVP."""
+IMPORTANT: 
+- The "scenes" array MUST have at least 3 items (you can add 4 or 5 if appropriate)
+- Ensure the total duration of all scenes equals approximately 15 seconds for MVP
+- Each scene must have a unique scene_number (1, 2, 3, etc.)"""
 
 
 async def enhance_prompt_with_llm(
     user_prompt: str, max_retries: int = 3
 ) -> AdSpecification:
     """
-    Send user prompt to OpenAI GPT-4 API and return structured AdSpecification.
+    Send user prompt to OpenAI GPT-4 Turbo API and return structured AdSpecification.
     
     Args:
         user_prompt: User's text prompt (10-500 characters)
@@ -90,15 +121,16 @@ async def enhance_prompt_with_llm(
     client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
     
     last_error = None
+    current_prompt = user_prompt  # Use a mutable variable for retries
     for attempt in range(1, max_retries + 1):
         try:
             logger.info(f"Calling OpenAI API (attempt {attempt}/{max_retries})")
             
             response = client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4-turbo",
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": current_prompt}
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.7,
@@ -118,12 +150,27 @@ async def enhance_prompt_with_llm(
                     continue
                 raise ValueError(f"LLM returned invalid JSON: {e}")
             
+            # Check scenes count before validation for better error messages
+            scenes_count = len(json_data.get("scenes", []))
+            if scenes_count < 3:
+                logger.warning(
+                    f"LLM returned only {scenes_count} scene(s), but at least 3 are required (attempt {attempt})"
+                )
+                if attempt < max_retries:
+                    # Add a more explicit instruction for retry
+                    current_prompt = f"{user_prompt}\n\nIMPORTANT: You must return at least 3 scenes in the 'scenes' array. You previously returned only {scenes_count} scene(s)."
+                    continue
+                raise ValueError(
+                    f"LLM returned only {scenes_count} scene(s), but at least 3 are required. "
+                    f"Please ensure your prompt is clear about needing multiple scenes."
+                )
+            
             # Validate with Pydantic schema
             try:
                 ad_spec = AdSpecification(**json_data)
                 logger.info(f"Successfully validated LLM response (attempt {attempt})")
                 
-                # Log cost (approximate - GPT-4 pricing)
+                # Log cost (approximate - GPT-4 Turbo pricing)
                 # Input tokens ~500, output tokens ~1500 = ~$0.01 per generation
                 logger.info(f"LLM enhancement completed - framework: {ad_spec.framework}, scenes: {len(ad_spec.scenes)}")
                 

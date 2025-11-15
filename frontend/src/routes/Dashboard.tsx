@@ -130,6 +130,22 @@ export const Dashboard: React.FC = () => {
             Our AI will create a professional video ad for you.
           </p>
 
+          {/* Example Prompt */}
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm font-semibold text-blue-900 mb-2">Example Prompt:</p>
+            <p className="text-sm text-blue-800 italic">
+              "Create a 10 second ad for a Gauntlet water bottle"
+            </p>
+            <button
+              type="button"
+              onClick={() => setPrompt("Create a 10 second ad for a Gauntlet water bottle")}
+              className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+              disabled={isLoading}
+            >
+              Use this example
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <Textarea
               label="Video Prompt"
