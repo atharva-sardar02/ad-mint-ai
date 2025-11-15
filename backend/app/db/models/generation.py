@@ -4,7 +4,7 @@ Generation ORM model.
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, JSON
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -31,6 +31,10 @@ class Generation(Base):
     generation_time_seconds = Column(Integer, nullable=True)
     cost = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
+    llm_specification = Column(JSON, nullable=True)  # LLM output JSON (AdSpecification)
+    scene_plan = Column(JSON, nullable=True)  # Scene breakdown JSON (ScenePlan)
+    temp_clip_paths = Column(JSON, nullable=True)  # Array of temp video clip file paths
+    cancellation_requested = Column(Boolean, default=False)  # Cancellation flag
     created_at = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 

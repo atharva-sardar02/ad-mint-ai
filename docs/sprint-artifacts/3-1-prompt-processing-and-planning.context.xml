@@ -1,0 +1,164 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>1</storyId>
+    <title>Prompt Processing and Planning</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/3-1-prompt-processing-and-planning.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a user</asA>
+    <iWant>I want to enter a text prompt and have it processed into a video plan</iWant>
+    <soThat>so that the system can generate a video based on my description</soThat>
+    <tasks>
+      - Task 1: Create Dashboard Component with Prompt Input (AC: 1)
+      - Task 2: Create LLM Enhancement Service (AC: 2)
+      - Task 3: Create Scene Planning Module (AC: 3)
+      - Task 4: Create Generation API Endpoint (AC: 1, 2, 3)
+      - Task 5: Create Frontend Generation Service (AC: 1)
+      - Task 6: Integrate Prompt Form with Generation Service (AC: 1)
+      - Task 7: Testing (AC: 1, 2, 3)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. **Prompt Input Validation:** Given I am on the dashboard, When I enter a valid prompt (10-500 characters) and submit, Then the system validates the input and starts video generation, And invalid prompts show error messages.
+
+    2. **LLM Enhancement:** Given a user prompt, When the LLM enhancement service processes it, Then it returns structured JSON with product description, brand guidelines, framework selection, and ad specifications, And the response is validated against Pydantic schema.
+
+    3. **Scene Planning:** Given LLM-generated ad specification with framework, When the scene planning module processes it, Then it generates scene breakdown with visual prompts, text overlays, and durations, And scene structure matches selected framework (AIDA, PAS, or BAB), And total duration matches target (15s for MVP).
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="AI Video Generation Pipeline">
+        Comprehensive PRD covering the complete video generation pipeline, LLM enhancement process, and framework-based storytelling. Section 11 details the seven-stage pipeline from prompt input through final export.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Ad Narrative Frameworks">
+        Details on PAS, BAB, and AIDA frameworks used for structuring video narratives. Framework selection is automatic based on LLM analysis.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications">
+        API endpoint specifications for POST /api/generate, GET /api/status/{generation_id}, and POST /api/generations/{id}/cancel. Includes request/response formats and error handling.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Backend project structure showing services/pipeline/ organization, API routes structure, and frontend component organization. Dashboard.tsx location and routing patterns.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary">
+        Key technical choices: FastAPI backend, synchronous orchestration for MVP, SQLAlchemy + Pydantic patterns, React Router for frontend routing.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="Services and Modules">
+        Detailed module specifications: llm_enhancement.py, scene_planning.py, generations.py API routes. Input/output contracts and responsibilities for each service.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="Data Models and Contracts">
+        Pydantic schema definitions: AdSpecification, BrandGuidelines, Scene, GenerateRequest, StatusResponse. Generation model extensions for Epic 3 (llm_specification, scene_plan JSON fields).
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="APIs and Interfaces">
+        Complete API endpoint specifications with request/response examples. Frontend API service interface patterns using apiClient.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="Workflows and Sequencing">
+        Step-by-step pipeline workflow: prompt submission → LLM enhancement → scene planning → progress updates. Progress percentage milestones at each stage.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic 3 Technical Specification" section="Acceptance Criteria">
+        Authoritative AC definitions: AC-3.1.1 (Prompt Input Validation), AC-3.1.2 (LLM Enhancement), AC-3.1.3 (Scene Planning).
+      </doc>
+      <doc path="docs/sprint-artifacts/3-1-prompt-processing-and-planning.md" title="Story 3.1" section="Dev Notes">
+        Architecture patterns, project structure notes, learnings from previous stories (Story 2-3), and references to existing components.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="Dashboard" lines="1-62" reason="Existing Dashboard placeholder component that needs to be updated with prompt input form. Already protected via ProtectedRoute wrapper." />
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="apiClient" lines="1-106" reason="Axios instance with JWT token interceptor. Use this for generation API calls. Already handles 401 errors and redirects." />
+      <artifact path="frontend/src/lib/config.ts" kind="config" symbol="API_ENDPOINTS" lines="16-20" reason="Centralized API endpoint constants including GENERATIONS.CREATE (/api/generate) and GENERATIONS.STATUS." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-39" reason="Generation ORM model with fields for status, progress, current_step. Needs extension with llm_specification and scene_plan JSON fields per Epic 3 spec." />
+      <artifact path="frontend/src/store/authStore.ts" kind="store" symbol="useAuthStore" reason="Zustand auth store. Can access user information if needed. Already used in Dashboard component." />
+      <artifact path="frontend/src/components/ProtectedRoute.tsx" kind="component" symbol="ProtectedRoute" reason="Protected route wrapper. Dashboard already wrapped, no changes needed." />
+      <artifact path="frontend/src/components/layout/Navbar.tsx" kind="component" symbol="Navbar" reason="Navigation bar component. Dashboard uses this, follow same styling patterns." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="tailwindcss" version="^4.1.17" />
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="PyJWT" version=">=2.8.0" />
+        <package name="openai" version="1.0+" note="Required for LLM enhancement service" />
+        <package name="replicate" version="0.22+" note="Required for video generation (future stories)" />
+        <package name="moviepy" version="1.0.3+" note="Required for video processing (future stories)" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - **Backend Framework:** FastAPI + Python 3.11 (from Epic 1)
+    - **LLM Service:** OpenAI GPT-4 API for prompt enhancement, use environment variable `OPENAI_API_KEY`
+    - **Response Validation:** Pydantic schemas for LLM response validation (AdSpecification, BrandGuidelines, Scene)
+    - **Database:** SQLAlchemy Generation model (from Epic 1) - update status, progress, current_step, store JSON fields
+    - **Error Handling:** Follow PRD error structure: `{"error": {"code": "...", "message": "..."}}`
+    - **Logging:** Structured logging at INFO level for stage transitions, WARNING for retries, ERROR for failures
+    - **Frontend:** React Router 6+ used for routing - Dashboard route already configured
+    - **State Management:** Zustand for state management - can use for generation state if needed
+    - **Styling:** Tailwind CSS for styling - follow same patterns as previous stories
+    - **Type Safety:** TypeScript for type safety - create types for generation request/response
+    - **API Client:** Use `apiClient.ts` for generation API calls - already has request interceptor for JWT tokens
+    - **Dashboard Component:** Dashboard.tsx already exists as placeholder from Story 2.3 - update it with prompt input form instead of creating new
+    - **Protected Routes:** Dashboard is already protected via ProtectedRoute wrapper - no changes needed
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/generate" kind="REST endpoint" signature="POST /api/generate
+Headers: Authorization: Bearer {jwt_token}
+Request Body: {&quot;prompt&quot;: &quot;string (10-500 characters)&quot;}
+Response (202): {&quot;generation_id&quot;: &quot;string&quot;, &quot;status&quot;: &quot;pending&quot;, &quot;message&quot;: &quot;string&quot;}" path="backend/app/api/routes/generations.py" />
+    <interface name="GET /api/status/{generation_id}" kind="REST endpoint" signature="GET /api/status/{generation_id}
+Headers: Authorization: Bearer {jwt_token}
+Response (200): {&quot;generation_id&quot;: &quot;string&quot;, &quot;status&quot;: &quot;pending|processing|completed|failed&quot;, &quot;progress&quot;: 0-100, &quot;current_step&quot;: &quot;string&quot;, &quot;video_url&quot;: &quot;string|null&quot;, &quot;cost&quot;: &quot;float|null&quot;, &quot;error&quot;: &quot;string|null&quot;}" path="backend/app/api/routes/generations.py" />
+    <interface name="OpenAI GPT-4 API" kind="External API" signature="POST https://api.openai.com/v1/chat/completions
+Headers: Authorization: Bearer {OPENAI_API_KEY}
+Request: Chat completion with system prompt and user prompt
+Response: JSON with AdSpecification structure" path="backend/app/services/pipeline/llm_enhancement.py" />
+    <interface name="generationService.startGeneration" kind="TypeScript function" signature="startGeneration(prompt: string): Promise&lt;{generation_id: string, status: string}&gt;
+Calls: POST /api/generate
+Returns: generation_id for status polling" path="frontend/src/lib/generationService.ts" />
+    <interface name="AdSpecification" kind="Pydantic schema" signature="class AdSpecification(BaseModel):
+    product_description: str
+    brand_guidelines: BrandGuidelines
+    ad_specifications: AdSpec
+    framework: str  # &quot;PAS&quot;, &quot;BAB&quot;, or &quot;AIDA&quot;
+    scenes: List[Scene]" path="backend/app/schemas/generation.py" />
+    <interface name="ScenePlan" kind="Pydantic schema" signature="class ScenePlan(BaseModel):
+    scenes: List[Scene]
+    total_duration: int
+    framework: str" path="backend/app/services/pipeline/scene_planning.py" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Frontend testing follows React Testing Library patterns established in Story 2.3. Backend testing uses pytest with FastAPI TestClient. Mock external APIs (OpenAI) in tests. Unit tests for individual services, integration tests for complete flow, E2E tests for user workflows. Test coverage goals: Backend 80%+ for pipeline services, Frontend 70%+ for dashboard components.
+    </standards>
+    <locations>
+      Frontend tests: `frontend/src/__tests__/` directory
+      Backend tests: `backend/tests/` directory
+      Component tests: Co-located with components or in `__tests__/` directories
+      Integration tests: `backend/tests/integration/` directory
+    </locations>
+    <ideas>
+      <test acId="AC-3.1.1" idea="Unit test: Dashboard prompt validation - test various prompt lengths (9 chars invalid, 10 chars valid, 500 chars valid, 501 chars invalid), verify error messages display correctly, verify submit button disabled for invalid prompts" />
+      <test acId="AC-3.1.2" idea="Unit test: LLM enhancement service with mocked OpenAI API - test successful response parsing, test Pydantic validation with invalid JSON, test retry logic on API failures (up to 3 attempts), test error handling for API errors" />
+      <test acId="AC-3.1.3" idea="Unit test: Scene planning with different frameworks - test AIDA framework generates 4 scenes (Attention, Interest, Desire, Action), test PAS framework generates 3 scenes (Problem, Agitation, Solution), test BAB framework generates 3 scenes (Before, After, Bridge), verify total duration matches target (15s for MVP)" />
+      <test acId="AC-3.1.1, AC-3.1.2, AC-3.1.3" idea="Integration test: Complete flow (prompt → LLM → scene planning → database update) - submit valid prompt, verify Generation record created with status=pending, verify LLM enhancement called and llm_specification stored, verify scene planning called and scene_plan stored, verify progress updates (10% after LLM, 20% after scene planning)" />
+      <test acId="AC-3.1.1" idea="E2E test: User submits prompt → generation starts → status updates - user enters prompt on dashboard, clicks submit, verify API call made, verify loading state shown, verify generation_id received, verify redirect to progress view or progress shown on same page" />
+      <test acId="AC-3.1.2" idea="Integration test: Error handling (API failures, invalid responses) - test OpenAI API failure returns user-friendly error, test invalid JSON response from LLM handled gracefully, test retry logic works correctly, verify error_message stored in Generation record" />
+    </ideas>
+  </tests>
+</story-context>
+

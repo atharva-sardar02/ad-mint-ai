@@ -1,0 +1,263 @@
+/**
+ * Unit tests for Dashboard component prompt validation.
+ * Tests prompt input validation with various lengths and edge cases.
+ */
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { Dashboard } from "../routes/Dashboard";
+import { useAuthStore } from "../store/authStore";
+import { generationService } from "../lib/generationService";
+
+// Mock generationService
+vi.mock("../lib/generationService", () => ({
+  generationService: {
+    startGeneration: vi.fn(),
+    getGenerationStatus: vi.fn(),
+  },
+}));
+
+// Mock useNavigate
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+describe("Dashboard Prompt Validation", () => {
+  beforeEach(() => {
+    // Set authenticated user
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        total_generations: 0,
+        total_cost: 0,
+      },
+      token: "test-token",
+    });
+    vi.clearAllMocks();
+  });
+
+  it("should show error for prompt shorter than 10 characters", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const submitButton = screen.getByRole("button", { name: /generate video/i });
+
+    // Enter short prompt (9 characters)
+    fireEvent.change(textarea, { target: { value: "short" } });
+
+    // Wait for validation
+    await waitFor(() => {
+      expect(screen.getByText(/must be at least 10 characters/i)).toBeInTheDocument();
+    });
+
+    // Submit button should be disabled
+    expect(submitButton).toBeDisabled();
+  });
+
+  it("should show error for prompt longer than 500 characters", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const longPrompt = "a".repeat(501);
+
+    fireEvent.change(textarea, { target: { value: longPrompt } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/must be no more than 500 characters/i)).toBeInTheDocument();
+    });
+
+    const submitButton = screen.getByRole("button", { name: /generate video/i });
+    expect(submitButton).toBeDisabled();
+  });
+
+  it("should accept valid prompt (10 characters)", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const validPrompt = "a".repeat(10);
+
+    fireEvent.change(textarea, { target: { value: validPrompt } });
+
+    await waitFor(() => {
+      const submitButton = screen.getByRole("button", { name: /generate video/i });
+      expect(submitButton).not.toBeDisabled();
+    });
+
+    // Should not show error
+    expect(screen.queryByText(/must be at least/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/must be no more than/i)).not.toBeInTheDocument();
+  });
+
+  it("should accept valid prompt (500 characters)", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const validPrompt = "a".repeat(500);
+
+    fireEvent.change(textarea, { target: { value: validPrompt } });
+
+    await waitFor(() => {
+      const submitButton = screen.getByRole("button", { name: /generate video/i });
+      expect(submitButton).not.toBeDisabled();
+    });
+  });
+
+  it("should show character count helper text", () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    fireEvent.change(textarea, { target: { value: "test prompt" } });
+
+    expect(screen.getByText(/11\/500 characters/i)).toBeInTheDocument();
+  });
+
+  it("should clear error when valid prompt is entered", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+
+    // Enter invalid prompt
+    fireEvent.change(textarea, { target: { value: "short" } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/must be at least 10 characters/i)).toBeInTheDocument();
+    });
+
+    // Enter valid prompt
+    fireEvent.change(textarea, { target: { value: "valid prompt here" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/must be at least 10 characters/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("should disable submit button when prompt is invalid", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const submitButton = screen.getByRole("button", { name: /generate video/i });
+
+    // Invalid prompt
+    fireEvent.change(textarea, { target: { value: "short" } });
+
+    await waitFor(() => {
+      expect(submitButton).toBeDisabled();
+    });
+  });
+
+  it("should enable submit button when prompt is valid", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const submitButton = screen.getByRole("button", { name: /generate video/i });
+
+    // Valid prompt
+    fireEvent.change(textarea, { target: { value: "This is a valid prompt that is long enough" } });
+
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
+    });
+  });
+
+  it("should prevent form submission with invalid prompt", async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const form = textarea.closest("form");
+
+    // Enter invalid prompt
+    fireEvent.change(textarea, { target: { value: "short" } });
+
+    await waitFor(() => {
+      const submitButton = screen.getByRole("button", { name: /generate video/i });
+      expect(submitButton).toBeDisabled();
+    });
+
+    // Try to submit
+    if (form) {
+      fireEvent.submit(form);
+    }
+
+    // Should not call generationService
+    expect(generationService.startGeneration).not.toHaveBeenCalled();
+  });
+
+  it("should call generationService with valid prompt on submit", async () => {
+    const mockResponse = {
+      generation_id: "test-gen-123",
+      status: "pending",
+      message: "Video generation started",
+    };
+
+    vi.mocked(generationService.startGeneration).mockResolvedValue(mockResponse);
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    const textarea = screen.getByLabelText(/video prompt/i);
+    const validPrompt = "Create a luxury watch ad for Instagram showcasing elegance";
+
+    fireEvent.change(textarea, { target: { value: validPrompt } });
+
+    await waitFor(() => {
+      const submitButton = screen.getByRole("button", { name: /generate video/i });
+      expect(submitButton).not.toBeDisabled();
+    });
+
+    const submitButton = screen.getByRole("button", { name: /generate video/i });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(generationService.startGeneration).toHaveBeenCalledWith(validPrompt);
+      expect(mockNavigate).toHaveBeenCalledWith("/generation/test-gen-123");
+    });
+  });
+});
+

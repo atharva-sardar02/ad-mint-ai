@@ -1,0 +1,195 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>2</storyId>
+    <title>Video Generation and Text Overlays</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/3-2-video-generation-and-text-overlays.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a developer</asA>
+    <iWant>I want to generate video clips and add text overlays</iWant>
+    <soThat>so that each scene becomes a complete video clip with branding</soThat>
+    <tasks>
+- [ ] Task 1: Create Video Generation Service (AC: 1, 3)
+  - [ ] Create `backend/app/services/pipeline/video_generation.py` module
+  - [ ] Install and configure Replicate Python SDK (add to requirements.txt)
+  - [ ] Implement function to call Replicate API with visual prompt
+  - [ ] Support primary model: Minimax Video-01 (cost-effective for MVP)
+  - [ ] Support fallback models: Kling 1.5, Runway Gen-3 Alpha Turbo
+  - [ ] Implement retry logic (up to 3 attempts) with exponential backoff
+  - [ ] Download generated video clip to temp storage (`/output/temp/`)
+  - [ ] Track API cost per clip (log cost, store in cost_tracking service)
+  - [ ] Validate video duration matches scene specification
+  - [ ] Validate video aspect ratio (9:16 for MVP)
+  - [ ] Handle rate limits gracefully (429 errors with retry)
+  - [ ] Handle API failures with fallback to alternative models
+  - [ ] Test: Mock Replicate API, verify clip generation and download
+
+- [ ] Task 2: Create Text Overlay Service (AC: 2)
+  - [ ] Create `backend/app/services/pipeline/overlays.py` module
+  - [ ] Install MoviePy library (add to requirements.txt)
+  - [ ] Implement function to add text overlay to video clip
+  - [ ] Extract text overlay specification from ScenePlan (text, position, style)
+  - [ ] Create text clip with brand colors from scene plan
+  - [ ] Apply brand fonts (use system fonts, map style keywords to font families)
+  - [ ] Position text (top, center, or bottom) based on specification
+  - [ ] Implement text animations: fade in, slide up, scale
+  - [ ] Add text shadow for readability (dark shadow behind light text)
+  - [ ] Composite text clip onto video clip using MoviePy
+  - [ ] Ensure text duration matches video clip duration
+  - [ ] Test: Test text overlay with various styles and positions
+
+- [ ] Task 3: Integrate Video Generation into Pipeline (AC: 1, 3)
+  - [ ] Update `backend/app/api/routes/generations.py` generation endpoint
+  - [ ] After scene planning (progress=20%), call video generation service
+  - [ ] Process scenes sequentially (or attempt parallel if API allows)
+  - [ ] For each scene: generate clip → add text overlay → store path
+  - [ ] Update Generation progress incrementally (30-70% based on scene count)
+  - [ ] Update `current_step` with scene progress ("Generating video clip 1 of 3")
+  - [ ] Store temp clip paths in Generation.temp_clip_paths JSON field
+  - [ ] Handle errors: update status to failed, store error_message
+  - [ ] Check cancellation_requested flag before each clip generation
+  - [ ] Test: Integration test for complete flow (scene plan → video clips with overlays)
+
+- [ ] Task 4: Update Generation Model Schema (AC: 1, 3)
+  - [ ] Update `backend/app/db/models/generation.py` Generation model
+  - [ ] Add `temp_clip_paths` JSON field to store array of temp file paths
+  - [ ] Create database migration script
+  - [ ] Update Pydantic schemas in `backend/app/schemas/generation.py` if needed
+  - [ ] Test: Verify model updates and migration
+
+- [ ] Task 5: Cost Tracking Integration (AC: 1)
+  - [ ] Create or update `backend/app/services/cost_tracking.py` module
+  - [ ] Track Replicate API costs per clip generation
+  - [ ] Log cost per clip with generation_id and scene number
+  - [ ] Accumulate total video generation cost for this generation
+  - [ ] Store cost breakdown in Generation record (optional JSON field)
+  - [ ] Test: Verify cost tracking logs and accumulation
+
+- [ ] Task 6: Testing (AC: 1, 2, 3)
+  - [ ] Unit test: Video generation service with mocked Replicate API
+  - [ ] Unit test: Text overlay service with various styles and positions
+  - [ ] Unit test: Cost tracking service with various cost scenarios
+  - [ ] Integration test: Complete flow (scene plan → video clips → text overlays)
+  - [ ] Integration test: Error handling (API failures, fallback models)
+  - [ ] Integration test: Cancellation during video generation
+  - [ ] E2E test: User submits prompt → video clips generated → text overlays added
+</tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Video Clip Generation:**
+   **Given** a scene with visual prompt and duration
+   **When** the video generation service processes it
+   **Then** it calls Replicate API with visual prompt
+   **And** generates a video clip (3-7 seconds)
+   **And** downloads clip to temp storage
+   **And** tracks API cost per clip
+
+2. **Text Overlay Addition:**
+   **Given** a video clip and text overlay specification
+   **When** the text overlay service processes it
+   **Then** it adds styled text to the video clip
+   **And** text uses brand colors and fonts
+   **And** text positioning matches specification (top, center, or bottom)
+   **And** text animation is applied (fade in, slide up)
+
+3. **Multiple Clip Generation:**
+   **Given** multiple scenes in scene plan
+   **When** video generation processes all scenes
+   **Then** clips are generated sequentially (or in parallel if API allows)
+   **And** each clip matches scene duration specification
+   **And** all clips use same aspect ratio (9:16 for MVP)
+</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Stage 3: Video Clip Generation" snippet="System generates video clips using Replicate API. Each clip generated from enriched visual prompt. Aspect ratio: 9:16 (vertical). Duration: 3-7 seconds per clip." />
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Stage 4: Text Overlay Addition" snippet="System adds text overlays to video clips. Text content based on scene type. Text styling based on brand colors and fonts. Text animations: fade in, slide up, scale." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic Technical Specification: Video Generation Pipeline" section="AC-3.2.1: Video Clip Generation" snippet="Given a scene with visual prompt and duration, when video generation service processes it, then it calls Replicate API with visual prompt, generates a video clip (3-7 seconds), downloads clip to temp storage, and tracks API cost per clip." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic Technical Specification: Video Generation Pipeline" section="AC-3.2.2: Text Overlay Addition" snippet="Given a video clip and text overlay specification, when text overlay service processes it, then it adds styled text to video clip with brand colors, fonts, positioning (top/center/bottom), and animations (fade in, slide up)." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic Technical Specification: Video Generation Pipeline" section="Services and Modules" snippet="video_generation.py calls Replicate API for each scene, downloads clips to temp storage, tracks costs. overlays.py adds text overlays to video clips using MoviePy with brand styling." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-3.md" title="Epic Technical Specification: Video Generation Pipeline" section="Dependencies and Integrations" snippet="Backend dependencies: replicate 0.22+ (Replicate Python SDK), moviepy 1.0.3+ (Video editing library). Replicate API endpoint: https://api.replicate.com/v1/predictions. Models: Minimax Video-01 (primary), Runway Gen-3 Alpha Turbo, Kling 1.5 (fallback)." />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure" snippet="Backend services organized under backend/app/services/pipeline/ as separate modules. Follow modular service pattern. Services are separate modules for each pipeline stage." />
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 3.2: Video Generation and Text Overlays" snippet="Create video_generator.py module, use Replicate Python SDK, track costs. Use MoviePy library for video processing, create text clips with styling. Handle rate limits gracefully, support multiple models with fallback logic." />
+    </docs>
+    <code>
+      <artifact path="backend/app/api/routes/generations.py" kind="route handler" symbol="create_generation" lines="24-127" reason="Main generation endpoint that orchestrates pipeline. Currently handles LLM enhancement and scene planning. Needs extension to call video generation after scene planning (progress=20%). Shows pattern for progress updates and error handling." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-40" reason="Generation model stores video generation records. Currently has llm_specification and scene_plan JSON fields. Needs temp_clip_paths JSON field added to store array of temp file paths for video clips." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="ScenePlan, Scene, TextOverlay" lines="40-79" reason="Pydantic schemas for scene planning and text overlays. ScenePlan contains scenes array. Scene has text_overlay field with TextOverlay specification (text, position, font_size, color, animation). Used for validating scene plan structure." />
+      <artifact path="backend/app/services/pipeline/scene_planning.py" kind="service" symbol="plan_scenes" lines="32-80" reason="Scene planning service that processes AdSpecification and generates ScenePlan. Returns ScenePlan with scenes array. Shows pattern for pipeline services under backend/app/services/pipeline/ directory." />
+      <artifact path="backend/app/services/pipeline/llm_enhancement.py" kind="service" symbol="enhance_prompt_with_llm" lines="68-70" reason="LLM enhancement service pattern. Async function that calls external API (OpenAI), validates response with Pydantic, returns structured object. Shows error handling and retry pattern to follow for video generation service." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="replicate" version="0.22+" reason="Replicate Python SDK for video generation API calls" />
+        <package name="moviepy" version="1.0.3+" reason="Video editing library for text overlays, video manipulation, and composition" />
+        <package name="fastapi" version="0.104+" reason="Web framework for API endpoints (already installed)" />
+        <package name="pydantic" version="2.0+" reason="Data validation for request/response schemas (already installed)" />
+        <package name="sqlalchemy" version="2.0+" reason="ORM for database models (already installed)" />
+      </ecosystem>
+      <ecosystem name="system">
+        <package name="ffmpeg" reason="Required by MoviePy for video encoding/decoding. Must be installed on system." />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Backend Framework: FastAPI + Python 3.11 (from Epic 1)</constraint>
+    <constraint>Video Generation API: Replicate API with Minimax Video-01 as primary model, Kling 1.5 and Runway Gen-3 as fallbacks</constraint>
+    <constraint>Video Processing: MoviePy library for text overlay addition and video manipulation</constraint>
+    <constraint>Cost Tracking: Track Replicate API costs per clip, log costs, accumulate total cost per generation</constraint>
+    <constraint>Error Handling: Retry logic (up to 3 attempts) for transient failures, fallback to alternative models, clear error messages</constraint>
+    <constraint>Logging: Structured logging at INFO level for clip generation start/completion, WARNING for retries, ERROR for failures</constraint>
+    <constraint>Temp Storage: Store video clips in /output/temp/ directory, clean up after generation completes or fails</constraint>
+    <constraint>Cancellation: Check cancellation_requested flag before each clip generation, stop processing if True</constraint>
+    <constraint>Services Pattern: Services organized under backend/app/services/pipeline/ as separate modules - follow same pattern for video_generation.py and overlays.py</constraint>
+    <constraint>Progress Tracking: Update progress incrementally (30-70% based on scene count), update current_step with scene progress</constraint>
+    <constraint>JSON Fields: Generation model uses JSON fields for intermediate pipeline data (llm_specification, scene_plan) - use same pattern for temp_clip_paths</constraint>
+    <constraint>Aspect Ratio: All clips use same aspect ratio (9:16 for MVP)</constraint>
+    <constraint>Video Duration: Each clip matches scene duration specification (3-7 seconds)</constraint>
+  </constraints>
+  
+  <interfaces>
+    <interface name="Replicate API" kind="REST API" signature="POST https://api.replicate.com/v1/predictions" path="External API">
+      <description>Replicate API for video generation. Endpoint: /v1/predictions. Authentication: API token from REPLICATE_API_TOKEN environment variable. Models: minimax/video-01 (primary), klingai/kling-video, runway/gen3-alpha-turbo (fallback).</description>
+    </interface>
+    <interface name="generate_video_clip" kind="function" signature="async def generate_video_clip(scene: Scene, output_dir: str) -> str" path="backend/app/services/pipeline/video_generation.py">
+      <description>Video generation service function. Takes Scene object with visual_prompt and duration, generates video clip via Replicate API, downloads to temp storage, returns file path. Should handle retries, fallback models, cost tracking.</description>
+    </interface>
+    <interface name="add_text_overlay" kind="function" signature="def add_text_overlay(video_path: str, text_overlay: TextOverlay, output_path: str) -> str" path="backend/app/services/pipeline/overlays.py">
+      <description>Text overlay service function. Takes video clip path and TextOverlay specification, adds styled text with brand colors/fonts, applies animations, composites onto video, returns path to output video.</description>
+    </interface>
+    <interface name="ScenePlan" kind="Pydantic Model" signature="class ScenePlan(BaseModel): scenes: List[Scene], total_duration: int, framework: str" path="backend/app/schemas/generation.py">
+      <description>ScenePlan schema contains scenes array. Each Scene has visual_prompt, text_overlay (TextOverlay), and duration. Used as input to video generation service.</description>
+    </interface>
+    <interface name="Generation.temp_clip_paths" kind="database field" signature="temp_clip_paths = Column(JSON, nullable=True)" path="backend/app/db/models/generation.py">
+      <description>JSON field to store array of temp file paths for generated video clips. Format: ["/output/temp/clip1.mp4", "/output/temp/clip2.mp4", ...]. Added in this story.</description>
+    </interface>
+  </interfaces>
+  
+  <tests>
+    <standards>Backend testing uses pytest with FastAPI TestClient. Mock external APIs (Replicate) in tests. Integration tests verify complete flow. Unit tests focus on individual service functions. Use structured logging assertions for cost tracking verification.</standards>
+    <locations>
+      <location>backend/tests/ - Unit and integration tests</location>
+      <location>backend/tests/test_services/ - Service-specific tests</location>
+      <location>backend/tests/test_api/ - API endpoint tests</location>
+    </locations>
+    <ideas>
+      <test ac_id="AC-3.2.1">Unit test: Mock Replicate API, verify generate_video_clip function calls API with correct parameters, downloads clip to temp storage, validates duration and aspect ratio, tracks cost per clip.</test>
+      <test ac_id="AC-3.2.1">Unit test: Test retry logic with simulated API failures, verify exponential backoff, verify fallback to alternative models when primary fails.</test>
+      <test ac_id="AC-3.2.2">Unit test: Test add_text_overlay function with various TextOverlay specifications (different positions, colors, animations), verify text styling matches specification, verify text duration matches video duration.</test>
+      <test ac_id="AC-3.2.2">Unit test: Test text positioning (top, center, bottom), verify text shadow for readability, verify brand colors and fonts applied correctly.</test>
+      <test ac_id="AC-3.2.3">Integration test: Test multiple clip generation with ScenePlan containing 3-5 scenes, verify clips generated sequentially (or parallel if API allows), verify all clips have same aspect ratio (9:16), verify each clip matches scene duration.</test>
+      <test ac_id="AC-3.2.3">Integration test: Test complete flow from ScenePlan → video clips → text overlays, verify temp_clip_paths stored in Generation model, verify progress updates incrementally (30-70%).</test>
+      <test ac_id="AC-3.2.1, AC-3.2.3">Integration test: Test error handling - simulate API failures, verify fallback models used, verify error messages stored, verify status updated to failed.</test>
+      <test ac_id="AC-3.2.1">Integration test: Test cancellation during video generation - set cancellation_requested flag, verify processing stops before next clip, verify cleanup of temp files.</test>
+      <test ac_id="AC-3.2.1">Unit test: Test cost tracking service - verify cost logged per clip with generation_id and scene number, verify total cost accumulated, verify cost breakdown stored in Generation record.</test>
+    </ideas>
+  </tests>
+</story-context>
+

@@ -11,6 +11,7 @@ import { Register } from "./routes/Auth/Register";
 import { Dashboard } from "./routes/Dashboard";
 import { Gallery } from "./routes/Gallery";
 import { Profile } from "./routes/Profile";
+import { GenerationStatus } from "./routes/GenerationStatus";
 import "./App.css";
 
 /**
@@ -75,6 +76,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/generation/:generationId"
+            element={
+              <ProtectedRoute>
+                <GenerationStatus />
               </ProtectedRoute>
             }
           />
