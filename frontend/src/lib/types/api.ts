@@ -102,3 +102,16 @@ export interface GetGenerationsParams {
   sort?: "created_at_desc" | "created_at_asc";
 }
 
+/**
+ * User profile response from the API.
+ */
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string | null;
+  total_generations: number;
+  total_cost: number;
+  created_at: string;  // ISO datetime string
+  last_login: string | null;  // ISO datetime string or null
+}
+

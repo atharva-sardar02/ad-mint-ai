@@ -1,0 +1,382 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>5</epicId>
+    <storyId>2</storyId>
+    <title>User Stats Update</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15T00:00:00Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/5-2-user-stats-update.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>user statistics to update automatically</iWant>
+    <soThat>users see accurate counts and costs</soThat>
+    <tasks>
+- Task 1: Create User Statistics Update Service (AC: 1, 3)
+  - Create or update `backend/app/services/cost_tracking.py` with function to increment `user.total_generations`
+  - Create function `update_user_statistics_on_completion(db: Session, generation_id: str)` that:
+    - Queries generation record to get user_id and cost
+    - Queries user record
+    - Increments `user.total_generations += 1` atomically
+    - Adds `generation.cost` to `user.total_cost` atomically
+    - Commits transaction
+    - Handles errors gracefully with logging
+  - Ensure function uses database transaction for atomicity
+  - Add proper error handling and logging
+
+- Task 2: Integrate Statistics Update into Generation Completion (AC: 1)
+  - Locate generation completion handler in `backend/app/api/routes/generations.py` (around line 369 where status="completed")
+  - Call `update_user_statistics_on_completion()` after generation status is set to "completed"
+  - Ensure update happens after `track_complete_generation_cost()` is called (to ensure cost is already calculated)
+  - Handle errors without breaking generation completion flow
+  - Add logging for statistics updates
+
+- Task 3: Verify Last Login Update (AC: 2)
+  - Verify `backend/app/api/routes/auth.py` login endpoint already updates `last_login` (line 126)
+  - Confirm update happens within database transaction
+  - Add test to verify last_login update if not already tested
+  - Document that last_login update is already implemented
+
+- Task 4: Refactor Cost Tracking Service (AC: 1, 3)
+  - Review `backend/app/services/cost_tracking.py` function `track_complete_generation_cost()`
+  - Update function to also increment `user.total_generations` (or create separate function)
+  - Ensure both `total_cost` and `total_generations` updates are in same transaction
+  - Maintain backward compatibility with existing code
+
+- Task 5: Testing (AC: 1, 2, 3)
+  - Create backend unit tests for statistics update function:
+    - Test `total_generations` increments correctly
+    - Test `total_cost` adds generation cost correctly
+    - Test both updates happen atomically (transaction rollback on error)
+    - Test no race conditions with concurrent updates
+  - Create integration test for generation completion flow:
+    - Test statistics update is called when generation completes
+    - Test statistics are updated correctly after completion
+  - Create test for last_login update (if not already exists):
+    - Test last_login updates on successful login
+    - Test last_login is committed atomically
+  - Test edge cases:
+    - Generation with zero cost
+    - User with existing statistics
+    - Concurrent generation completions
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Statistics Update on Generation Completion:**
+   **Given** a video generation completes successfully
+   **When** the generation service finishes processing
+   **Then** the system:
+   - Increments `user.total_generations` by 1
+   - Adds `generation.cost` to `user.total_cost`
+   - Updates occur atomically within a database transaction
+
+2. **Last Login Update:**
+   **Given** a user logs in successfully
+   **When** the login endpoint processes the request
+   **Then** the system updates `user.last_login` to the current timestamp
+   **And** the update is committed atomically
+
+3. **Atomic Statistics Updates:**
+   **Given** statistics updates occur
+   **When** the update is processed
+   **Then** updates are atomic (database transaction ensures consistency)
+   **And** updates are immediate (user sees updated stats on next profile view)
+   **And** updates are accurate (no race conditions, proper locking if needed)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Story 5.2: User Stats Update</section>
+        <snippet>As a developer, I want user statistics to update automatically, so that users see accurate counts and costs. Includes incrementing total_generations, updating total_cost, and updating last_login on login. Updates must be atomic.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR-023: User Stats Update</section>
+        <snippet>System shall increment total_generations and update total_cost when video generation completes. System shall update last_login timestamp on successful login. All updates must be atomic.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-5.md</path>
+        <title>Epic Technical Specification: User Profile</title>
+        <section>Story 5.2: User Stats Update</section>
+        <snippet>Statistics update workflow: Video generation completes → generation service calculates cost → calls user statistics update function → atomic transaction increments total_generations and adds to total_cost. Last login update: Login endpoint updates last_login timestamp atomically.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Implementation Patterns</section>
+        <snippet>Service layer pattern: Business logic in backend/app/services/. Database transactions: Use SQLAlchemy session transactions for atomicity. Error handling: Log errors but don't break main flow.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/5-1-profile-display.md</path>
+        <title>Story 5.1: Profile Display</title>
+        <section>Dev Agent Record - Completion Notes</section>
+        <snippet>User profile endpoint already implemented in backend/app/api/routes/users.py. User model contains all required fields. Service pattern established in cost_tracking.py. Database transactions used for atomicity.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/cost_tracking.py</path>
+        <kind>Service module</kind>
+        <symbol>track_complete_generation_cost</symbol>
+        <lines>131-171</lines>
+        <reason>Existing function that tracks generation cost and updates user.total_cost. Needs to be extended to also increment user.total_generations. Currently updates cost atomically - same pattern should be used for statistics.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/cost_tracking.py</path>
+        <kind>Service function</kind>
+        <symbol>update_user_total_cost</symbol>
+        <lines>96-129</lines>
+        <reason>Function that updates user.total_cost atomically. Can be used as a pattern for updating total_generations. Uses database transaction for atomicity.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/generations.py</path>
+        <kind>Route handler</kind>
+        <symbol>process_generation</symbol>
+        <lines>47-403</lines>
+        <reason>Background task that processes video generation. Around line 393, track_complete_generation_cost() is called after generation completes. Statistics update should be called here or integrated into track_complete_generation_cost().</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/generations.py</path>
+        <kind>Route handler</kind>
+        <symbol>process_generation</symbol>
+        <lines>360-370</lines>
+        <reason>Generation completion handler where status is set to "completed" and completed_at is set. This is where statistics update should be triggered.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/auth.py</path>
+        <kind>Route handler</kind>
+        <symbol>login</symbol>
+        <lines>91-149</lines>
+        <reason>Login endpoint that already updates last_login timestamp at line 126. Verify this is working correctly and add test if missing.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/db/models/user.py</path>
+        <kind>SQLAlchemy model</kind>
+        <symbol>User</symbol>
+        <lines>13-29</lines>
+        <reason>User model with total_generations, total_cost, and last_login fields. All fields already exist - no model changes needed. Fields are: total_generations (Integer, default=0), total_cost (Float, default=0.0), last_login (DateTime, nullable=True).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/db/models/generation.py</path>
+        <kind>SQLAlchemy model</kind>
+        <symbol>Generation</symbol>
+        <lines>13-43</lines>
+        <reason>Generation model with cost field and user_id foreign key. Used to get generation cost and user_id for statistics updates. Fields: cost (Float, nullable=True), user_id (String(36), ForeignKey("users.id")).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/users.py</path>
+        <kind>Route handler</kind>
+        <symbol>get_user_profile</symbol>
+        <lines>13-36</lines>
+        <reason>Profile endpoint that displays user statistics. Statistics updates will be visible immediately after update through this endpoint.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/tests/test_cost_tracking.py</path>
+        <kind>Test file</kind>
+        <symbol>test_update_user_total_cost</symbol>
+        <lines>71-84</lines>
+        <reason>Existing test for updating user total_cost. Can be used as a pattern for testing total_generations update. Tests atomicity and correctness.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/tests/test_integration_progress_tracking.py</path>
+        <kind>Integration test</kind>
+        <symbol>test_cost_calculation_and_user_total_cost_update</symbol>
+        <lines>464-497</lines>
+        <reason>Integration test that verifies cost tracking updates user.total_cost atomically. Can be extended to test total_generations increment as well.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/tests/conftest.py</path>
+        <kind>Test configuration</kind>
+        <symbol>db_session</symbol>
+        <lines>18-47</lines>
+        <reason>Pytest fixture that provides in-memory SQLite database session for testing. Use this for all database-related tests. Includes foreign key constraints enabled.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package>fastapi</package>
+        <version>>=0.104.0</version>
+      </package>
+      <package>sqlalchemy</package>
+        <version>>=2.0.0</version>
+      </package>
+      <package>pydantic</package>
+        <version>>=2.0.0</version>
+      </package>
+      <package>pytest</package>
+        <version>>=7.4.0</version>
+      </package>
+      <package>httpx</package>
+        <version>>=0.24.0</version>
+      </package>
+    </python>
+  </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <type>Architecture Pattern</type>
+      <description>Statistics updates must be in service layer (backend/app/services/). Follow existing pattern from cost_tracking.py. Use SQLAlchemy session transactions for atomicity.</description>
+    </constraint>
+    <constraint>
+      <type>Database Transaction</type>
+      <description>All statistics updates must be atomic. Use SQLAlchemy session.commit() within a single transaction. Both total_generations and total_cost updates must be in same transaction.</description>
+    </constraint>
+    <constraint>
+      <type>Error Handling</type>
+      <description>Statistics update errors should be logged but must not break generation completion flow. Generation should still be marked as completed even if statistics update fails.</description>
+    </constraint>
+    <constraint>
+      <type>Service Integration</type>
+      <description>Statistics update should be called after track_complete_generation_cost() to ensure generation.cost is already calculated. Can be integrated into track_complete_generation_cost() or called separately.</description>
+    </constraint>
+    <constraint>
+      <type>Backward Compatibility</type>
+      <description>Any changes to cost_tracking.py must maintain backward compatibility. Existing functions should continue to work. New function can be added or existing function extended.</description>
+    </constraint>
+    <constraint>
+      <type>Testing</type>
+      <description>Backend tests in backend/tests/ using pytest. Use db_session fixture from conftest.py. Test atomicity with transaction rollback. Test concurrent updates for race conditions.</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>update_user_statistics_on_completion</name>
+      <kind>Service function</kind>
+      <signature>def update_user_statistics_on_completion(
+    db: Session,
+    generation_id: str
+) -> None
+Queries generation record to get user_id and cost
+Queries user record
+Increments user.total_generations += 1 atomically
+Adds generation.cost to user.total_cost atomically
+Commits transaction
+Handles errors gracefully with logging</signature>
+      <path>backend/app/services/cost_tracking.py (to be created or updated)</path>
+    </interface>
+    <interface>
+      <name>track_complete_generation_cost</name>
+      <kind>Service function</kind>
+      <signature>def track_complete_generation_cost(
+    db: Session,
+    generation_id: str,
+    video_cost: float,
+    llm_cost: Optional[float] = None
+) -> None
+Accumulates generation cost and updates both Generation and User records.
+Currently updates user.total_cost. May be extended to also increment user.total_generations.</signature>
+      <path>backend/app/services/cost_tracking.py</path>
+    </interface>
+    <interface>
+      <name>process_generation</name>
+      <kind>Background task</kind>
+      <signature>async def process_generation(generation_id: str, prompt: str)
+Background task that processes video generation pipeline.
+Calls track_complete_generation_cost() around line 393 after generation completes.
+Statistics update should be called here or integrated into track_complete_generation_cost().</signature>
+      <path>backend/app/api/routes/generations.py</path>
+    </interface>
+    <interface>
+      <name>login</name>
+      <kind>FastAPI route</kind>
+      <signature>@router.post("/login", response_model=TokenResponse)
+async def login(
+    credentials: UserLogin, db: Session = Depends(get_db)
+) -> TokenResponse
+Authenticates user and returns JWT token.
+Already updates user.last_login = datetime.utcnow() at line 126.
+Verify this is working correctly and add test if missing.</signature>
+      <path>backend/app/api/routes/auth.py</path>
+    </interface>
+    <interface>
+      <name>User</name>
+      <kind>SQLAlchemy model</kind>
+      <signature>class User(Base):
+    __tablename__ = "users"
+    id = Column(String(36), primary_key=True)
+    username = Column(String(100), unique=True, nullable=False)
+    total_generations = Column(Integer, default=0)  # To be incremented
+    total_cost = Column(Float, default=0.0)  # To be updated
+    last_login = Column(DateTime, nullable=True)  # Already updated on login
+    generations = relationship("Generation", back_populates="user")</signature>
+      <path>backend/app/db/models/user.py</path>
+    </interface>
+    <interface>
+      <name>Generation</name>
+      <kind>SQLAlchemy model</kind>
+      <signature>class Generation(Base):
+    __tablename__ = "generations"
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    cost = Column(Float, nullable=True)  # Cost to add to user.total_cost
+    status = Column(String(20), default="pending")  # "completed" triggers statistics update
+    user = relationship("User", back_populates="generations")</signature>
+      <path>backend/app/db/models/generation.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>Backend testing uses pytest with httpx for API testing. Test files in backend/tests/ directory. Use db_session fixture from conftest.py for in-memory SQLite database. Test atomicity with transaction rollback on error. Test concurrent updates for race conditions. Follow existing test patterns from test_cost_tracking.py and test_integration_progress_tracking.py.</standards>
+    <locations>
+      <location>backend/tests/</location>
+      <location>backend/tests/test_cost_tracking.py (for cost tracking tests)</location>
+      <location>backend/tests/test_integration_progress_tracking.py (for integration tests)</location>
+    </locations>
+    <ideas>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test update_user_statistics_on_completion() increments user.total_generations by 1 when generation completes</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test update_user_statistics_on_completion() adds generation.cost to user.total_cost when generation completes</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test update_user_statistics_on_completion() updates both total_generations and total_cost atomically (same transaction)</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test update_user_statistics_on_completion() handles errors gracefully without breaking generation completion</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Integration: Test generation completion flow calls statistics update and updates user statistics correctly</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Backend: Test login endpoint updates user.last_login timestamp on successful login</description>
+      </test>
+      <test>
+        <acId>2</acId>
+        <description>Backend: Test last_login update is committed atomically within login transaction</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Backend: Test statistics updates are atomic (transaction rollback on error prevents partial updates)</description>
+      </test>
+      <test>
+        <acId>3</acId>
+        <description>Backend: Test no race conditions with concurrent generation completions (multiple generations completing simultaneously)</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test statistics update with generation that has zero cost</description>
+      </test>
+      <test>
+        <acId>1</acId>
+        <description>Backend: Test statistics update with user that has existing statistics (non-zero total_generations and total_cost)</description>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

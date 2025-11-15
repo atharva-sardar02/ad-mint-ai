@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import auth, generations
+from app.api.routes import auth, generations, users
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ app.add_middleware(
 # Include routers (after CORS middleware)
 app.include_router(auth.router)
 app.include_router(generations.router)
+app.include_router(users.router)
 
 # Mount static files for serving videos and thumbnails
 # This allows the frontend to access files at /output/videos/ and /output/thumbnails/
