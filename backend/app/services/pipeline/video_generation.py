@@ -46,7 +46,7 @@ async def generate_video_clip(
     generation_id: str,
     scene_number: int,
     cancellation_check: Optional[callable] = None
-) -> str:
+) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
     
@@ -58,7 +58,7 @@ async def generate_video_clip(
         cancellation_check: Optional function to check if generation should be cancelled
     
     Returns:
-        str: Path to the generated video clip file
+        tuple[str, str]: (Path to the generated video clip file, Model name used)
     
     Raises:
         ValueError: If API key is missing or invalid
@@ -126,7 +126,8 @@ async def generate_video_clip(
                 f"model: {model_name}, cost: ${cost:.4f})"
             )
             
-            return str(clip_path)
+            # Return both clip path and model name used for accurate cost tracking
+            return (str(clip_path), model_name)
             
         except RuntimeError as e:
             # Cancellation - re-raise immediately
@@ -489,7 +490,7 @@ async def generate_all_clips(
             raise RuntimeError("Generation cancelled by user")
         
         try:
-            clip_path = await generate_video_clip(
+            clip_path, model_used = await generate_video_clip(
                 scene=scene,
                 output_dir=output_dir,
                 generation_id=generation_id,
