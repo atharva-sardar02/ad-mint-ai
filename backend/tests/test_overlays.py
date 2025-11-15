@@ -142,3 +142,5 @@ def test_add_text_overlay_integration(tmp_path, sample_text_overlay):
     # Skip for unit tests, but useful for integration testing
     pass
 
+
+

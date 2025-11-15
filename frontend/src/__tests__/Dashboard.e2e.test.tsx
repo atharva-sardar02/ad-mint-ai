@@ -201,3 +201,5 @@ describe("Dashboard E2E: User submits prompt → generation starts → status up
   });
 });
 
+
+

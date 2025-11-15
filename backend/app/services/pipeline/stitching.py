@@ -162,3 +162,5 @@ def stitch_video_clips(
         logger.error(f"Unexpected error during video stitching: {e}", exc_info=True)
         raise RuntimeError(f"Video stitching failed: {e}")
 
+
+

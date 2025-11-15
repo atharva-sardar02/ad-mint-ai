@@ -34,3 +34,5 @@ The audio service (`backend/app/services/pipeline/audio.py`) selects sound effec
 - Sound effects are composited with background music
 - If a sound effect file is not found, the service continues without it (logs warning)
 
+
+

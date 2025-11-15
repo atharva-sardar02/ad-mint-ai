@@ -2,6 +2,7 @@
  * User service for API calls related to user profile.
  */
 import apiClient from "./apiClient";
+import { API_ENDPOINTS } from "./config";
 import type { UserProfile } from "./types/api";
 
 /**
@@ -12,7 +13,7 @@ import type { UserProfile } from "./types/api";
  * @throws {NetworkError} If network request fails
  */
 export async function getUserProfile(): Promise<UserProfile> {
-  const response = await apiClient.get<UserProfile>("/user/profile");
+  const response = await apiClient.get<UserProfile>(API_ENDPOINTS.USER.PROFILE);
   return response.data;
 }
 

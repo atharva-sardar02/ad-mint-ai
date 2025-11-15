@@ -101,3 +101,5 @@ def test_track_complete_generation_cost(db_session, sample_generation):
     assert sample_generation.cost == 0.76
     assert user.total_cost == initial_user_cost + 0.76
 
+
+
