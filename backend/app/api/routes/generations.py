@@ -16,6 +16,7 @@ from app.db.models.generation import Generation
 from app.db.models.user import User
 from app.db.session import SessionLocal, get_db
 from app.schemas.generation import (
+    DeleteResponse,
     GenerateRequest,
     GenerateResponse,
     GenerationListResponse,
@@ -477,12 +478,26 @@ async def get_generation_status(
     # Count available clips
     available_clips = len(generation.temp_clip_paths) if generation.temp_clip_paths else 0
     
+    # Helper function to convert relative paths to full URLs
+    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
+        """Convert relative path to full URL for frontend consumption."""
+        if not relative_path:
+            return None
+        from app.core.config import settings
+        # If already a full URL, return as-is
+        if relative_path.startswith("http://") or relative_path.startswith("https://"):
+            return relative_path
+        # Convert relative path to full URL
+        base_url = settings.STATIC_BASE_URL.rstrip("/")
+        path = relative_path.lstrip("/")
+        return f"{base_url}/{path}"
+    
     return StatusResponse(
         generation_id=generation.id,
         status=generation.status,
         progress=generation.progress,
         current_step=generation.current_step,
-        video_url=generation.video_url,
+        video_url=get_full_url(generation.video_url),
         cost=generation.cost,
         error=generation.error_message,
         num_scenes=generation.num_scenes,
@@ -561,14 +576,28 @@ async def get_generations(
     # Apply pagination
     generations = query.offset(offset).limit(limit).all()
 
+    # Helper function to convert relative paths to full URLs
+    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
+        """Convert relative path to full URL for frontend consumption."""
+        if not relative_path:
+            return None
+        from app.core.config import settings
+        # If already a full URL, return as-is
+        if relative_path.startswith("http://") or relative_path.startswith("https://"):
+            return relative_path
+        # Convert relative path to full URL
+        base_url = settings.STATIC_BASE_URL.rstrip("/")
+        path = relative_path.lstrip("/")
+        return f"{base_url}/{path}"
+    
     # Convert to Pydantic models
     generation_items = [
         GenerationListItem(
             id=gen.id,
             prompt=gen.prompt,
             status=gen.status,
-            video_url=gen.video_url,
-            thumbnail_url=gen.thumbnail_url,
+            video_url=get_full_url(gen.video_url),
+            thumbnail_url=get_full_url(gen.thumbnail_url),
             duration=gen.duration,
             cost=gen.cost,
             created_at=gen.created_at,
@@ -677,3 +706,120 @@ async def download_clip(
         media_type="video/mp4",
         filename=filename
     )
+
+
+@router.delete("/generations/{generation_id}", response_model=DeleteResponse, status_code=status.HTTP_200_OK)
+async def delete_generation(
+    generation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> DeleteResponse:
+    """
+    Delete a video generation and its associated files.
+    
+    Args:
+        generation_id: UUID of the generation to delete
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        DeleteResponse: Success message and generation_id
+    
+    Raises:
+        HTTPException: 401 if user is not authenticated
+        HTTPException: 403 if user doesn't own the generation
+        HTTPException: 404 if generation not found
+        HTTPException: 500 if deletion fails
+    """
+    # Store user_id early to avoid lazy loading issues
+    user_id = current_user.id
+    logger.info(f"User {user_id} requesting deletion of generation {generation_id}")
+    
+    # Query the generation (don't need to load user relationship, just check user_id)
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        logger.warning(f"Generation {generation_id} not found for deletion request by user {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Verify ownership
+    if generation.user_id != user_id:
+        logger.warning(f"User {user_id} attempted to delete generation {generation_id} owned by {generation.user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to delete this generation"
+                }
+            }
+        )
+    
+    try:
+        # Delete video file if it exists
+        if generation.video_path and os.path.exists(generation.video_path):
+            try:
+                os.remove(generation.video_path)
+                logger.info(f"Deleted video file: {generation.video_path}")
+            except FileNotFoundError:
+                logger.warning(f"Video file not found (may have been already deleted): {generation.video_path}")
+            except Exception as e:
+                logger.error(f"Error deleting video file {generation.video_path}: {e}")
+                # Continue with deletion even if file deletion fails
+        
+        # Delete thumbnail file if it exists
+        if generation.thumbnail_url:
+            try:
+                # Parse thumbnail URL - could be file path or HTTP URL
+                thumbnail_path = None
+                if generation.thumbnail_url.startswith("http://") or generation.thumbnail_url.startswith("https://"):
+                    # Extract path from URL if it's a local file URL
+                    # For now, skip HTTP URLs (they're served, not stored locally)
+                    logger.info(f"Thumbnail is HTTP URL, skipping file deletion: {generation.thumbnail_url}")
+                else:
+                    # Assume it's a file path
+                    thumbnail_path = generation.thumbnail_url
+                    if os.path.exists(thumbnail_path):
+                        os.remove(thumbnail_path)
+                        logger.info(f"Deleted thumbnail file: {thumbnail_path}")
+                    else:
+                        logger.warning(f"Thumbnail file not found (may have been already deleted): {thumbnail_path}")
+            except FileNotFoundError:
+                logger.warning(f"Thumbnail file not found (may have been already deleted): {generation.thumbnail_url}")
+            except Exception as e:
+                logger.error(f"Error deleting thumbnail file {generation.thumbnail_url}: {e}")
+                # Continue with deletion even if thumbnail deletion fails
+        
+        # Delete database record
+        # Note: We delete by ID to avoid foreign key constraint checks on user relationship
+        db.query(Generation).filter(Generation.id == generation_id).delete()
+        db.commit()
+        
+        logger.info(f"Successfully deleted generation {generation_id} for user {user_id}")
+        
+        return DeleteResponse(
+            message="Video deleted successfully",
+            generation_id=generation_id
+        )
+        
+    except Exception as e:
+        # Log error using stored user_id to avoid triggering user table query
+        logger.error(f"Error deleting generation {generation_id} for user {user_id}: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "DELETION_FAILED",
+                    "message": "Failed to delete generation"
+                }
+            }
+        )

@@ -59,9 +59,9 @@ development_status:
 
   epic-4: contexted
   4-1-video-gallery: done
-  4-2-video-playback-and-download: backlog
-  4-3-video-deletion: backlog
-  4-4-video-search-optional: backlog
+  4-2-video-playback-and-download: done
+  4-3-video-deletion: done
+  4-4-video-search-optional: done
   epic-4-retrospective: optional
 
   epic-5: backlog

@@ -10,6 +10,7 @@ import { Login } from "./routes/Auth/Login";
 import { Register } from "./routes/Auth/Register";
 import { Dashboard } from "./routes/Dashboard";
 import { Gallery } from "./routes/Gallery";
+import { VideoDetail } from "./routes/VideoDetail";
 import { Profile } from "./routes/Profile";
 import { GenerationStatus } from "./routes/GenerationStatus";
 import "./App.css";
@@ -68,6 +69,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Gallery />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gallery/:id"
+            element={
+              <ProtectedRoute>
+                <VideoDetail />
               </ProtectedRoute>
             }
           />

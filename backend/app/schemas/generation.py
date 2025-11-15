@@ -60,6 +60,12 @@ class GenerationListResponse(BaseModel):
     )
 
 
+class DeleteResponse(BaseModel):
+    """Response schema for DELETE /api/generations/{id} endpoint."""
+    message: str
+    generation_id: str
+
+
 # LLM Response Schemas (for validating OpenAI API responses)
 class BrandGuidelines(BaseModel):
     """Brand guidelines extracted from LLM response."""

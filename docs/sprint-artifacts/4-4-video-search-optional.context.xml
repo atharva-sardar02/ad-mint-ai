@@ -1,0 +1,150 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>4</storyId>
+    <title>Video Search (Optional)</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/4-4-video-search-optional.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>search my videos by prompt text</iWant>
+    <soThat>I can quickly find specific videos</soThat>
+    <tasks>
+      <task id="1" ac="1">Add Search Input to Gallery Component</task>
+      <task id="2" ac="2">Implement Debounced Search</task>
+      <task id="3" ac="2,5">Wire Up Search to Backend API</task>
+      <task id="4" ac="3">Implement Search Clear Functionality</task>
+      <task id="5" ac="4">Add No Results Message</task>
+      <task id="6" ac="5">Update Pagination with Search</task>
+      <task id="7" ac="1,2,3,4,5">Testing</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">Search Input Display: Search input field visible in gallery header with placeholder text</criterion>
+    <criterion id="2">Real-Time Search Filtering: Gallery filters videos by prompt text (case-insensitive, debounced 300ms, partial matches)</criterion>
+    <criterion id="3">Empty Search State: Clearing search text shows all videos again, pagination and status filter remain functional</criterion>
+    <criterion id="4">No Results Message: Shows user-friendly "No videos found" message when search returns 0 results</criterion>
+    <criterion id="5">Combined Filtering: Search and status filter work together (AND logic), pagination works correctly</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 4.4: Video Search (Optional)">
+        Story requirements and acceptance criteria for video search functionality. Search filters videos by prompt text with case-insensitive substring matching, debounced 300ms, and works in combination with status filter.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="AC-4.4.1, AC-4.4.2">
+        Acceptance criteria for search functionality: filters videos by prompt text (case-insensitive, debounced 300ms), works with status filter (AND logic). Search performance requirement: &lt;500ms response time.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="APIs and Interfaces">
+        GET /api/generations endpoint specification with q parameter for search: Optional search term for prompt text (case-insensitive substring match). Query parameter q accepts string, filters using ILIKE on prompt field.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Workflows and Sequencing">
+        Search/Filter Flow: User types in search bar (debounced 300ms), frontend calls GET /api/generations?q={search_term}&amp;status={filter_status}, backend applies search filter with ILIKE, returns filtered results, frontend updates gallery display.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-4.md" title="Epic 4 Technical Specification" section="Performance">
+        Search Performance: Search query response should be &lt;500ms for substring search on prompt field. Database index: Ensure prompt field is searchable (full-text search not required for MVP, ILIKE/LIKE is sufficient).
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-021: Video Search">
+        System shall filter videos by prompt text (optional feature). System shall filter by status (completed, failed, processing). Search is optional feature for MVP.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications - GET /api/generations">
+        Query parameter q: Optional search term to filter by prompt text (case-insensitive substring match). Search works in combination with status filter.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary">
+        Frontend: React 18 + TypeScript + Vite, Tailwind CSS for rapid responsive UI implementation, React Router for client-side routing, Zustand for small predictable global state (auth/session, user profile).
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Frontend structure: routes/ for page components, components/ui/ for reusable UI components, lib/services/ for API service functions, lib/types/ for TypeScript types.
+      </doc>
+      <doc path="docs/sprint-artifacts/4-1-video-gallery.md" title="Story 4.1: Video Gallery" section="Dev Agent Record - Completion Notes">
+        Backend search functionality (q parameter) is already implemented but not exposed in frontend UI. Action item: Add search input field to frontend Gallery component to expose q parameter functionality.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="frontend/src/routes/Gallery.tsx" kind="component" symbol="Gallery" lines="1-192" reason="Main gallery component to update with search input and debounced search logic. Currently has status filter, pagination, and empty state - need to add search input and searchQuery state." />
+      <artifact path="frontend/src/lib/services/generations.ts" kind="service" symbol="getGenerations" lines="20-43" reason="API service function already supports q parameter. Function accepts GetGenerationsParams with optional q field and includes it in query string. No changes needed to this file." />
+      <artifact path="frontend/src/lib/types/api.ts" kind="types" symbol="GetGenerationsParams" lines="97-103" reason="TypeScript interface for getGenerations parameters. Already includes optional q?: string field. No changes needed." />
+      <artifact path="frontend/src/components/ui/Input.tsx" kind="component" symbol="Input" lines="1-72" reason="Reusable Input component with label, error, and helperText support. Can be reused for search input field. Uses Tailwind CSS styling, mobile-responsive." />
+      <artifact path="backend/app/api/routes/generations.py" kind="endpoint" symbol="get_generations" lines="28-125" reason="Backend endpoint already implements search functionality. Line 36-38: q parameter accepts optional search term. Line 84-85: Applies search filter using Generation.prompt.ilike(f'%{q}%') for case-insensitive substring match. No backend changes needed." />
+      <artifact path="frontend/src/__tests__/Gallery.test.tsx" kind="test" symbol="Gallery tests" lines="1-320" reason="Existing test file for Gallery component. Need to add test cases for search functionality: search input rendering, debounce timing, search query updates results, search clear, combined search and status filtering, pagination with search." />
+      <artifact path="frontend/src/lib/apiClient.ts" kind="service" symbol="apiClient" lines="1-105" reason="Axios instance with interceptors for JWT tokens and error handling. Already configured and working. No changes needed for search functionality." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+        <package name="tailwindcss" version="^4.1.17" />
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Backend search functionality already implemented - no backend changes needed. Backend endpoint GET /api/generations supports q parameter for case-insensitive substring search on prompt field.</constraint>
+    <constraint>Frontend must use debounced search with 300ms delay to reduce API calls and improve performance.</constraint>
+    <constraint>Search must work in combination with status filter (AND logic) - both filters applied simultaneously.</constraint>
+    <constraint>Search query response time must be &lt;500ms per tech spec NFR.</constraint>
+    <constraint>Use local component state for search query (no global Zustand store needed for MVP).</constraint>
+    <constraint>Follow existing component patterns from Gallery component: functional component with TypeScript, Tailwind CSS styling, React hooks for state management.</constraint>
+    <constraint>Reuse existing Input component from frontend/src/components/ui/Input.tsx if possible, or create inline input following same styling patterns.</constraint>
+    <constraint>Reset pagination (offset to 0) when search query changes, similar to status filter behavior.</constraint>
+    <constraint>Maintain search query when loading more pages (pagination with search active).</constraint>
+    <constraint>Use Vitest with React Testing Library for frontend tests, following existing test patterns from Gallery.test.tsx.</constraint>
+    <constraint>Mock API responses for frontend tests using vi.mock() pattern already established in Gallery tests.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="GET /api/generations" kind="REST endpoint" signature="GET /api/generations?limit={number}&amp;offset={number}&amp;status={string}&amp;q={string}&amp;sort={string}" path="backend/app/api/routes/generations.py:28-125">
+      Query parameter q: Optional search term for prompt text (case-insensitive substring match). Backend applies filter using Generation.prompt.ilike(f'%{q}%'). Returns GenerationListResponse with paginated results.
+    </interface>
+    <interface name="getGenerations" kind="function" signature="getGenerations(params?: GetGenerationsParams): Promise&lt;GenerationListResponse&gt;" path="frontend/src/lib/services/generations.ts:20-43">
+      Service function accepts GetGenerationsParams with optional q?: string field. Includes q in query string if provided. Returns typed GenerationListResponse. No changes needed - already supports search.
+    </interface>
+    <interface name="GetGenerationsParams" kind="TypeScript interface" signature="interface GetGenerationsParams { limit?: number; offset?: number; status?: GenerationStatus; q?: string; sort?: string }" path="frontend/src/lib/types/api.ts:97-103">
+      TypeScript interface for getGenerations parameters. Includes optional q?: string field for search query. No changes needed.
+    </interface>
+    <interface name="Input" kind="React component" signature="Input(props: InputProps): JSX.Element" path="frontend/src/components/ui/Input.tsx:17-70">
+      Reusable Input component with label, error, helperText support. Extends React.InputHTMLAttributes. Uses Tailwind CSS for styling. Can be reused for search input field.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Frontend tests use Vitest with React Testing Library. Tests follow existing patterns from Gallery.test.tsx: mock API services using vi.mock(), use render() with BrowserRouter wrapper, test user interactions with fireEvent, use waitFor() for async updates, mock useNavigate hook. Test files located in frontend/src/__tests__/. Unit tests for components, integration tests for complete flows. Mock API responses to avoid actual network calls.
+    </standards>
+    <locations>
+      <location>frontend/src/__tests__/Gallery.test.tsx</location>
+      <location>frontend/src/__tests__/*.test.tsx</location>
+    </locations>
+    <ideas>
+      <idea ac="1">Test search input renders in gallery header with placeholder text "Search videos by prompt..."</idea>
+      <idea ac="2">Test debounce functionality: verify API call is made 300ms after user stops typing, not on every keystroke</idea>
+      <idea ac="2">Test search query filters results: mock API response, enter search text, verify only matching videos displayed</idea>
+      <idea ac="2">Test case-insensitive search: verify backend handles case-insensitive matching (test with uppercase/lowercase search terms)</idea>
+      <idea ac="2">Test partial matches: verify substring search works (search "luxury" matches "luxury watch ad")</idea>
+      <idea ac="3">Test search clear: enter search text, click clear button, verify all videos shown again, status filter maintained</idea>
+      <idea ac="4">Test no results message: enter search text with no matches, verify "No videos found" message displayed with helpful text</idea>
+      <idea ac="5">Test combined filtering: enter search text and select status filter, verify only videos matching both criteria shown</idea>
+      <idea ac="5">Test pagination with search: verify "Load More" button works correctly when search is active, maintains search query when loading more</idea>
+      <idea ac="5">Test pagination reset: verify offset resets to 0 when search query changes</idea>
+      <idea>Integration test: Complete search flow - type in search bar, wait for debounce, verify API call with q parameter, verify results update, verify pagination works</idea>
+    </ideas>
+  </tests>
+</story-context>
+

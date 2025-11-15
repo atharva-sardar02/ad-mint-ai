@@ -365,3 +365,229 @@ def test_get_generations_offset_validation(db_session: Session, test_user, auth_
     
     app.dependency_overrides.clear()
 
+
+def test_delete_generation_success(db_session: Session, test_user, auth_token):
+    """Test DELETE /api/generations/{id} successfully deletes generation (AC-4.3.1)."""
+    import os
+    import tempfile
+    from pathlib import Path
+    from app.db.session import get_db
+    from app.api.deps import get_current_user
+    
+    # Override dependencies to use test session and test user
+    app.dependency_overrides[get_db] = lambda: db_session
+    # Override get_current_user to return test_user directly (bypassing database query)
+    # Note: FastAPI dependency override - we need to match the callable, not the signature
+    # The override will be called by FastAPI's dependency injection system
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    
+    # Create a temporary video file
+    temp_dir = tempfile.mkdtemp()
+    video_path = os.path.join(temp_dir, "test_video.mp4")
+    thumbnail_path = os.path.join(temp_dir, "test_thumbnail.jpg")
+    
+    # Create dummy files
+    Path(video_path).touch()
+    Path(thumbnail_path).touch()
+    
+    # Create a generation with file paths
+    generation = Generation(
+        user_id=test_user.id,
+        prompt="Test video to delete",
+        status="completed",
+        video_path=video_path,
+        video_url=f"https://example.com/video.mp4",
+        thumbnail_url=thumbnail_path,
+        duration=15,
+        cost=1.5,
+    )
+    db_session.add(generation)
+    db_session.commit()
+    db_session.refresh(generation)
+    
+    generation_id = generation.id
+    
+    # Verify files exist
+    assert os.path.exists(video_path)
+    assert os.path.exists(thumbnail_path)
+    
+    # Delete the generation
+    response = client.delete(
+        f"/api/generations/{generation_id}",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+    
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["message"] == "Video deleted successfully"
+    assert data["generation_id"] == generation_id
+    
+    # Verify database record is deleted
+    deleted_gen = db_session.query(Generation).filter(Generation.id == generation_id).first()
+    assert deleted_gen is None
+    
+    # Verify files are deleted
+    assert not os.path.exists(video_path)
+    assert not os.path.exists(thumbnail_path)
+    
+    app.dependency_overrides.clear()
+    
+    # Clean up temp directory
+    import shutil
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_delete_generation_ownership_verification(db_session: Session, test_user, test_user2, auth_token):
+    """Test DELETE /api/generations/{id} returns 403 for non-owner (AC-4.3.5)."""
+    from app.db.session import get_db
+    from app.api.deps import get_current_user
+    
+    # Override dependencies to use test session and test_user (who doesn't own the generation)
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    
+    # Create a generation owned by test_user2
+    generation = Generation(
+        user_id=test_user2.id,
+        prompt="User2's video",
+        status="completed",
+        video_url="https://example.com/video.mp4",
+        thumbnail_url="https://example.com/thumb.jpg",
+        duration=15,
+        cost=1.5,
+    )
+    db_session.add(generation)
+    db_session.commit()
+    db_session.refresh(generation)
+    
+    generation_id = generation.id
+    
+    # Try to delete as test_user (doesn't own it)
+    response = client.delete(
+        f"/api/generations/{generation_id}",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+    
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    data = response.json()
+    assert "detail" in data
+    assert data["detail"]["error"]["code"] == "FORBIDDEN"
+    assert "permission" in data["detail"]["error"]["message"].lower()
+    
+    # Verify generation still exists
+    existing_gen = db_session.query(Generation).filter(Generation.id == generation_id).first()
+    assert existing_gen is not None
+    assert existing_gen.id == generation_id
+    
+    app.dependency_overrides.clear()
+
+
+def test_delete_generation_not_found(db_session: Session, test_user, auth_token):
+    """Test DELETE /api/generations/{id} returns 404 for non-existent generation (AC-4.3.1)."""
+    from app.db.session import get_db
+    from app.api.deps import get_current_user
+    from uuid import uuid4
+    
+    # Override dependencies to use test session and test user
+    app.dependency_overrides[get_db] = lambda: db_session
+    # Override get_current_user to return test_user directly (bypassing database query)
+    # Note: FastAPI dependency override - we need to match the callable, not the signature
+    # The override will be called by FastAPI's dependency injection system
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    
+    fake_id = str(uuid4())
+    
+    response = client.delete(
+        f"/api/generations/{fake_id}",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+    
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    data = response.json()
+    assert "detail" in data
+    assert data["detail"]["error"]["code"] == "GENERATION_NOT_FOUND"
+    
+    app.dependency_overrides.clear()
+
+
+def test_delete_generation_unauthorized(db_session: Session, test_user):
+    """Test DELETE /api/generations/{id} returns 403 without token (AC-4.3.1)."""
+    from app.db.session import get_db
+    
+    # Override get_db to use test session (don't override get_current_user - we want 403 for missing token)
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    generation = Generation(
+        user_id=test_user.id,
+        prompt="Test video",
+        status="completed",
+        video_url="https://example.com/video.mp4",
+        thumbnail_url="https://example.com/thumb.jpg",
+        duration=15,
+        cost=1.5,
+    )
+    db_session.add(generation)
+    db_session.commit()
+    db_session.refresh(generation)
+    
+    generation_id = generation.id
+    
+    # Try to delete without token - HTTPBearer returns 403 for missing credentials
+    response = client.delete(f"/api/generations/{generation_id}")
+    
+    # HTTPBearer returns 403 Forbidden when Authorization header is missing
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    
+    app.dependency_overrides.clear()
+
+
+def test_delete_generation_file_not_found_graceful(db_session: Session, test_user, auth_token):
+    """Test DELETE /api/generations/{id} handles missing files gracefully (AC-4.3.1)."""
+    import os
+    from app.db.session import get_db
+    from app.api.deps import get_current_user
+    
+    # Override dependencies to use test session and test user
+    app.dependency_overrides[get_db] = lambda: db_session
+    # Override get_current_user to return test_user directly (bypassing database query)
+    # Note: FastAPI dependency override - we need to match the callable, not the signature
+    # The override will be called by FastAPI's dependency injection system
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    
+    # Create a generation with file paths that don't exist
+    generation = Generation(
+        user_id=test_user.id,
+        prompt="Test video with missing files",
+        status="completed",
+        video_path="/nonexistent/path/video.mp4",
+        video_url="https://example.com/video.mp4",
+        thumbnail_url="/nonexistent/path/thumb.jpg",
+        duration=15,
+        cost=1.5,
+    )
+    db_session.add(generation)
+    db_session.commit()
+    db_session.refresh(generation)
+    
+    generation_id = generation.id
+    
+    # Verify files don't exist
+    assert not os.path.exists(generation.video_path)
+    assert not os.path.exists(generation.thumbnail_url)
+    
+    # Delete should succeed even if files are missing
+    response = client.delete(
+        f"/api/generations/{generation_id}",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+    
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["message"] == "Video deleted successfully"
+    
+    # Verify database record is deleted
+    deleted_gen = db_session.query(Generation).filter(Generation.id == generation_id).first()
+    assert deleted_gen is None
+    
+    app.dependency_overrides.clear()
+
