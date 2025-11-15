@@ -1,9 +1,9 @@
 # ad-mint-ai - Epic Breakdown
 
 **Author:** BMad
-**Date:** 2025-11-14
+**Date:** 2025-11-14 (Updated: 2025-11-14)
 **Project Level:** Intermediate
-**Target Scale:** MVP
+**Target Scale:** MVP + Post-MVP Features
 
 ---
 
@@ -17,45 +17,61 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 
 ## Functional Requirements Inventory
 
-- **FR-001:** User Registration - System shall allow users to create accounts with username and password
-- **FR-002:** User Login - System shall authenticate users via username/password and generate JWT token
-- **FR-003:** Protected Routes - System shall restrict access to authenticated users only
-- **FR-004:** User Logout - System shall clear JWT token from client storage
-- **FR-005:** Simple Prompt Input - System shall accept text prompt (10-500 characters)
-- **FR-006:** LLM Enhancement - System shall send prompt to LLM and generate complete ad specification JSON
-- **FR-007:** Framework Selection - System shall automatically select best advertising framework (PAS, BAB, or AIDA)
-- **FR-008:** Scene Planning - System shall break video into 3-5 scenes based on framework
-- **FR-009:** Video Clip Generation - System shall generate video clips using Replicate API
-- **FR-010:** Text Overlay Addition - System shall add text overlays to video clips
-- **FR-011:** Video Stitching - System shall concatenate all scene clips with transitions
-- **FR-012:** Audio Layer - System shall select and add background music and sound effects
-- **FR-013:** Post-Processing - System shall apply color grading and export final video (1080p minimum)
-- **FR-014:** Progress Tracking - System shall update database with current status and progress %
-- **FR-015:** Cost Calculation - System shall track total cost per generation
-- **FR-016:** Cancel Generation (Best-Effort) - System shall allow users to request cancellation of in-progress generation
-- **FR-017:** Video Gallery - System shall display all user's generated videos in grid layout
-- **FR-018:** Video Playback - System shall serve video files from storage with HTML5 player
-- **FR-019:** Video Download - System shall allow users to download MP4 files
-- **FR-020:** Video Deletion - System shall allow users to delete their videos with confirmation
-- **FR-021:** Video Search - System shall filter videos by prompt text and status (optional)
-- **FR-022:** Profile Display - System shall show user statistics (total videos, cost, dates)
-- **FR-023:** User Stats Update - System shall increment total_generations and update total_cost
+- **FR-001:** User Registration - System shall allow users to create accounts with username and password ✅
+- **FR-002:** User Login - System shall authenticate users via username/password and generate JWT token ✅
+- **FR-003:** Protected Routes - System shall restrict access to authenticated users only ✅
+- **FR-004:** User Logout - System shall clear JWT token from client storage ✅
+- **FR-005:** Simple Prompt Input - System shall accept text prompt (10-500 characters) ✅
+- **FR-006:** LLM Enhancement - System shall send prompt to LLM and generate complete ad specification JSON ✅
+- **FR-007:** Framework Selection - System shall automatically select best advertising framework (PAS, BAB, or AIDA) ✅
+- **FR-008:** Scene Planning - System shall break video into 3-5 scenes based on framework ✅
+- **FR-009:** Video Clip Generation - System shall generate video clips using Replicate API ✅
+- **FR-010:** Text Overlay Addition - System shall add text overlays to video clips ✅
+- **FR-011:** Video Stitching - System shall concatenate all scene clips with transitions ✅
+- **FR-012:** Audio Layer - System shall select and add background music and sound effects ✅
+- **FR-013:** Post-Processing - System shall apply color grading and export final video (1080p minimum) ✅
+- **FR-014:** Progress Tracking - System shall update database with current status and progress % ✅
+- **FR-015:** Cost Calculation - System shall track total cost per generation ✅
+- **FR-016:** Cancel Generation (Best-Effort) - System shall allow users to request cancellation of in-progress generation ✅
+- **FR-017:** Video Gallery - System shall display all user's generated videos in grid layout ✅
+- **FR-018:** Video Playback - System shall serve video files from storage with HTML5 player ✅
+- **FR-019:** Video Download - System shall allow users to download MP4 files ✅
+- **FR-020:** Video Deletion - System shall allow users to delete their videos with confirmation ✅
+- **FR-021:** Video Search - System shall filter videos by prompt text and status (optional) ✅
+- **FR-022:** Profile Display - System shall show user statistics (total videos, cost, dates) ✅
+- **FR-023:** User Stats Update - System shall increment total_generations and update total_cost ✅
+- **FR-024:** Video Editor Access - System shall provide an editor interface accessible from completed video detail page
+- **FR-025:** Timeline Interface - System shall display a timeline showing all video clips in sequence
+- **FR-026:** Clip Trimming - System shall allow users to trim clips by adjusting start/end points
+- **FR-027:** Clip Splitting - System shall allow users to split clips at any position
+- **FR-028:** Clip Merging - System shall allow users to merge multiple adjacent clips
+- **FR-029:** Editor Save and Export - System shall allow users to save editing changes and export edited videos
+- **FR-030:** Video Coherence Analysis - System shall automatically analyze visual consistency across all clips
+- **FR-031:** Coherence Enhancement - System shall automatically apply color grading and transition optimizations
+- **FR-032:** Prompt Optimization via LLM - System shall enhance user prompts using LLM for better video quality
+- **FR-033:** Quality Feedback Loop - System shall track quality metrics and learn from user preferences
+- **FR-034:** Profile Display - System shall show user statistics (total videos, cost, dates) ✅
+- **FR-035:** User Stats Update - System shall increment total_generations and update total_cost ✅
 
 ---
 
 ## FR Coverage Map
 
-- **Epic 1 (Foundation):** Covers infrastructure needs for all FRs - project setup, database, deployment pipeline
-- **Epic 2 (User Authentication):** FR-001, FR-002, FR-003, FR-004
-- **Epic 3 (Video Generation Pipeline):** FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012, FR-013, FR-014, FR-015, FR-016
-- **Epic 4 (Video Management):** FR-017, FR-018, FR-019, FR-020, FR-021
-- **Epic 5 (User Profile):** FR-022, FR-023
+- **Epic 1 (Foundation):** ✅ COMPLETED - Covers infrastructure needs for all FRs - project setup, database, deployment pipeline
+- **Epic 2 (User Authentication):** ✅ COMPLETED - FR-001, FR-002, FR-003, FR-004
+- **Epic 3 (Video Generation Pipeline):** ✅ COMPLETED - FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012, FR-013, FR-014, FR-015, FR-016
+- **Epic 4 (Video Management):** ✅ COMPLETED - FR-017, FR-018, FR-019, FR-020, FR-021
+- **Epic 5 (User Profile):** ✅ COMPLETED - FR-022, FR-023, FR-034, FR-035
+- **Epic 6 (Video Editing):** FR-024, FR-025, FR-026, FR-027, FR-028, FR-029
+- **Epic 7 (Video Quality Optimization):** FR-030, FR-031, FR-032, FR-033
 
 ---
 
-## Epic 1: Foundation & Infrastructure
+## Epic 1: Foundation & Infrastructure ✅ COMPLETED
 
 **Goal:** Establish the foundational infrastructure, project structure, database setup, and deployment pipeline that enables all subsequent development work.
+
+**Status:** All stories completed. Epic delivered and in production.
 
 ### Story 1.1: Project Setup and Repository Structure
 
@@ -173,9 +189,11 @@ So that I can deploy the application to AWS EC2.
 
 ---
 
-## Epic 2: User Authentication
+## Epic 2: User Authentication ✅ COMPLETED
 
 **Goal:** Enable users to create accounts, log in securely, and access protected features using JWT-based authentication.
+
+**Status:** All stories completed. Epic delivered and in production.
 
 ### Story 2.1: Authentication Backend
 
@@ -299,9 +317,11 @@ So that my session is cleared and I return to the login page.
 
 ---
 
-## Epic 3: Video Generation Pipeline
+## Epic 3: Video Generation Pipeline ✅ COMPLETED
 
 **Goal:** Implement the complete AI-powered video generation pipeline from user prompt to final video output.
+
+**Status:** All stories completed. Epic delivered and in production.
 
 ### Story 3.1: Prompt Processing and Planning
 
@@ -442,9 +462,11 @@ So that I know the status of my video generation and can manage it.
 
 ---
 
-## Epic 4: Video Management
+## Epic 4: Video Management ✅ COMPLETED
 
 **Goal:** Enable users to view, play, download, search, and delete their generated videos through an intuitive gallery interface.
+
+**Status:** All stories completed. Epic delivered and in production.
 
 ### Story 4.1: Video Gallery
 
@@ -578,9 +600,11 @@ So that I can quickly find specific videos.
 
 ---
 
-## Epic 5: User Profile
+## Epic 5: User Profile ✅ COMPLETED
 
 **Goal:** Display user statistics and account information so users can track their usage and costs.
+
+**Status:** All stories completed. Epic delivered and in production.
 
 ### Story 5.1: Profile Display
 
@@ -647,6 +671,464 @@ So that users see accurate counts and costs.
 
 ---
 
+## Epic 6: Video Editing
+
+**Goal:** Enable users to edit generated videos using a timeline-based editor with trim, split, and merge capabilities for fine-tuning video content.
+
+### Story 6.1: Video Editor Access and Setup
+
+As a user,
+I want to access a video editor from my completed video,
+So that I can edit and refine my generated video.
+
+**Acceptance Criteria:**
+
+**Editor Access:**
+**Given** I am viewing a completed video on the video detail page
+**When** I click the "Edit Video" button
+**Then** the system opens the video editor interface
+
+**And** the editor:
+- Loads the video with all individual scene clips available
+- Maintains a backup of the original video for restoration
+- Displays the video in a preview player
+- Shows an "Exit Editor" button to return to video detail page
+
+**Backend:**
+**Given** a user requests to edit a video
+**When** the system processes the request
+**Then** it:
+- Verifies user ownership of the video
+- Loads all scene clips associated with the generation
+- Returns video metadata including clip information, durations, and transitions
+- Creates an editing session record in the database
+
+**Prerequisites:** Story 4.2 (Video Playback), Story 3.3 (Video Assembly)
+
+**Technical Notes:**
+- Create editor route/page component, add "Edit Video" button to video detail page
+- Create editor API endpoint that returns video and clip data
+- Store original video path for restoration capability
+- Create editing_session table to track active editing sessions
+
+---
+
+### Story 6.2: Timeline Interface
+
+As a user,
+I want to see a timeline with all my video clips,
+So that I can visualize and navigate through the video structure.
+
+**Acceptance Criteria:**
+
+**Timeline Display:**
+**Given** I am in the video editor
+**When** the editor loads
+**Then** I see a timeline showing:
+- All video clips in sequence from left to right
+- Visual thumbnails for each clip (first frame or keyframe)
+- Clip durations displayed below each clip
+- Current playback position indicator (playhead)
+- Zoom controls for precise editing
+
+**Timeline Interaction:**
+**Given** I am viewing the timeline
+**When** I interact with it
+**Then** I can:
+- Click anywhere on timeline to seek to that position
+- Drag playhead to scrub through video
+- Zoom in/out using controls or mouse wheel (Ctrl/Cmd + scroll)
+- See time markers (seconds) along the timeline
+- Select clips by clicking on them
+
+**And** the timeline:
+- Updates in real-time as I make edits
+- Maintains smooth scrolling and performance
+- Shows selected clip with highlight/border
+- Displays total video duration
+
+**Prerequisites:** Story 6.1
+
+**Technical Notes:**
+- Use canvas or SVG for timeline rendering, implement thumbnail generation for clips
+- Create timeline component with zoom/pan functionality, implement playhead scrubbing
+- Generate thumbnails on video load, cache thumbnails for performance
+- Use requestAnimationFrame for smooth timeline updates
+
+---
+
+### Story 6.3: Clip Trimming
+
+As a user,
+I want to trim video clips by adjusting start and end points,
+So that I can remove unwanted portions and fine-tune clip durations.
+
+**Acceptance Criteria:**
+
+**Trim Selection:**
+**Given** I have selected a clip on the timeline
+**When** I select the clip
+**Then** trim handles appear at the start and end of the clip
+
+**Trim Adjustment:**
+**Given** I see trim handles on a selected clip
+**When** I drag a trim handle
+**Then**:
+- The clip duration updates in real-time
+- Preview shows the trimmed clip content
+- Timeline updates immediately to reflect changes
+- Time values update to show new start/end times
+
+**Trim Validation:**
+**Given** I am trimming a clip
+**When** I adjust trim points
+**Then** the system:
+- Prevents trimming beyond clip boundaries
+- Maintains minimum clip duration (0.5 seconds)
+- Shows visual feedback for invalid trim positions
+- Allows precise time entry via input fields (optional)
+
+**Preview:**
+**Given** I have trimmed a clip
+**When** I preview the video
+**Then** the trimmed clip plays with the new start/end points
+
+**Prerequisites:** Story 6.2
+
+**Technical Notes:**
+- Implement trim handle UI components, add drag handlers for trim adjustment
+- Use MoviePy to trim clips, validate trim points before applying
+- Update timeline state on trim, provide real-time preview
+- Store trim points in editing session, apply on export
+
+---
+
+### Story 6.4: Clip Splitting
+
+As a user,
+I want to split a clip at any point,
+So that I can divide long clips into separate segments for independent editing.
+
+**Acceptance Criteria:**
+
+**Split Point Selection:**
+**Given** I have a clip selected on the timeline
+**When** I click a "Split" button or press a keyboard shortcut (S key)
+**Then** a split indicator appears at the playhead position
+
+**Split Execution:**
+**Given** I have positioned the split indicator
+**When** I confirm the split
+**Then** the system:
+- Divides the clip into two separate clips at the split point
+- Maintains both clips in the timeline sequence
+- Preserves all metadata (text overlays, transitions) for both clips
+- Updates the timeline to show two clips instead of one
+
+**Split Clip Editing:**
+**Given** I have split a clip
+**When** I select either resulting clip
+**Then** I can edit them independently:
+- Trim each clip separately
+- Apply different effects or transitions
+- Move clips independently (if reordering is supported)
+
+**Prerequisites:** Story 6.2
+
+**Technical Notes:**
+- Implement split UI with split indicator, add split confirmation dialog
+- Use MoviePy to split video at specified time, create two clip objects
+- Preserve metadata for both clips, update timeline data structure
+- Handle edge cases (split at start/end, very short clips)
+
+---
+
+### Story 6.5: Clip Merging
+
+As a user,
+I want to merge multiple adjacent clips,
+So that I can combine related segments into a single continuous clip.
+
+**Acceptance Criteria:**
+
+**Clip Selection:**
+**Given** I have multiple clips on the timeline
+**When** I select multiple adjacent clips (Ctrl/Cmd + click or drag selection)
+**Then** the selected clips are highlighted
+
+**Merge Execution:**
+**Given** I have selected multiple adjacent clips
+**When** I click the "Merge" button
+**Then** the system:
+- Combines selected clips into a single continuous clip
+- Preserves video content from all merged clips
+- Maintains frame rate consistency across merged segments
+- Applies appropriate transitions between merged segments
+- Updates timeline to show merged clip as single entity
+
+**Merge Validation:**
+**Given** I attempt to merge clips
+**When** the system processes the merge
+**Then** it:
+- Only allows merging of adjacent clips
+- Validates that clips are in sequence
+- Shows error message if non-adjacent clips are selected
+- Maintains total video duration correctly
+
+**Prerequisites:** Story 6.2
+
+**Technical Notes:**
+- Implement multi-clip selection UI, add merge button/action
+- Use MoviePy concatenate_videoclips to merge, apply transitions between segments
+- Validate clip adjacency, update timeline after merge
+- Handle metadata preservation (text overlays may need adjustment)
+
+---
+
+### Story 6.6: Editor Save and Export
+
+As a user,
+I want to save my editing changes and export the edited video,
+So that I can preserve my work and download the final result.
+
+**Acceptance Criteria:**
+
+**Save Editing Session:**
+**Given** I have made edits to a video
+**When** I click "Save" or the system auto-saves
+**Then** the system:
+- Saves editing state (trim points, splits, merges) to database
+- Preserves original video unchanged
+- Allows me to return and continue editing later
+- Shows "Saved" confirmation message
+
+**Export Edited Video:**
+**Given** I have edited a video and want to export
+**When** I click "Export Video"
+**Then** the system:
+- Creates a new video version with all edits applied
+- Processes the video with all trim, split, and merge operations
+- Maintains original video for comparison
+- Exports edited video in same format and quality as original (1080p MP4)
+- Updates database with new video version
+
+**Export Progress:**
+**Given** I have initiated video export
+**When** the export is processing
+**Then** I see:
+- Progress indicator showing export status
+- Estimated time remaining
+- Ability to cancel export (if not too late)
+
+**Version Management:**
+**Given** I have exported an edited video
+**When** I view the video
+**Then** I can:
+- See both original and edited versions
+- Compare original vs edited
+- Restore original if needed
+
+**Prerequisites:** Story 6.3, Story 6.4, Story 6.5
+
+**Technical Notes:**
+- Create save/export API endpoints, implement editing session persistence
+- Use MoviePy to apply all edits and export final video, maintain version history
+- Store edited video as new generation record or version, implement progress tracking
+- Add undo/redo functionality (store edit history in session)
+
+---
+
+## Epic 7: Video Quality Optimization
+
+**Goal:** Automatically enhance video quality through coherence analysis, visual consistency improvements, and LLM-powered prompt optimization to deliver the best possible video output.
+
+### Story 7.1: Video Coherence Analysis
+
+As a developer,
+I want to automatically analyze visual consistency across video clips,
+So that the system can identify and improve coherence issues.
+
+**Acceptance Criteria:**
+
+**Coherence Analysis:**
+**Given** a video with multiple clips has been generated
+**When** the coherence analysis service processes it
+**Then** it analyzes:
+- Color consistency across clips (hue, saturation, brightness)
+- Lighting consistency (exposure, shadows, highlights)
+- Visual style consistency (texture, sharpness, grain)
+- Motion consistency (camera movement, object motion)
+- Narrative flow and visual continuity
+
+**Analysis Output:**
+**Given** coherence analysis completes
+**When** the system processes results
+**Then** it generates:
+- Coherence score (0-100) indicating overall consistency
+- List of detected inconsistencies with severity levels
+- Optimal transition points between clips
+- Recommendations for enhancement adjustments
+
+**Integration:**
+**Given** coherence analysis is implemented
+**When** a video generation completes
+**Then** the system:
+- Automatically runs coherence analysis (optional, can be triggered manually)
+- Stores analysis results in database
+- Makes results available for enhancement service
+
+**Prerequisites:** Story 3.3 (Video Assembly)
+
+**Technical Notes:**
+- Use OpenCV for color analysis (histogram comparison, color space analysis)
+- Implement lighting analysis (exposure detection, shadow/highlight detection)
+- Use computer vision techniques for style consistency (texture analysis, edge detection)
+- Create coherence_analysis table to store results, implement analysis service module
+
+---
+
+### Story 7.2: Coherence Enhancement
+
+As a developer,
+I want to automatically apply enhancements to improve video coherence,
+So that the final video has smooth, consistent visual flow.
+
+**Acceptance Criteria:**
+
+**Automatic Enhancement:**
+**Given** coherence analysis has identified inconsistencies
+**When** the enhancement service processes the video
+**Then** it automatically applies:
+- Color grading adjustments to match clips (adjust hue, saturation, brightness)
+- Transition optimizations for smoother visual flow (crossfade duration, easing)
+- Lighting adjustments (exposure correction, contrast normalization)
+- Style normalization (texture matching, sharpness adjustment)
+
+**Brand Guideline Preservation:**
+**Given** enhancements are being applied
+**When** the system processes adjustments
+**Then** it:
+- Maintains brand color guidelines from original generation
+- Preserves intended visual style and mood
+- Applies enhancements within acceptable ranges
+- Does not over-correct or change artistic intent
+
+**Enhancement Application:**
+**Given** enhancements are ready to apply
+**When** the system processes the video
+**Then** it:
+- Applies enhancements during video stitching phase (or post-processing)
+- Processes clips individually before final assembly
+- Maintains video quality (no degradation, 1080p minimum)
+- Completes enhancement in reasonable time (<30 seconds for 15s video)
+
+**Prerequisites:** Story 7.1, Story 3.3
+
+**Technical Notes:**
+- Use OpenCV/MoviePy for color grading, implement color matching algorithms
+- Apply LUTs (Look-Up Tables) for consistent color grading, use histogram matching
+- Optimize transitions based on analysis, adjust crossfade durations dynamically
+- Integrate with video stitching pipeline, apply enhancements before final export
+
+---
+
+### Story 7.3: LLM-Powered Prompt Optimization
+
+As a user,
+I want my prompts to be optimized by AI,
+So that I get better quality videos from my initial ideas.
+
+**Acceptance Criteria:**
+
+**Prompt Optimization Request:**
+**Given** I am on the video generation page
+**When** I enter a prompt and click "Optimize Prompt" (optional button)
+**Then** the system:
+- Sends my prompt to LLM (GPT-4/Claude) for analysis
+- Analyzes prompt for clarity, specificity, and visual generation potential
+- Generates an optimized version of my prompt
+
+**Optimized Prompt Features:**
+**Given** the LLM has analyzed my prompt
+**When** it generates the optimized version
+**Then** it includes:
+- Relevant visual style keywords (cinematic, vibrant, minimalist, etc.)
+- Composition and framing details (close-up, wide shot, angle specifications)
+- Brand-appropriate descriptive elements (luxury, tech, eco-friendly, etc.)
+- Enhanced product feature descriptions (more specific, visual-focused)
+- Improved scene-by-scene visual prompts (if multi-scene)
+
+**Optimization Presentation:**
+**Given** an optimized prompt has been generated
+**When** the system presents it to me
+**Then** I see:
+- Original prompt displayed
+- Optimized prompt displayed with highlighted improvements
+- Explanation of what was improved and why
+- Option to accept, modify, or reject the optimized prompt
+
+**Prompt Usage:**
+**Given** I have accepted an optimized prompt
+**When** I proceed with video generation
+**Then** the system uses the optimized prompt for generation
+**And** the optimized prompt is stored with the generation record
+
+**Prerequisites:** Story 3.1 (Prompt Processing)
+
+**Technical Notes:**
+- Create prompt optimization service, integrate with LLM API (OpenAI/Claude)
+- Design prompt optimization prompt template, analyze user input for improvement opportunities
+- Create UI component for prompt optimization, show before/after comparison
+- Store optimization history, track which optimizations lead to better results
+
+---
+
+### Story 7.4: Quality Feedback Loop
+
+As a developer,
+I want the system to learn from video quality outcomes,
+So that prompt optimization and coherence enhancement improve over time.
+
+**Acceptance Criteria:**
+
+**Quality Metrics Tracking:**
+**Given** a video has been generated
+**When** the system processes quality metrics
+**Then** it tracks:
+- Coherence score from analysis (Story 7.1)
+- Visual consistency metrics
+- User acceptance rate (did user download/use the video?)
+- Regeneration rate (did user regenerate with same prompt?)
+- User feedback (if rating system exists)
+
+**Learning from Outcomes:**
+**Given** quality metrics are being tracked
+**When** the system analyzes patterns
+**Then** it:
+- Identifies which prompt optimizations lead to better results
+- Learns which coherence enhancements are most effective
+- Adjusts optimization algorithms based on successful outcomes
+- Refines enhancement parameters based on user preferences
+
+**Continuous Improvement:**
+**Given** the feedback loop is active
+**When** new videos are generated
+**Then** the system:
+- Applies learned improvements to new generations
+- Refines prompt optimization suggestions
+- Adjusts coherence enhancement algorithms
+- Improves overall video quality over time
+
+**Prerequisites:** Story 7.1, Story 7.2, Story 7.3
+
+**Technical Notes:**
+- Create quality_metrics table to store scores and outcomes
+- Implement analytics service to analyze patterns, use machine learning for pattern recognition (optional)
+- Update optimization algorithms based on data, A/B test different approaches
+- Store anonymized data for learning, respect user privacy
+
+---
+
 ## FR Coverage Matrix
 
 - **FR-001:** User Registration → Epic 2, Story 2.1
@@ -672,19 +1154,33 @@ So that users see accurate counts and costs.
 - **FR-021:** Video Search → Epic 4, Story 4.4 (optional)
 - **FR-022:** Profile Display → Epic 5, Story 5.1
 - **FR-023:** User Stats Update → Epic 5, Story 5.2
+- **FR-024:** Video Editor Access → Epic 6, Story 6.1
+- **FR-025:** Timeline Interface → Epic 6, Story 6.2
+- **FR-026:** Clip Trimming → Epic 6, Story 6.3
+- **FR-027:** Clip Splitting → Epic 6, Story 6.4
+- **FR-028:** Clip Merging → Epic 6, Story 6.5
+- **FR-029:** Editor Save and Export → Epic 6, Story 6.6
+- **FR-030:** Video Coherence Analysis → Epic 7, Story 7.1
+- **FR-031:** Coherence Enhancement → Epic 7, Story 7.2
+- **FR-032:** Prompt Optimization via LLM → Epic 7, Story 7.3
+- **FR-033:** Quality Feedback Loop → Epic 7, Story 7.4
+- **FR-034:** Profile Display → Epic 5, Story 5.1 (duplicate of FR-022)
+- **FR-035:** User Stats Update → Epic 5, Story 5.2 (duplicate of FR-023)
 
 ---
 
 ## Summary
 
-This epic breakdown decomposes all 23 functional requirements from the PRD into 5 epics and 18 implementable stories. Each story is sized for focused development work, with detailed BDD-style acceptance criteria and technical implementation notes.
+This epic breakdown decomposes all 35 functional requirements from the PRD into 7 epics and 28 implementable stories. Each story is sized for focused development work, with detailed BDD-style acceptance criteria and technical implementation notes.
 
 **Epic Sequencing:**
-1. **Epic 1 (Foundation)** - Must be completed first, establishes infrastructure (4 stories)
-2. **Epic 2 (User Authentication)** - Enables user access, required before video features (4 stories)
-3. **Epic 3 (Video Generation Pipeline)** - Core product functionality (4 stories)
-4. **Epic 4 (Video Management)** - Enables users to view and manage their videos (4 stories)
-5. **Epic 5 (User Profile)** - Provides usage tracking and account information (2 stories)
+1. **Epic 1 (Foundation)** ✅ COMPLETED - Must be completed first, establishes infrastructure (4 stories)
+2. **Epic 2 (User Authentication)** ✅ COMPLETED - Enables user access, required before video features (4 stories)
+3. **Epic 3 (Video Generation Pipeline)** ✅ COMPLETED - Core product functionality (4 stories)
+4. **Epic 4 (Video Management)** ✅ COMPLETED - Enables users to view and manage their videos (4 stories)
+5. **Epic 5 (User Profile)** ✅ COMPLETED - Provides usage tracking and account information (2 stories)
+6. **Epic 6 (Video Editing)** - Enables users to edit generated videos with timeline-based editor (6 stories)
+7. **Epic 7 (Video Quality Optimization)** - Automatically enhances video quality through coherence and prompt optimization (4 stories)
 
 **Next Steps in BMad Method:**
 1. **UX Design** (if UI exists) - Run: `*create-ux-design` workflow
