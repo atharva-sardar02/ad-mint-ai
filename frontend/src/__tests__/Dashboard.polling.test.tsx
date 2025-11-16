@@ -3,7 +3,7 @@
  * Tests status polling, cleanup, and error handling.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Dashboard } from "../routes/Dashboard";
 import { useAuthStore } from "../store/authStore";
@@ -15,6 +15,17 @@ vi.mock("../lib/generationService", () => ({
     startGeneration: vi.fn(),
     getGenerationStatus: vi.fn(),
     cancelGeneration: vi.fn(),
+    getCoherenceSettingsDefaults: vi.fn().mockResolvedValue({
+      seed_control: true,
+      ip_adapter_reference: false,
+      ip_adapter_sequential: false,
+      lora: false,
+      enhanced_planning: true,
+      vbench_quality_control: true,
+      post_processing_enhancement: true,
+      controlnet: false,
+      csfd_detection: false,
+    }),
   },
 }));
 
@@ -68,6 +79,15 @@ describe("Dashboard Polling Logic", () => {
       </MemoryRouter>
     );
 
+    // Wait for component to be ready (coherence settings fetch)
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    
+    await waitFor(() => {
+      expect(screen.getByLabelText(/video prompt/i)).toBeInTheDocument();
+    });
+
     // Start generation
     const textarea = screen.getByLabelText(/video prompt/i);
     const submitButton = screen.getByRole("button", { name: /generate video/i });
@@ -75,16 +95,19 @@ describe("Dashboard Polling Logic", () => {
     fireEvent.change(textarea, { target: { value: "Create a test video ad" } });
     fireEvent.click(submitButton);
 
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalled();
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
+
+    expect(generationService.startGeneration).toHaveBeenCalled();
 
     // Advance timer to trigger polling
-    vi.advanceTimersByTime(2000);
-
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledWith("test-gen-123");
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+
+    expect(generationService.getGenerationStatus).toHaveBeenCalledWith("test-gen-123");
   });
 
   it("should poll every 2 seconds", async () => {
@@ -115,6 +138,14 @@ describe("Dashboard Polling Logic", () => {
       </MemoryRouter>
     );
 
+    // Wait for component to be ready
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/video prompt/i)).toBeInTheDocument();
+    });
+
     // Start generation
     const textarea = screen.getByLabelText(/video prompt/i);
     const submitButton = screen.getByRole("button", { name: /generate video/i });
@@ -122,25 +153,29 @@ describe("Dashboard Polling Logic", () => {
     fireEvent.change(textarea, { target: { value: "Create a test video ad" } });
     fireEvent.click(submitButton);
 
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalled();
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.startGeneration).toHaveBeenCalled();
 
     // Advance timer multiple times
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
 
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(2);
 
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(3);
   });
 
   it("should stop polling when status is completed", async () => {
@@ -171,6 +206,14 @@ describe("Dashboard Polling Logic", () => {
       </MemoryRouter>
     );
 
+    // Wait for component to be ready
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/video prompt/i)).toBeInTheDocument();
+    });
+
     // Start generation
     const textarea = screen.getByLabelText(/video prompt/i);
     const submitButton = screen.getByRole("button", { name: /generate video/i });
@@ -178,22 +221,25 @@ describe("Dashboard Polling Logic", () => {
     fireEvent.change(textarea, { target: { value: "Create a test video ad" } });
     fireEvent.click(submitButton);
 
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalled();
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.startGeneration).toHaveBeenCalled();
 
     // First poll
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
 
     // Second poll should not happen (status is completed)
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      // Should still be only 1 call
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    // Should still be only 1 call
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
   });
 
   it("should stop polling when status is failed", async () => {
@@ -224,6 +270,14 @@ describe("Dashboard Polling Logic", () => {
       </MemoryRouter>
     );
 
+    // Wait for component to be ready
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/video prompt/i)).toBeInTheDocument();
+    });
+
     // Start generation
     const textarea = screen.getByLabelText(/video prompt/i);
     const submitButton = screen.getByRole("button", { name: /generate video/i });
@@ -231,21 +285,24 @@ describe("Dashboard Polling Logic", () => {
     fireEvent.change(textarea, { target: { value: "Create a test video ad" } });
     fireEvent.click(submitButton);
 
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalled();
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.startGeneration).toHaveBeenCalled();
 
     // First poll
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
 
     // Second poll should not happen (status is failed)
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
   });
 
   it("should handle polling errors gracefully", async () => {
@@ -266,6 +323,14 @@ describe("Dashboard Polling Logic", () => {
       </MemoryRouter>
     );
 
+    // Wait for component to be ready
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/video prompt/i)).toBeInTheDocument();
+    });
+
     // Start generation
     const textarea = screen.getByLabelText(/video prompt/i);
     const submitButton = screen.getByRole("button", { name: /generate video/i });
@@ -273,12 +338,16 @@ describe("Dashboard Polling Logic", () => {
     fireEvent.change(textarea, { target: { value: "Create a test video ad" } });
     fireEvent.click(submitButton);
 
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalled();
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.startGeneration).toHaveBeenCalled();
 
     // Advance timer to trigger polling
-    vi.advanceTimersByTime(2000);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
+    });
 
     await waitFor(() => {
       expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -288,10 +357,11 @@ describe("Dashboard Polling Logic", () => {
     });
 
     // Polling should continue despite error
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(2);
 
     consoleErrorSpy.mockRestore();
   });
@@ -324,6 +394,14 @@ describe("Dashboard Polling Logic", () => {
       </MemoryRouter>
     );
 
+    // Wait for component to be ready
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/video prompt/i)).toBeInTheDocument();
+    });
+
     // Start generation
     const textarea = screen.getByLabelText(/video prompt/i);
     const submitButton = screen.getByRole("button", { name: /generate video/i });
@@ -331,15 +409,17 @@ describe("Dashboard Polling Logic", () => {
     fireEvent.change(textarea, { target: { value: "Create a test video ad" } });
     fireEvent.click(submitButton);
 
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalled();
+    await act(async () => {
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.startGeneration).toHaveBeenCalled();
 
     // Trigger one poll
-    vi.advanceTimersByTime(2000);
-    await waitFor(() => {
-      expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await vi.runAllTimersAsync();
     });
+    expect(generationService.getGenerationStatus).toHaveBeenCalledTimes(1);
 
     // Unmount component
     unmount();

@@ -63,5 +63,9 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Ensure user attributes remain accessible after the session is closed
+    db.refresh(user)
+    db.expunge(user)
+
     return user
 

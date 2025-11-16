@@ -1,0 +1,160 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>6</epicId>
+    <storyId>6.4</storyId>
+    <title>Clip Splitting</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/6-4-clip-splitting.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to split a clip at any point</iWant>
+    <soThat>I can divide long clips into separate segments for independent editing</soThat>
+    <tasks>
+      <task id="1">Create Split Controls UI Component - Create SplitControls.tsx component with split button, indicator visualization, and keyboard shortcut handler</task>
+      <task id="2">Implement Split Point Selection - Add click handler on timeline, validate split point within clip boundaries, show split indicator</task>
+      <task id="3">Implement Split Confirmation Dialog - Show confirmation dialog with split point time, allow cancel/confirm</task>
+      <task id="4">Create Backend Split API Endpoint - POST /api/editor/{generation_id}/split endpoint with validation and ownership verification</task>
+      <task id="5">Create Split Service - split_service.py module with validation logic, editing state updates, and two new clip creation</task>
+      <task id="6">Implement Split State Management - Update editor state and timeline with two new clips, maintain sequence order</task>
+      <task id="7">Integrate Split with Timeline Component - Show split indicator at playhead, update timeline to display two clips after split</task>
+      <task id="8">Integrate Split with Editor Component - Connect split operations to editor state, call API endpoint, handle errors</task>
+      <task id="9">Update Editor API Client - Add splitClip() function to editorApi.ts for API calls</task>
+      <task id="10">Implement Metadata Preservation - Preserve text overlay and other metadata for both split clips</task>
+      <task id="11">Handle Edge Cases - Prevent splitting at boundaries, validate minimum duration, handle trimmed clips</task>
+      <task id="12">Update Split State Persistence - Store split operation in editing session, load split clips on editor load</task>
+      <task id="13">Testing - Create unit, integration, and E2E tests for split functionality</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <given>I have a clip selected on the timeline</given>
+      <when>I click a "Split" button or press a keyboard shortcut (S key)</when>
+      <then>a split indicator appears at the playhead position</then>
+    </criterion>
+    <criterion id="2">
+      <given>I have positioned the split indicator</given>
+      <when>I confirm the split</when>
+      <then>the system divides the clip into two separate clips at the split point, maintains both clips in the timeline sequence, preserves all metadata (text overlays, transitions) for both clips, and updates the timeline to show two clips instead of one</then>
+    </criterion>
+    <criterion id="3">
+      <given>I am attempting to split a clip</given>
+      <when>I position the split point</when>
+      <then>the system prevents splitting at clip start/end, validates split point is within clip boundaries, shows visual feedback for invalid split positions, and maintains minimum clip duration (0.5 seconds) for both resulting clips</then>
+    </criterion>
+    <criterion id="4">
+      <given>I have split a clip</given>
+      <when>I select either resulting clip</when>
+      <then>I can edit them independently: trim each clip separately, apply different effects or transitions (if supported), and both clips maintain their position in timeline sequence</then>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 6.4: Clip Splitting" snippet="As a user, I want to split a clip at any point, So that I can divide long clips into separate segments for independent editing. Includes acceptance criteria for split point selection, execution, validation, and split clip editing." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="AC-EDIT-004: Clip Splitting" snippet="Given user has positioned playhead within a clip, When user clicks Split button, Then clip is divided into two separate clips at split point, both clips appear on timeline, both clips can be edited independently, and metadata (text overlays) is preserved for both clips." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="Workflows and Sequencing" snippet="Clip Splitting Workflow: User positions playhead, clicks Split button or presses 'S' key, frontend calls POST /api/editor/{generation_id}/split, backend validates split point, updates editing session with two clips replacing original, returns new clip structure, frontend updates timeline." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="APIs and Interfaces" snippet="POST /api/editor/{generation_id}/split endpoint: Request body contains clip_id and split_time, response includes message, original_clip_id, new_clips array with clip_id and duration, and updated_state JSON." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="Services and Modules" snippet="split_service.py: Clip splitting operations using MoviePy, takes clip path and split time, returns two clip paths. Note: Actual video splitting with MoviePy happens during export, not in split service." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="NFR-EDIT-003" snippet="Split operation API response: &lt;300ms (state update only, not video processing). Split operations update editing session state, actual video splitting happens during export." />
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-027" snippet="Clip Splitting - System shall allow users to split clips at any position. Users can divide long clips into separate segments for independent editing." />
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Project Structure" snippet="Frontend components in src/components/editor/, backend services in app/services/editor/, API routes in app/api/routes/editor.py. Follows React 18 + TypeScript, FastAPI with service layer separation." />
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Decision Summary" snippet="React 18 + TypeScript + Vite for frontend, FastAPI for backend, SQLAlchemy + Pydantic for persistence and validation. Component architecture uses reusable components in components/editor/ directory." />
+      <doc path="docs/sprint-artifacts/6-3-clip-trimming.md" title="Story 6.3: Clip Trimming" section="Learnings from Previous Story" snippet="TrimControls component pattern, trim validation logic, editing session state updates, timeline integration, API pattern with ownership verification, state updates, metadata preservation, performance (state-only operations)." />
+    </docs>
+    <code>
+      <artifact path="frontend/src/routes/Editor.tsx" kind="component" symbol="Editor" lines="1-364" reason="Main editor component that integrates Timeline and TrimControls. Will integrate SplitControls component. Manages editor state, clip selection, video playback, and edit operations." />
+      <artifact path="frontend/src/components/editor/Timeline.tsx" kind="component" symbol="Timeline" lines="1-428" reason="Timeline component with clip visualization, selection, playhead, and interaction. Split indicator should appear at playhead position on selected clip. Provides onClipSelect callback and clip position data for split controls integration." />
+      <artifact path="frontend/src/components/editor/TrimControls.tsx" kind="component" symbol="TrimControls" lines="1-200" reason="TrimControls component pattern to follow for SplitControls. Shows how to create editor control component with drag handles, validation, and timeline integration." />
+      <artifact path="frontend/src/lib/editorApi.ts" kind="service" symbol="loadEditorData, trimClip" lines="18-158" reason="Editor API client with loadEditorData and trimClip functions. Needs splitClip() function added for split API calls. Follows same error handling pattern as trimClip." />
+      <artifact path="frontend/src/lib/types/api.ts" kind="types" symbol="ClipInfo, EditorData" lines="121-150" reason="TypeScript types for clip and editor data. ClipInfo structure includes duration, start_time, end_time fields. Split operation will create two ClipInfo objects from one." />
+      <artifact path="backend/app/api/routes/editor.py" kind="controller" symbol="get_editor_data, trim_clip" lines="25-228" reason="Editor API route handler with GET /api/editor/{generation_id} and POST /api/editor/{generation_id}/trim endpoints. Needs POST /api/editor/{generation_id}/split endpoint added following same pattern as trim endpoint." />
+      <artifact path="backend/app/services/editor/editor_service.py" kind="service" symbol="extract_clips_from_generation, get_or_create_editing_session" lines="43-208" reason="Editor service with clip extraction and editing session management. Editing session state structure includes clips array. Split operation will replace one clip with two clips in editing_state." />
+      <artifact path="backend/app/services/editor/trim_service.py" kind="service" symbol="validate_trim_points, apply_trim_to_editing_session" lines="17-135" reason="Trim service pattern to follow for split service. Shows validation logic (boundaries, minimum duration), editing session state updates, and clip structure modification. Split service should follow similar pattern but create two clips instead of modifying one." />
+      <artifact path="backend/app/db/models/editing_session.py" kind="model" symbol="EditingSession" lines="1-47" reason="EditingSession ORM model with editing_state JSON field. Editing state structure includes clips array with id, original_path, start_time, end_time, trim_start, trim_end, split_points, merged_with fields. Split operation adds split_points or creates two separate clips." />
+      <artifact path="backend/app/schemas/editor.py" kind="schema" symbol="ClipInfo, EditorDataResponse, TrimClipRequest, TrimClipResponse" lines="9-51" reason="Pydantic schemas for editor API. ClipInfo schema defines clip structure. Need SplitClipRequest and SplitClipResponse schemas for split endpoint, following same pattern as TrimClipRequest/Response." />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="axios" version="^1.13.2" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="moviepy" version=">=1.0.3" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Framework: React 18 + TypeScript. Use functional components with hooks, follow component architecture in components/editor/ directory.</constraint>
+    <constraint>State Management: Use local component state for split UI, update editor state via API calls. Follow same pattern as TrimControls component.</constraint>
+    <constraint>Backend Pattern: FastAPI route with service layer separation. Follow same pattern as trim endpoint: route handler in editor.py, business logic in split_service.py.</constraint>
+    <constraint>Video Processing: Split operation stored in editing session state, actual MoviePy splitting happens during export (Story 6.6), not in split service. Split service only updates editing_state JSON.</constraint>
+    <constraint>Performance: Split operations update state only, not video files until export. API response time target: &lt;300ms (from tech spec NFR-EDIT-003).</constraint>
+    <constraint>Validation: Prevent splitting at clip start (0 seconds or original start_time), prevent splitting at clip end (clip duration or original end_time), maintain minimum clip duration (0.5 seconds) for both resulting clips.</constraint>
+    <constraint>Metadata Preservation: Preserve text overlay metadata, scene_number, and other clip metadata for both split clips. Handle metadata that may need adjustment (e.g., text overlay timing).</constraint>
+    <constraint>Keyboard Shortcuts: Use React keyboard event handlers, prevent default browser behavior for 'S' key when editor is focused. Follow same pattern as other editor shortcuts.</constraint>
+    <constraint>Testing: Create unit tests for SplitControls component, backend unit tests for split service, integration tests for split API, and E2E tests for split workflow. Follow testing patterns from trim story.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/editor/{generation_id}/split" kind="REST endpoint" signature="POST /api/editor/{generation_id}/split
+Request Body: { clip_id: string, split_time: float }
+Response: { message: string, original_clip_id: string, new_clips: [{ clip_id: string, duration: float }], updated_state: object }
+Headers: Authorization: Bearer {jwt_token}" path="backend/app/api/routes/editor.py" />
+    <interface name="splitClip()" kind="function signature" signature="async function splitClip(generationId: string, clipId: string, splitTime: number): Promise&lt;ClipInfo[]&gt;" path="frontend/src/lib/editorApi.ts" />
+    <interface name="apply_split_to_editing_session()" kind="function signature" signature="def apply_split_to_editing_session(editing_session: EditingSession, clip_id: str, split_time: float, db: Session) -&gt; Dict[str, Any]" path="backend/app/services/editor/split_service.py" />
+    <interface name="SplitControls component props" kind="component interface" signature="interface SplitControlsProps {
+  selectedClip: ClipInfo | null;
+  clipPosition?: { x: number; width: number; y: number };
+  timelineWidth: number;
+  totalDuration: number;
+  currentTime: number;
+  onSplit: (splitTime: number) =&gt; void;
+  onSplitCancel: () =&gt; void;
+}" path="frontend/src/components/editor/SplitControls.tsx" />
+    <interface name="SplitClipRequest schema" kind="Pydantic model" signature="class SplitClipRequest(BaseModel):
+    clip_id: str
+    split_time: float" path="backend/app/schemas/editor.py" />
+    <interface name="SplitClipResponse schema" kind="Pydantic model" signature="class SplitClipResponse(BaseModel):
+    message: str
+    original_clip_id: str
+    new_clips: List[Dict[str, Any]]
+    updated_state: dict" path="backend/app/schemas/editor.py" />
+  </interfaces>
+
+  <tests>
+    <standards>Testing uses Vitest for frontend unit tests, pytest for backend unit tests. Frontend components tested with @testing-library/react. Backend services tested with pytest fixtures and database session mocks. Integration tests use httpx for API testing. E2E tests cover complete user workflows. Follow testing patterns from trim story (Story 6.3).</standards>
+    <locations>
+      <location>frontend/src/__tests__/</location>
+      <location>backend/tests/</location>
+      <location>frontend/src/components/editor/__tests__/</location>
+      <location>backend/tests/test_editor_*.py</location>
+    </locations>
+    <ideas>
+      <idea criterion="1">Test SplitControls component rendering: split button appears when clip is selected, split indicator appears at playhead position, keyboard shortcut 'S' triggers split mode</idea>
+      <idea criterion="1">Test split point selection: click handler positions split point at playhead, split indicator updates position, visual feedback for invalid positions</idea>
+      <idea criterion="2">Test split execution: confirmation dialog shows split point time, confirm creates two clips, timeline updates to show two clips, metadata preserved for both clips</idea>
+      <idea criterion="2">Test split API endpoint: valid request creates two clips in editing session, invalid clip_id returns 404, invalid split_time returns 400, ownership verification returns 403</idea>
+      <idea criterion="3">Test split validation: prevent splitting at clip start, prevent splitting at clip end, validate minimum duration for both clips, show error for invalid split points</idea>
+      <idea criterion="3">Test edge cases: very short clips (show error if split would create clips &lt;0.5s), trimmed clips (split point relative to trimmed boundaries), already split clips (allow further splitting)</idea>
+      <idea criterion="4">Test split clip editing: both clips independently selectable, both clips can be trimmed separately, clips maintain position in timeline sequence</idea>
+      <idea criterion="4">Test split state persistence: split clips loaded when editor loads existing session, split clips appear correctly on timeline, split state persists across page refresh</idea>
+      <idea>E2E test: Complete split workflow - select clip, click split button, position split point, confirm split, verify two clips on timeline, verify independent editing of split clips</idea>
+    </ideas>
+  </tests>
+</story-context>
+

@@ -15,19 +15,35 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO"):
     Configure structured logging for the application.
     
     Args:
-        log_file: Path to log file (default: /var/log/fastapi/app.log in production, stdout in development)
+        log_file: Path to log file (default: logs/app.log in project root, stdout in development if DEBUG=True)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
     # Determine log file path
     if log_file is None:
         if settings.DEBUG:
-            # Development: log to stdout
+            # Development: log to stdout only
             log_file = None
         else:
-            # Production: log to file
-            log_dir = Path("/var/log/fastapi")
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_file = str(log_dir / "app.log")
+            # Production: try to log to file
+            # Use project-relative logs directory (preferred for development and production)
+            # Get project root: backend/app/core -> backend/app -> backend -> project root
+            project_root = Path(__file__).parent.parent.parent.parent
+            project_log_dir = project_root / "logs"
+            
+            try:
+                project_log_dir.mkdir(parents=True, exist_ok=True)
+                log_file = str(project_log_dir / "app.log")
+            except (PermissionError, OSError):
+                # If project logs directory fails, try system log directory (production only)
+                try:
+                    system_log_dir = Path("/var/log/fastapi")
+                    system_log_dir.mkdir(parents=True, exist_ok=True)
+                    log_file = str(system_log_dir / "app.log")
+                except (PermissionError, OSError):
+                    # If both fail, just log to stdout
+                    # Note: Can't use logging.warning here as logger isn't configured yet
+                    print("WARNING: Could not create log directory. Logging to stdout only.")
+                    log_file = None
     
     # Configure root logger
     root_logger = logging.getLogger()

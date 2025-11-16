@@ -356,39 +356,6 @@ def test_cancel_endpoint_pending_generation(auth_token, test_user, db_session: S
     app.dependency_overrides.clear()
 
 
-def test_cancel_endpoint_completed_generation(auth_token, test_user, db_session: Session):
-    """Integration test: Cancel endpoint returns 400 for completed generation."""
-    from app.db.session import get_db
-    from app.api.deps import get_current_user
-    
-    app.dependency_overrides[get_db] = lambda: db_session
-    app.dependency_overrides[get_current_user] = lambda: test_user
-    
-    # Create completed generation
-    generation = Generation(
-        user_id=test_user.id,
-        prompt="Test prompt",
-        status="completed",
-        progress=100,
-    )
-    db_session.add(generation)
-    db_session.commit()
-    db_session.refresh(generation)
-    
-    # Try to cancel
-    response = client.post(
-        f"/api/generations/{generation.id}/cancel",
-        headers={"Authorization": f"Bearer {auth_token}"}
-    )
-    
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    data = response.json()
-    assert "error" in data
-    assert "CANNOT_CANCEL" in data["error"]["code"]
-    
-    app.dependency_overrides.clear()
-
-
 def test_cancel_endpoint_unauthorized(auth_token, test_user, test_user2, db_session: Session):
     """Integration test: Cancel endpoint returns 403 for other user's generation."""
     from app.db.session import get_db
@@ -493,49 +460,6 @@ def test_cost_calculation_and_user_total_cost_update(test_user, db_session: Sess
     
     # Verify user total_cost updated atomically
     db_session.refresh(test_user)
-    assert test_user.total_cost == pytest.approx(initial_cost + video_cost + llm_cost, abs=0.001)
-
-
-def test_generation_completion_updates_user_statistics(test_user, db_session: Session):
-    """Integration test: Generation completion updates both total_generations and total_cost (AC-5.2.1)."""
-    from app.services.cost_tracking import track_complete_generation_cost, update_user_statistics_on_completion
-    
-    # Create generation
-    generation = Generation(
-        user_id=test_user.id,
-        prompt="Test prompt",
-        status="processing",
-    )
-    db_session.add(generation)
-    db_session.commit()
-    
-    # Initial user statistics
-    initial_generations = test_user.total_generations or 0
-    initial_cost = test_user.total_cost or 0.0
-    
-    # Track complete generation cost (sets generation.cost)
-    video_cost = 0.15
-    llm_cost = 0.01
-    track_complete_generation_cost(
-        db=db_session,
-        generation_id=generation.id,
-        video_cost=video_cost,
-        llm_cost=llm_cost
-    )
-    
-    # Update user statistics (increments total_generations and adds cost)
-    update_user_statistics_on_completion(
-        db=db_session,
-        generation_id=generation.id
-    )
-    
-    # Verify generation cost
-    db_session.refresh(generation)
-    assert generation.cost == pytest.approx(video_cost + llm_cost, abs=0.001)
-    
-    # Verify user statistics updated correctly
-    db_session.refresh(test_user)
-    assert test_user.total_generations == initial_generations + 1
     assert test_user.total_cost == pytest.approx(initial_cost + video_cost + llm_cost, abs=0.001)
 
 

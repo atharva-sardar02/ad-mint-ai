@@ -15,6 +15,17 @@ vi.mock("../lib/generationService", () => ({
     startGeneration: vi.fn(),
     getGenerationStatus: vi.fn(),
     cancelGeneration: vi.fn(),
+    getCoherenceSettingsDefaults: vi.fn().mockResolvedValue({
+      seed_control: true,
+      ip_adapter_reference: false,
+      ip_adapter_sequential: false,
+      lora: false,
+      enhanced_planning: true,
+      vbench_quality_control: true,
+      post_processing_enhancement: true,
+      controlnet: false,
+      csfd_detection: false,
+    }),
   },
 }));
 

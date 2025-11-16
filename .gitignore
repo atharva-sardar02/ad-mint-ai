@@ -116,6 +116,7 @@ docker-compose.override.yml
 # ============================================
 
 *.log
+logs/
 *.tmp
 *.temp
 *.bak
@@ -177,3 +178,5 @@ docs/.doctrees/
 *.deb
 *.rpm
 *.pyc*
+
+ClipForge/

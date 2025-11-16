@@ -19,6 +19,7 @@ async def get_user_profile(
 
     Args:
         current_user: Current authenticated user (from dependency)
+        db: Database session
 
     Returns:
         UserProfile with user information and statistics
@@ -27,6 +28,5 @@ async def get_user_profile(
         HTTPException: 401 if not authenticated (handled by get_current_user dependency)
     """
     # Use Pydantic's model_validate for automatic serialization
-    # This handles all field mapping and validation automatically
     return UserProfile.model_validate(current_user)
 
