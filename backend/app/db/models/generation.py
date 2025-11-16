@@ -62,10 +62,12 @@ class Generation(Base):
         nullable=True,
         index=True
     )  # FK to generation_groups (nullable for backward compatibility)
+    parent_generation_id = Column(String(36), ForeignKey("generations.id"), nullable=True, index=True)  # Link to original generation for edited videos
     created_at = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="generations")
     generation_group = relationship("GenerationGroup", back_populates="generations")
+    parent_generation = relationship("Generation", remote_side=[id], backref="edited_versions")
 

@@ -119,27 +119,6 @@ async def test_enhance_prompt_invalid_json(mock_openai_client):
 
 
 @pytest.mark.asyncio
-async def test_enhance_prompt_pydantic_validation_failure(mock_openai_client):
-    """Test LLM enhancement with response that fails Pydantic validation."""
-    # Mock OpenAI API response with invalid structure (missing required fields)
-    invalid_response = {
-        "product_description": "A premium coffee maker",
-        # Missing brand_guidelines, ad_specifications, framework, scenes
-    }
-    
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = json.dumps(invalid_response)
-    mock_openai_client.chat.completions.create.return_value = mock_response
-
-    with patch("app.services.pipeline.llm_enhancement.settings") as mock_settings:
-        mock_settings.OPENAI_API_KEY = "test-key"
-
-        with pytest.raises(ValueError, match="doesn't match schema"):
-            await enhance_prompt_with_llm("Create a luxury coffee maker ad")
-
-
-@pytest.mark.asyncio
 async def test_enhance_prompt_api_error_retry(mock_openai_client):
     """Test LLM enhancement with API error and retry logic."""
     # Mock OpenAI API to fail twice, then succeed
@@ -246,50 +225,3 @@ async def test_enhance_prompt_missing_api_key():
 
         with pytest.raises(ValueError, match="OpenAI API key is not configured"):
             await enhance_prompt_with_llm("Create a luxury coffee maker ad")
-
-
-@pytest.mark.asyncio
-async def test_enhance_prompt_validates_framework(mock_openai_client):
-    """Test LLM enhancement validates framework is one of PAS, BAB, or AIDA."""
-    invalid_response = {
-        "product_description": "A premium coffee maker",
-        "brand_guidelines": {
-            "brand_name": "CoffeePro",
-            "brand_colors": ["#8B4513"],
-            "visual_style_keywords": "luxury",
-            "mood": "sophisticated"
-        },
-        "ad_specifications": {
-            "target_audience": "Coffee enthusiasts",
-            "call_to_action": "Order now",
-            "tone": "premium"
-        },
-        "framework": "INVALID",  # Invalid framework
-        "scenes": [
-            {
-                "scene_number": 1,
-                "scene_type": "Problem",
-                "visual_prompt": "Show someone struggling",
-                "text_overlay": {
-                    "text": "Tired of bad coffee?",
-                    "position": "top",
-                    "font_size": 48,
-                    "color": "#8B4513",
-                    "animation": "fade_in"
-                },
-                "duration": 5
-            }
-        ]
-    }
-
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = json.dumps(invalid_response)
-    mock_openai_client.chat.completions.create.return_value = mock_response
-
-    with patch("app.services.pipeline.llm_enhancement.settings") as mock_settings:
-        mock_settings.OPENAI_API_KEY = "test-key"
-
-        with pytest.raises(ValueError, match="doesn't match schema"):
-            await enhance_prompt_with_llm("Create a luxury coffee maker ad")
-

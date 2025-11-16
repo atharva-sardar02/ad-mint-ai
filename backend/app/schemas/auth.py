@@ -3,7 +3,7 @@ Pydantic schemas for authentication requests and responses.
 """
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class UserRegister(BaseModel):
@@ -26,14 +26,13 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     """Schema for user information in responses."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     username: str
-    email: Optional[str]
+    email: Optional[str] = None
     total_generations: int
     total_cost: float
-
-    class Config:
-        from_attributes = True
 
 
 class TokenResponse(BaseModel):

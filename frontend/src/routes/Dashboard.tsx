@@ -588,42 +588,34 @@ export const Dashboard: React.FC = () => {
                 required
               />
 
-              <BasicSettingsPanel
-                settings={basicSettings}
-                onChange={setBasicSettings}
-                disabled={isLoading}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <BasicSettingsPanel
+                  settings={basicSettings}
+                  onChange={setBasicSettings}
+                  disabled={isLoading}
+                />
 
-              <CoherenceSettingsPanel
-                settings={coherenceSettings}
-                onChange={setCoherenceSettings}
-                errors={errors.coherence_settings}
-                disabled={isLoading}
-              />
+                <CoherenceSettingsPanel
+                  settings={coherenceSettings}
+                  onChange={setCoherenceSettings}
+                  errors={errors.coherence_settings}
+                  disabled={isLoading}
+                />
+              </div>
 
               {apiError && (
                 <ErrorMessage message={apiError} />
               )}
 
-              <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  isLoading={isLoading}
-                  disabled={!isValid || isLoading}
-                  fullWidth
-                >
-                  Generate Video
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleLogout}
-                  disabled={isLoading}
-                >
-                  Logout
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isLoading}
+                disabled={!isValid || isLoading}
+                fullWidth
+              >
+                Generate Video
+              </Button>
             </form>
           )}
         </div>

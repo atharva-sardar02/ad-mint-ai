@@ -111,6 +111,7 @@ export const Gallery: React.FC = () => {
           {/* Status filter */}
           <div className="max-w-xs">
             <Select
+              id="status-filter"
               label="Filter by status"
               value={statusFilter}
               onChange={handleStatusFilterChange}

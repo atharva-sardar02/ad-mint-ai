@@ -85,6 +85,7 @@ class GenerationListItem(BaseModel):
     generation_group_id: Optional[str] = None  # Group ID if part of parallel generation
     variation_label: Optional[str] = None  # Variation label (A, B, C, etc.) if part of parallel generation
     coherence_settings: Optional[dict] = None  # Coherence technique settings
+    parent_generation_id: Optional[str] = Field(None, description="ID of original generation if this is an edited version")
 
     class Config:
         from_attributes = True
@@ -171,7 +172,7 @@ class Scene(BaseModel):
     scene_number: int = Field(..., ge=1)
     scene_type: str = Field(..., description="Framework-specific type (e.g., 'Problem', 'Solution' for PAS)")
     visual_prompt: str
-    text_overlay: TextOverlay
+    text_overlay: Optional[TextOverlay] = None
     duration: int = Field(..., ge=3, le=7, description="Duration in seconds")
 
 

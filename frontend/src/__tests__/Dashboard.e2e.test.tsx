@@ -58,7 +58,7 @@ describe("Dashboard E2E: User submits prompt → generation starts → status up
     vi.clearAllMocks();
   });
 
-  it("should complete full flow: submit prompt → API call → navigate to status page", async () => {
+  it("should complete full flow: submit prompt → API call → show status inline", async () => {
     const mockResponse = {
       generation_id: "test-gen-123",
       status: "pending",
@@ -99,10 +99,14 @@ describe("Dashboard E2E: User submits prompt → generation starts → status up
       expect(generationService.startGeneration).toHaveBeenCalledWith(validPrompt);
     });
 
-    // Step 6: Verify navigation to status page
+    // Step 6: Verify inline progress UI is shown instead of navigation
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/generation/test-gen-123");
+      expect(
+        screen.getByRole("heading", { name: /generation progress/i })
+      ).toBeInTheDocument();
+      expect(screen.getByText(/initializing/i)).toBeInTheDocument();
     });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it("should handle API error and display error message", async () => {
@@ -130,7 +134,9 @@ describe("Dashboard E2E: User submits prompt → generation starts → status up
 
     // Verify error message is displayed
     await waitFor(() => {
-      expect(screen.getByText(/failed to start video generation/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/failed to start generation/i)
+      ).toBeInTheDocument();
     });
 
     // Verify navigation did not occur

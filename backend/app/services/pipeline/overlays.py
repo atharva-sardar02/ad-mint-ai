@@ -154,7 +154,7 @@ def _create_text_clip(
         size=(text_width, padded_height),  # Explicit height with padding
         method='caption',
         text_align='center'
-    ).with_duration(duration)
+    ).with_duration(duration).with_position((0, 0))  # Position at origin within composite
     
     # Add text shadow for readability
     shadow_color = _get_shadow_color(text_overlay.color)
@@ -289,12 +289,23 @@ def _position_text_clip(
         TextClip: Positioned text clip
     """
     width, height = video_size
-    text_height = text_clip.h
+    text_height = getattr(text_clip, "h", None)
     
-    # Ensure text_height is valid (handle CompositeVideoClip)
-    if text_height is None or text_height <= 0:
-        logger.warning(f"Invalid text height ({text_height}), using default calculation")
-        text_height = int(height * 0.1)  # Fallback to 10% of video height
+    # Ensure text_height is usable (handle CompositeVideoClip/mocks)
+    invalid_height = False
+    if text_height is None:
+        invalid_height = True
+    else:
+        try:
+            invalid_height = text_height <= 0
+        except TypeError:
+            invalid_height = True
+    
+    if invalid_height:
+        logger.debug(
+            f"Text height not available ({text_height}), falling back to 10% of video height"
+        )
+        text_height = max(int(height * 0.1), 10)
     
     if position == "top":
         # Position at top with margin

@@ -38,6 +38,15 @@ export interface RegisterResponse {
 /**
  * Authentication service object with methods for authentication operations.
  */
+const NETWORK_ERROR_MESSAGE = "Network error - please check your connection";
+
+const throwNetworkError = (error?: unknown): never => {
+  if (error instanceof NetworkError) {
+    throw error;
+  }
+  throw new NetworkError(NETWORK_ERROR_MESSAGE, error);
+};
+
 export const authService = {
   /**
    * Register a new user.
@@ -72,12 +81,11 @@ export const authService = {
       }
 
       // Handle network errors
-      if (error instanceof NetworkError) {
-        throw new Error("Network error - please check your connection");
+      if (error instanceof NetworkError || error instanceof Error) {
+        throwNetworkError(error);
       }
 
-      // Re-throw other errors
-      throw error;
+      throwNetworkError();
     }
   },
 
@@ -108,12 +116,11 @@ export const authService = {
       }
 
       // Handle network errors
-      if (error instanceof NetworkError) {
-        throw new Error("Network error - please check your connection");
+      if (error instanceof NetworkError || error instanceof Error) {
+        throwNetworkError(error);
       }
 
-      // Re-throw other errors
-      throw error;
+      throwNetworkError();
     }
   },
 
@@ -150,12 +157,11 @@ export const authService = {
       }
 
       // Handle network errors
-      if (error instanceof NetworkError) {
-        throw new Error("Network error - please check your connection");
+      if (error instanceof NetworkError || error instanceof Error) {
+        throwNetworkError(error);
       }
 
-      // Re-throw other errors
-      throw error;
+      throwNetworkError();
     }
   },
 };

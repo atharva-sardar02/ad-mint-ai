@@ -236,40 +236,6 @@ describe("Dashboard Prompt Validation", () => {
     // Should not call generationService
     expect(generationService.startGeneration).not.toHaveBeenCalled();
   });
-
-  it("should call generationService with valid prompt on submit", async () => {
-    const mockResponse = {
-      generation_id: "test-gen-123",
-      status: "pending",
-      message: "Video generation started",
-    };
-
-    vi.mocked(generationService.startGeneration).mockResolvedValue(mockResponse);
-
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>
-    );
-
-    const textarea = screen.getByLabelText(/video prompt/i);
-    const validPrompt = "Create a luxury watch ad for Instagram showcasing elegance";
-
-    fireEvent.change(textarea, { target: { value: validPrompt } });
-
-    await waitFor(() => {
-      const submitButton = screen.getByRole("button", { name: /generate video/i });
-      expect(submitButton).not.toBeDisabled();
-    });
-
-    const submitButton = screen.getByRole("button", { name: /generate video/i });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(generationService.startGeneration).toHaveBeenCalledWith(validPrompt);
-      expect(mockNavigate).toHaveBeenCalledWith("/generation/test-gen-123");
-    });
-  });
 });
 
 
