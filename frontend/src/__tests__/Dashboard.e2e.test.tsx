@@ -10,7 +10,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Dashboard } from "../routes/Dashboard";
 import { useAuthStore } from "../store/authStore";
-import { generationService } from "../lib/generationService";
+import { generationService, type GenerateResponse } from "../lib/generationService";
 
 // Mock generationService
 vi.mock("../lib/generationService", () => ({
@@ -161,8 +161,8 @@ describe("Dashboard E2E: User submits prompt → generation starts → status up
 
   it("should show loading state during API call", async () => {
     // Create a promise that we can control
-    let resolvePromise: (value: any) => void;
-    const controlledPromise = new Promise((resolve) => {
+    let resolvePromise: (value: GenerateResponse) => void;
+    const controlledPromise = new Promise<GenerateResponse>((resolve) => {
       resolvePromise = resolve;
     });
 

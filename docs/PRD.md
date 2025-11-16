@@ -119,7 +119,7 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 - **Zero Creative Input Required**: Users don't need to specify colors, style, music, or framework
 - **Framework-Based Storytelling**: Applies proven advertising psychology (not random scenes)
 - **Video Clips, Not Static Images**: Real motion footage with cinematic quality
-- **Cost-Effective**: ~$0.80-2.00 per video vs. $500-5000 for traditional production
+- **Cost-Effective**: Up to $200 per video vs. $500-5000 for traditional production (quality-focused pricing)
 - **Fast Generation**: 2-3 minutes vs. days/weeks for manual creation
 - **Consistent Quality**: Every output follows best practices for advertising
 
@@ -168,7 +168,7 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 1. **Deliver High-Quality Video Ads**: Professional-grade output suitable for paid advertising
 2. **Minimize User Effort**: Single text prompt input with zero configuration required
 3. **Fast Generation**: Complete video in under 5 minutes
-4. **Cost Efficiency**: Under $2 per video for system costs
+4. **Cost Efficiency**: Under $200 per video for system costs (quality is priority)
 5. **User Satisfaction**: 80%+ of videos require no regeneration
 
 ### 5.2 Success Metrics (KPIs)
@@ -176,7 +176,7 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 **Technical Performance:**
 - Video generation success rate: >90%
 - Average generation time: <3 minutes
-- Cost per video: <$2.00
+- Cost per video: <$200.00 (quality-focused, cost is not a constraint)
 - System uptime: >99%
 
 **User Engagement:**
@@ -515,11 +515,24 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 
 ### 8.5 Video Quality Optimization
 
+**Epic 7 Implementation:** This section is implemented by Epic 7 (Multi-Scene Coherence & Quality Optimization), which provides state-of-the-art generation-time consistency techniques and automated quality control. See `docs/epics.md` for detailed story breakdown.
+
+**Key Techniques:**
+- **Seed Control & Latent Reuse:** Shared random seeds and latent state reuse across scenes for visual coherence
+- **IP-Adapter:** Identity preservation for characters and products using reference images
+- **LoRA Training:** Custom model fine-tuning for recurring brand characters/products
+- **VideoDirectorGPT-Style Planning:** Enhanced LLM planning with consistency groupings and shot lists
+- **VBench Quality Metrics:** Automated quality assessment with temporal, aesthetic, and prompt alignment scores
+- **CSFD Character Consistency:** Cross-Scene Face Distance scoring for character-driven ads
+- **ControlNet:** Compositional consistency via depth maps and layout control
+- **Enhanced Post-Processing:** Brand-aware color grading and transition optimization
+
 **FR-030: Video Coherence Analysis**
 - System shall automatically analyze visual consistency across all clips in a video
 - System shall detect visual inconsistencies (color, lighting, style, motion)
 - System shall identify optimal transition points between clips
 - System shall assess narrative flow and visual continuity
+- **Implementation:** Epic 7, Stories 7.5 (VBench Integration), 7.7 (CSFD Detection), 7.6 (Post-Processing)
 
 **FR-031: Coherence Enhancement**
 - System shall automatically apply color grading adjustments to improve consistency
@@ -527,6 +540,7 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 - System shall adjust lighting and contrast to create cohesive visual narrative
 - System shall maintain brand guidelines while improving coherence
 - System shall apply enhancements during video stitching phase
+- **Implementation:** Epic 7, Stories 7.1 (Seed Control), 7.3 (IP-Adapter), 7.4 (LoRA), 7.6 (Post-Processing), 7.8 (ControlNet)
 
 **FR-032: Prompt Optimization via LLM**
 - System shall accept user's initial prompt as input
@@ -540,12 +554,14 @@ Our solution transforms a simple text prompt into a publication-ready video adve
   - Improves scene-by-scene visual prompts
 - System shall present optimized prompt to user with explanation of improvements
 - System shall allow user to accept, modify, or reject optimized prompt
+- **Implementation:** Epic 7, Stories 7.2 (Enhanced Planning), 7.9 (Feedback Loop)
 
 **FR-033: Quality Feedback Loop**
 - System shall track video quality metrics (coherence score, visual consistency)
 - System shall learn from user preferences and regeneration patterns
 - System shall improve prompt optimization based on successful video outcomes
 - System shall refine coherence enhancement algorithms based on user feedback
+- **Implementation:** Epic 7, Story 7.9 (Quality Feedback Loop)
 
 ### 8.6 User Profile
 
@@ -2075,9 +2091,10 @@ VITE_API_URL=http://your-ec2-ip
 - Voice-over generation (text-to-speech)
 - Custom music generation per video
 - Real video footage (not just AI-generated)
-- Character consistency across scenes
-- Advanced prompt optimization with style transfer
+- Character consistency across scenes (implemented in Epic 7 via IP-Adapter, LoRA, and CSFD)
+- Advanced prompt optimization with style transfer (implemented in Epic 7 via VideoDirectorGPT-style planning)
 - Multi-model ensemble generation for quality improvement
+- **Note:** Epic 7 (Multi-Scene Coherence & Quality Optimization) implements advanced coherence techniques including seed control, IP-Adapter, LoRA training, VBench quality metrics, CSFD character consistency, ControlNet compositional consistency, and enhanced post-processing. These features are available in MVP scope with user-controllable settings.
 
 ### 20.3 Enterprise Features
 
@@ -2440,7 +2457,7 @@ VITE_API_URL=http://your-ec2-ip
 - [ ] Video generation completes in <5 minutes
 - [ ] Video quality is professional (1080p minimum)
 - [ ] User can view, download, and delete videos
-- [ ] Cost per video is <$2
+- [ ] Cost per video is <$200 (quality-focused)
 - [ ] Success rate >80%
 - [ ] Application deployed and accessible online
 - [ ] Demo video recorded

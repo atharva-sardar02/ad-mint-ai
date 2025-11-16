@@ -6,6 +6,9 @@ import { API_ENDPOINTS } from "./config";
 
 export interface GenerateRequest {
   prompt: string;
+  model?: string;
+  num_clips?: number;
+  use_llm?: boolean;
 }
 
 export interface GenerateResponse {
@@ -30,11 +33,29 @@ export interface StatusResponse {
  * Start a new video generation from a prompt.
  */
 export const startGeneration = async (
-  prompt: string
+  prompt: string,
+  model?: string,
+  numClips?: number,
+  useLlm: boolean = true
 ): Promise<GenerateResponse> => {
   const response = await apiClient.post<GenerateResponse>(
     API_ENDPOINTS.GENERATIONS.CREATE,
-    { prompt }
+    { prompt, model, num_clips: numClips, use_llm: useLlm }
+  );
+  return response.data;
+};
+
+/**
+ * Start a single clip generation (bypasses pipeline).
+ */
+export const startSingleClipGeneration = async (
+  prompt: string,
+  model: string,
+  numClips: number = 1
+): Promise<GenerateResponse> => {
+  const response = await apiClient.post<GenerateResponse>(
+    API_ENDPOINTS.GENERATIONS.CREATE_SINGLE_CLIP,
+    { prompt, model, num_clips: numClips }
   );
   return response.data;
 };
@@ -68,6 +89,7 @@ export const cancelGeneration = async (
  */
 export const generationService = {
   startGeneration,
+  startSingleClipGeneration,
   getGenerationStatus,
   cancelGeneration,
 };
