@@ -62,15 +62,29 @@ export const GenerationStatus: React.FC = () => {
       return;
     }
 
+    let isMounted = true; // Track if component is still mounted
+
     const fetchStatus = async () => {
+      // Check if component is still mounted before making async call
+      if (!isMounted) return;
+
       try {
         const statusData = await generationService.getGenerationStatus(generationId);
+        
+        // Check again after async operation
+        if (!isMounted) return;
+        
         setStatus(statusData);
         setError("");
       } catch (err: any) {
+        // Don't update state if component unmounted
+        if (!isMounted) return;
+        
         setError(err?.message || "Failed to load generation status");
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -78,13 +92,17 @@ export const GenerationStatus: React.FC = () => {
 
     // Poll for status updates every 2 seconds if generation is in progress
     const interval = setInterval(() => {
-      if (generationId && status && (status.status === "pending" || status.status === "processing")) {
+      if (generationId && isMounted) {
+        // Use a ref or state check inside the async function
         fetchStatus();
       }
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, [generationId, status?.status]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [generationId]);
 
   if (isLoading) {
     return (

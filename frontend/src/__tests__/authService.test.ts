@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { authService } from "../lib/authService";
 import apiClient from "../lib/apiClient";
 import { API_ENDPOINTS } from "../lib/config";
+import { NetworkError } from "../lib/types/api";
 
 // Mock apiClient
 vi.mock("../lib/apiClient", () => ({
@@ -71,7 +72,9 @@ describe("authService", () => {
     });
 
     it("should handle network errors", async () => {
-      vi.mocked(apiClient.post).mockRejectedValue(new Error("Network error"));
+      vi.mocked(apiClient.post).mockRejectedValue(
+        new NetworkError("Network error - please check your connection")
+      );
 
       await expect(
         authService.register("testuser", "password123")

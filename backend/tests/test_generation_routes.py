@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.db.models.user import User
-from app.db.models.generation import Generation
+from app.db.models.generation import Generation, GenerationGroup
 from app.main import app
-from app.schemas.generation import AdSpecification, BrandGuidelines, AdSpec, Scene, TextOverlay
+from app.schemas.generation import AdSpecification, BrandGuidelines, AdSpec, Scene, TextOverlay, CoherenceSettings
 
 client = TestClient(app)
 
@@ -59,6 +59,317 @@ def auth_token(test_user, db_session: Session):
     
     app.dependency_overrides.clear()
     return token
+
+
+def test_create_generation_success(auth_token, db_session: Session):
+    """Test successful generation creation (AC-3.1.1, AC-3.1.2, AC-3.1.3)."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM enhancement response
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=2,
+                scene_type="Agitation",
+                visual_prompt="Show frustration",
+                text_overlay=TextOverlay(
+                    text="Every cup is different",
+                    position="center",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="slide_up"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=3,
+                scene_type="Solution",
+                visual_prompt="Show CoffeePro",
+                text_overlay=TextOverlay(
+                    text="CoffeePro - Perfect every time",
+                    position="bottom",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        response = client.post(
+            "/api/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prompt": "Create a luxury coffee maker ad"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert "generation_id" in data
+        assert data["status"] == "pending"
+        assert "message" in data
+        
+        # Verify generation was created in database
+        generation = db_session.query(Generation).filter(Generation.id == data["generation_id"]).first()
+        assert generation is not None
+        assert generation.prompt == "Create a luxury coffee maker ad"
+        assert generation.status == "pending"
+        assert generation.progress == 20  # Should be 20% after LLM + scene planning
+        assert generation.llm_specification is not None
+        assert generation.scene_plan is not None
+        assert generation.framework == "PAS"
+        assert generation.num_scenes == 3
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_generation_with_coherence_settings(auth_token, db_session: Session):
+    """Test generation creation with coherence_settings (AC-3.1.1 with coherence settings)."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM enhancement response
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=2,
+                scene_type="Agitation",
+                visual_prompt="Show frustration",
+                text_overlay=TextOverlay(
+                    text="Every cup is different",
+                    position="center",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="slide_up"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=3,
+                scene_type="Solution",
+                visual_prompt="Show CoffeePro",
+                text_overlay=TextOverlay(
+                    text="CoffeePro - Perfect every time",
+                    position="bottom",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        coherence_settings = {
+            "seed_control": True,
+            "ip_adapter_reference": True,
+            "ip_adapter_sequential": False,
+            "enhanced_planning": True,
+            "vbench_quality_control": True,
+            "post_processing_enhancement": True,
+        }
+        
+        response = client.post(
+            "/api/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prompt": "Create a luxury coffee maker ad",
+                "coherence_settings": coherence_settings
+            }
+        )
+        
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert "generation_id" in data
+        
+        # Verify generation was created with coherence_settings
+        generation = db_session.query(Generation).filter(Generation.id == data["generation_id"]).first()
+        assert generation is not None
+        assert generation.coherence_settings is not None
+        assert generation.coherence_settings["seed_control"] is True
+        assert generation.coherence_settings["ip_adapter_reference"] is True
+        assert generation.coherence_settings["enhanced_planning"] is True
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_generation_without_coherence_settings_uses_defaults(auth_token, db_session: Session):
+    """Test that generation without coherence_settings applies defaults."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM enhancement response
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=2,
+                scene_type="Agitation",
+                visual_prompt="Show frustration",
+                text_overlay=TextOverlay(
+                    text="Every cup is different",
+                    position="center",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="slide_up"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=3,
+                scene_type="Solution",
+                visual_prompt="Show CoffeePro",
+                text_overlay=TextOverlay(
+                    text="CoffeePro - Perfect every time",
+                    position="bottom",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        response = client.post(
+            "/api/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prompt": "Create a luxury coffee maker ad"
+                # No coherence_settings provided
+            }
+        )
+        
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        
+        # Verify generation was created with default coherence_settings
+        generation = db_session.query(Generation).filter(Generation.id == data["generation_id"]).first()
+        assert generation is not None
+        assert generation.coherence_settings is not None
+        # Check defaults are applied
+        assert generation.coherence_settings["seed_control"] is True
+        assert generation.coherence_settings["enhanced_planning"] is True
+        assert generation.coherence_settings["vbench_quality_control"] is True
+    
+    app.dependency_overrides.clear()
+
+
+def test_get_coherence_settings_defaults():
+    """Test GET /api/coherence/settings/defaults endpoint."""
+    response = client.get("/api/coherence/settings/defaults")
+    
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    
+    # Check all techniques are present
+    assert "seed_control" in data
+    assert "ip_adapter_reference" in data
+    assert "ip_adapter_sequential" in data
+    assert "lora" in data
+    assert "enhanced_planning" in data
+    assert "vbench_quality_control" in data
+    assert "post_processing_enhancement" in data
+    assert "controlnet" in data
+    assert "csfd_detection" in data
+    
+    # Check metadata fields
+    for technique, info in data.items():
+        assert "enabled" in info
+        assert "recommended" in info
+        assert "cost_impact" in info
+        assert "time_impact" in info
+        assert "description" in info
+        assert "tooltip" in info
 
 
 def test_create_generation_invalid_prompt_length(auth_token, db_session: Session):
@@ -158,3 +469,598 @@ def test_get_generation_status_unauthorized(auth_token, db_session: Session):
     
     app.dependency_overrides.clear()
 
+
+def test_create_generation_llm_api_failure(auth_token, db_session: Session):
+    """Test generation creation when LLM API fails (AC-3.1.2 error handling)."""
+    from app.db.session import get_db
+    import openai
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        # Simulate OpenAI API error after retries
+        mock_llm.side_effect = openai.APIError(
+            message="API request failed",
+            request=None,
+            body=None
+        )
+        
+        response = client.post(
+            "/api/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prompt": "Create a luxury coffee maker ad"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data
+        assert data["error"]["code"] == "GENERATION_FAILED"
+        
+        # Verify generation was marked as failed
+        # Get the most recent generation for this user
+        generation = db_session.query(Generation).filter(
+            Generation.user_id == db_session.query(User).filter(User.username == "testuser").first().id
+        ).order_by(Generation.created_at.desc()).first()
+        
+        assert generation is not None
+        assert generation.status == "failed"
+        assert generation.error_message is not None
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_generation_invalid_llm_response(auth_token, db_session: Session):
+    """Test generation creation when LLM returns invalid JSON (AC-3.1.2 validation)."""
+    from app.db.session import get_db
+    from app.services.pipeline.llm_enhancement import enhance_prompt_with_llm
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        # Simulate invalid JSON response (ValueError from JSON parsing)
+        mock_llm.side_effect = ValueError("LLM returned invalid JSON: Expecting value")
+        
+        response = client.post(
+            "/api/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prompt": "Create a luxury coffee maker ad"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data
+        assert data["error"]["code"] == "GENERATION_FAILED"
+        assert "invalid JSON" in data["error"]["message"].lower() or "failed to process" in data["error"]["message"].lower()
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_generation_pydantic_validation_failure(auth_token, db_session: Session):
+    """Test generation creation when LLM response fails Pydantic validation (AC-3.1.2)."""
+    from app.db.session import get_db
+    from pydantic import ValidationError
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        # Simulate Pydantic validation error
+        mock_llm.side_effect = ValueError("LLM response doesn't match schema: validation error")
+        
+        response = client.post(
+            "/api/generate",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "prompt": "Create a luxury coffee maker ad"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data
+        assert data["error"]["code"] == "GENERATION_FAILED"
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_generation_scene_planning_failure(auth_token, db_session: Session):
+    """Test generation creation when scene planning fails (AC-3.1.3 error handling)."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM to succeed but scene planning to fail
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        with patch("app.services.pipeline.scene_planning.plan_scenes") as mock_plan:
+            # Simulate scene planning failure
+            mock_plan.side_effect = ValueError("Scene planning failed: invalid framework")
+            
+            response = client.post(
+                "/api/generate",
+                headers={"Authorization": f"Bearer {auth_token}"},
+                json={
+                    "prompt": "Create a luxury coffee maker ad"
+                }
+            )
+            
+            assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            data = response.json()
+            assert "error" in data
+            assert data["error"]["code"] == "GENERATION_FAILED"
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_parallel_generation_success(auth_token, db_session: Session):
+    """Test successful parallel generation creation (AC: 4, 7)."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM enhancement response
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=2,
+                scene_type="Agitation",
+                visual_prompt="Show frustration",
+                text_overlay=TextOverlay(
+                    text="Every cup is different",
+                    position="center",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="slide_up"
+                ),
+                duration=5
+            ),
+            Scene(
+                scene_number=3,
+                scene_type="Solution",
+                visual_prompt="Show CoffeePro",
+                text_overlay=TextOverlay(
+                    text="CoffeePro - Perfect every time",
+                    position="bottom",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        # Create parallel generation request with 2 variations
+        response = client.post(
+            "/api/generate/parallel",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "variations": [
+                    {"prompt": "Create a luxury coffee maker ad - variation 1"},
+                    {"prompt": "Create a luxury coffee maker ad - variation 2"}
+                ],
+                "comparison_type": "prompt"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert "group_id" in data
+        assert "generation_ids" in data
+        assert len(data["generation_ids"]) == 2
+        assert data["status"] == "pending"
+        assert "message" in data
+        
+        # Verify generation group was created
+        group = db_session.query(GenerationGroup).filter(GenerationGroup.id == data["group_id"]).first()
+        assert group is not None
+        assert group.user_id == db_session.query(User).filter(User.username == "testuser").first().id
+        assert group.comparison_type == "prompt"
+        
+        # Verify all generations were created and linked to group
+        generations = db_session.query(Generation).filter(
+            Generation.generation_group_id == data["group_id"]
+        ).all()
+        assert len(generations) == 2
+        for gen in generations:
+            assert gen.generation_group_id == data["group_id"]
+            assert gen.status == "pending"
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_parallel_generation_max_variations(auth_token, db_session: Session):
+    """Test parallel generation with maximum number of variations (10)."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM enhancement response
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        # Create parallel generation with 10 variations (maximum)
+        response = client.post(
+            "/api/generate/parallel",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "variations": [
+                    {"prompt": f"Create a luxury coffee maker ad - variation {i+1}"} for i in range(10)
+                ],
+                "comparison_type": "prompt"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert "group_id" in data
+        assert "generation_ids" in data
+        assert len(data["generation_ids"]) == 10  # Should create 10 generations
+        
+        # Verify all generations were created
+        generations = db_session.query(Generation).filter(
+            Generation.generation_group_id == data["group_id"]
+        ).all()
+        assert len(generations) == 10
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_parallel_generation_settings_comparison(auth_token, db_session: Session):
+    """Test parallel generation with settings comparison mode."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Mock LLM enhancement response
+    mock_ad_spec = AdSpecification(
+        product_description="A premium coffee maker",
+        brand_guidelines=BrandGuidelines(
+            brand_name="CoffeePro",
+            brand_colors=["#8B4513"],
+            visual_style_keywords="luxury, modern",
+            mood="sophisticated"
+        ),
+        ad_specifications=AdSpec(
+            target_audience="Coffee enthusiasts",
+            call_to_action="Order now",
+            tone="premium"
+        ),
+        framework="PAS",
+        scenes=[
+            Scene(
+                scene_number=1,
+                scene_type="Problem",
+                visual_prompt="Show someone struggling",
+                text_overlay=TextOverlay(
+                    text="Tired of bad coffee?",
+                    position="top",
+                    font_size=48,
+                    color="#8B4513",
+                    animation="fade_in"
+                ),
+                duration=5
+            )
+        ]
+    )
+    
+    with patch("app.services.pipeline.llm_enhancement.enhance_prompt_with_llm", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = mock_ad_spec
+        
+        # Create parallel generation with settings comparison
+        response = client.post(
+            "/api/generate/parallel",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "variations": [
+                    {
+                        "prompt": "Create a luxury coffee maker ad",
+                        "coherence_settings": {"seed_control": True, "enhanced_planning": True}
+                    },
+                    {
+                        "prompt": "Create a luxury coffee maker ad",
+                        "coherence_settings": {"seed_control": False, "enhanced_planning": True}
+                    }
+                ],
+                "comparison_type": "settings"
+            }
+        )
+        
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        data = response.json()
+        assert "group_id" in data
+        
+        # Verify group has correct comparison type
+        group = db_session.query(GenerationGroup).filter(GenerationGroup.id == data["group_id"]).first()
+        assert group is not None
+        assert group.comparison_type == "settings"
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_parallel_generation_invalid_variation_count(auth_token, db_session: Session):
+    """Test parallel generation with invalid variation count."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Test with too few variations
+    response = client.post(
+        "/api/generate/parallel",
+        headers={"Authorization": f"Bearer {auth_token}"},
+        json={
+            "variations": [
+                {"prompt": "Single variation"}
+            ],
+            "comparison_type": "prompt"
+        }
+    )
+    
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == "INVALID_VARIATION_COUNT"
+    
+    # Test with too many variations (11 exceeds limit of 10)
+    response = client.post(
+        "/api/generate/parallel",
+        headers={"Authorization": f"Bearer {auth_token}"},
+        json={
+            "variations": [
+                {"prompt": f"Variation {i}"} for i in range(11)
+            ],
+            "comparison_type": "prompt"
+        }
+    )
+    
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == "INVALID_VARIATION_COUNT"
+    assert "between 2 and 10" in data["error"]["message"]
+    
+    app.dependency_overrides.clear()
+
+
+def test_create_parallel_generation_rate_limit(auth_token, db_session: Session, test_user):
+    """Test rate limiting for parallel generation (AC: 7)."""
+    from app.db.session import get_db
+    from datetime import datetime, timedelta
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Create 9 generations in the last hour (1 remaining)
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    for i in range(9):
+        generation = Generation(
+            user_id=test_user.id,
+            prompt=f"Test prompt {i}",
+            status="completed",
+            created_at=one_hour_ago + timedelta(minutes=i)
+        )
+        db_session.add(generation)
+    db_session.commit()
+    
+    # Try to create parallel generation with 2 variations (would exceed limit of 10)
+    response = client.post(
+        "/api/generate/parallel",
+        headers={"Authorization": f"Bearer {auth_token}"},
+        json={
+            "variations": [
+                {"prompt": "Variation 1"},
+                {"prompt": "Variation 2"}
+            ],
+            "comparison_type": "prompt"
+        }
+    )
+    
+    assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+    assert "10 videos/hour" in data["error"]["message"]
+    
+    app.dependency_overrides.clear()
+
+
+def test_get_comparison_group_success(auth_token, db_session: Session, test_user):
+    """Test getting comparison group with variations (AC: 5, 6, 7)."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Create a generation group
+    group = GenerationGroup(
+        user_id=test_user.id,
+        comparison_type="settings"
+    )
+    db_session.add(group)
+    db_session.commit()
+    db_session.refresh(group)
+    
+    # Create generations in the group
+    generation1 = Generation(
+        user_id=test_user.id,
+        prompt="Prompt 1",
+        status="completed",
+        progress=100,
+        cost=0.50,
+        generation_group_id=group.id,
+        coherence_settings={"seed_control": True}
+    )
+    generation2 = Generation(
+        user_id=test_user.id,
+        prompt="Prompt 2",
+        status="completed",
+        progress=100,
+        cost=0.75,
+        generation_group_id=group.id,
+        coherence_settings={"seed_control": False}
+    )
+    db_session.add_all([generation1, generation2])
+    db_session.commit()
+    
+    # Get comparison group
+    response = client.get(
+        f"/api/comparison/{group.id}",
+        headers={"Authorization": f"Bearer {auth_token}"}
+    )
+    
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["group_id"] == group.id
+    assert data["comparison_type"] == "settings"
+    assert len(data["variations"]) == 2
+    assert data["total_cost"] == 1.25  # 0.50 + 0.75
+    assert "differences" in data
+    
+    # Verify variation details
+    assert data["variations"][0]["generation_id"] == generation1.id
+    assert data["variations"][0]["prompt"] == "Prompt 1"
+    assert data["variations"][0]["cost"] == 0.50
+    assert data["variations"][1]["generation_id"] == generation2.id
+    assert data["variations"][1]["prompt"] == "Prompt 2"
+    assert data["variations"][1]["cost"] == 0.75
+    
+    app.dependency_overrides.clear()
+
+
+def test_get_comparison_group_unauthorized(auth_token, db_session: Session):
+    """Test getting comparison group owned by another user (AC: 7)."""
+    from app.db.session import get_db
+    from app.core.security import hash_password
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    # Create another user
+    other_user = User(
+        username="otheruser",
+        password_hash=hash_password("password123"),
+        email="other@example.com"
+    )
+    db_session.add(other_user)
+    db_session.commit()
+    
+    # Create group for other user
+    group = GenerationGroup(
+        user_id=other_user.id,
+        comparison_type="prompt"
+    )
+    db_session.add(group)
+    db_session.commit()
+    db_session.refresh(group)
+    
+    # Try to access with test_user's token
+    response = client.get(
+        f"/api/comparison/{group.id}",
+        headers={"Authorization": f"Bearer {auth_token}"}
+    )
+    
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == "FORBIDDEN"
+    
+    app.dependency_overrides.clear()
+
+
+def test_get_comparison_group_not_found(auth_token, db_session: Session):
+    """Test getting non-existent comparison group."""
+    from app.db.session import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    
+    response = client.get(
+        "/api/comparison/non-existent-id",
+        headers={"Authorization": f"Bearer {auth_token}"}
+    )
+    
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == "GROUP_NOT_FOUND"
+    
+    app.dependency_overrides.clear()

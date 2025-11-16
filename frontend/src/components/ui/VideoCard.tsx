@@ -103,8 +103,36 @@ export const VideoCard: React.FC<VideoCardProps> = ({ generation }) => {
 
       {/* Card content */}
       <div className="p-4">
-        {/* Prompt preview */}
-        <p className="text-sm text-gray-700 mb-2 line-clamp-2">{promptPreview}</p>
+        {/* Title or Variation label */}
+        <div className="mb-2">
+          {generation.title ? (
+            <h3 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-1">
+              {generation.title}
+            </h3>
+          ) : generation.variation_label ? (
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                Variation {generation.variation_label}
+              </span>
+            </div>
+          ) : null}
+          <p className="text-sm text-gray-700 line-clamp-2">{promptPreview}</p>
+        </div>
+
+        {/* Coherence settings preview */}
+        {generation.coherence_settings && (
+          <div className="mb-2 text-xs text-gray-600">
+            <span className="font-medium">Settings: </span>
+            <span className="text-gray-500">
+              {Object.entries(generation.coherence_settings)
+                .filter(([key, enabled]) => enabled && key !== 'vbench_quality_control') // Exclude VBench as it's not implemented
+                .map(([key, _]) => key.replace(/_/g, " "))
+                .slice(0, 3)
+                .join(", ")}
+              {Object.entries(generation.coherence_settings).filter(([key, enabled]) => enabled && key !== 'vbench_quality_control').length > 3 && "..."}
+            </span>
+          </div>
+        )}
 
         {/* Metadata */}
         <div className="flex items-center justify-between text-xs text-gray-500">
