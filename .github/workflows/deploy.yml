@@ -203,8 +203,18 @@ jobs:
             else
               # Pull latest code
               echo "📥 Pulling latest code from GitHub..."
+              # Fix permissions on output directory before git reset (files may be owned by www-data)
+              if [ -d "backend/output" ]; then
+                echo "🔐 Fixing permissions on output directory for git operations..."
+                sudo chown -R ubuntu:ubuntu backend/output 2>/dev/null || true
+              fi
               git fetch origin
               git reset --hard origin/main
+              # Restore output directory permissions after git reset
+              if [ -d "backend/output" ]; then
+                echo "🔐 Restoring output directory permissions..."
+                sudo chown -R www-data:www-data backend/output 2>/dev/null || true
+              fi
             fi
             
             # Update dependencies
