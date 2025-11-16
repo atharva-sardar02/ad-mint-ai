@@ -65,6 +65,72 @@ jobs:
             exit 1
           fi
 
+      - name: Cleanup old backups and free disk space
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            DEPLOYMENT_DIR=$(dirname "$DEPLOYMENT_PATH")
+            
+            echo "🧹 Cleaning up old backups and freeing disk space..."
+            
+            # Remove old backup directories (keep the most recent .backup and .old-*)
+            if [ -d "$DEPLOYMENT_DIR" ]; then
+              # Find all .old-* directories, keep only the most recent one
+              OLD_BACKUPS=$(sudo find "$DEPLOYMENT_DIR" -maxdepth 1 -type d -name "${DEPLOYMENT_PATH##*/}.old-*" -printf '%T@ %p\n' 2>/dev/null | sort -rn || true)
+              
+              if [ -n "$OLD_BACKUPS" ]; then
+                BACKUP_COUNT=$(echo "$OLD_BACKUPS" | wc -l)
+                if [ "$BACKUP_COUNT" -gt 1 ]; then
+                  echo "🗑️  Found $BACKUP_COUNT old .old-* directories, keeping most recent, removing others..."
+                  KEEP_FIRST=true
+                  echo "$OLD_BACKUPS" | while read -r timestamp dir; do
+                    if [ "$KEEP_FIRST" = "true" ]; then
+                      echo "  ✅ Keeping most recent: $dir"
+                      KEEP_FIRST=false
+                    else
+                      echo "  🗑️  Removing: $dir"
+                      sudo rm -rf "$dir" 2>/dev/null || true
+                    fi
+                  done
+                else
+                  KEPT_DIR=$(echo "$OLD_BACKUPS" | awk '{print $2}')
+                  echo "✅ Keeping only .old-* backup: $KEPT_DIR"
+                fi
+              fi
+              
+              # Remove old .backup directory only if we're about to create a new one
+              # (We'll create a fresh backup in the next step)
+              if [ -d "${DEPLOYMENT_PATH}.backup" ]; then
+                echo "🗑️  Removing old .backup directory (will create fresh one)..."
+                sudo rm -rf "${DEPLOYMENT_PATH}.backup"
+              fi
+            fi
+            
+            # Clean up pip cache
+            echo "🧹 Cleaning pip cache..."
+            pip cache purge 2>/dev/null || true
+            sudo -H pip cache purge 2>/dev/null || true
+            
+            # Clean up apt cache
+            echo "🧹 Cleaning apt cache..."
+            sudo apt-get clean 2>/dev/null || true
+            sudo apt-get autoclean 2>/dev/null || true
+            
+            # Clean up temporary files
+            echo "🧹 Cleaning temporary files..."
+            sudo rm -rf /tmp/* 2>/dev/null || true
+            sudo rm -rf /var/tmp/* 2>/dev/null || true
+            
+            # Clean up old journal logs
+            echo "🧹 Cleaning old journal logs..."
+            sudo journalctl --vacuum-time=7d 2>/dev/null || true
+            
+            # Show disk usage
+            echo "💾 Current disk usage:"
+            df -h / | tail -1
+          EOF
+
       - name: Backup current backend deployment
         run: |
           ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
@@ -74,16 +140,11 @@ jobs:
             
             echo "💾 Creating backup of current deployment..."
             
-            # Remove old backup if it exists (with sudo)
-            if [ -d "$BACKUP_PATH" ]; then
-              echo "🗑️  Removing old backup..."
-              sudo rm -rf "$BACKUP_PATH"
-            fi
-            
             # Create backup (with sudo for directory creation, then fix ownership)
             # Use rsync to exclude unnecessary files for faster backup
             if [ -d "$DEPLOYMENT_PATH" ]; then
               echo "📦 Copying deployment to backup (excluding large directories)..."
+              sudo mkdir -p "$BACKUP_PATH"
               sudo rsync -a --exclude='node_modules' --exclude='venv' --exclude='__pycache__' --exclude='.git' --exclude='*.pyc' --exclude='.pytest_cache' --exclude='dist' --exclude='build' "$DEPLOYMENT_PATH/" "$BACKUP_PATH/"
               sudo chown -R ubuntu:ubuntu "$BACKUP_PATH"
               echo "✅ Backup created at: $BACKUP_PATH"
@@ -112,16 +173,33 @@ jobs:
             # Check if it's a git repository, if not clone it
             if [ ! -d ".git" ]; then
               echo "📥 Cloning repository (first time deployment or not a git repo)..."
-              # Move existing files to temp location if any
-              if [ "$(ls -A $DEPLOYMENT_PATH 2>/dev/null)" ]; then
-                echo "⚠️  Directory has files but is not a git repo, backing up..."
-                sudo mv "$DEPLOYMENT_PATH" "${DEPLOYMENT_PATH}.old-$(date +%s)" 2>/dev/null || true
-                sudo mkdir -p "$DEPLOYMENT_PATH"
-                sudo chown ubuntu:ubuntu "$DEPLOYMENT_PATH"
+              # Backup .env file if it exists
+              ENV_BACKUP="/tmp/ad-mint-ai-env-backup"
+              if [ -f "$DEPLOYMENT_PATH/backend/.env" ]; then
+                echo "💾 Backing up .env file..."
+                sudo cp "$DEPLOYMENT_PATH/backend/.env" "$ENV_BACKUP" 2>/dev/null || true
               fi
+              
+              # Remove old deployment directory (but keep venv if it exists to save space)
+              if [ -d "$DEPLOYMENT_PATH" ]; then
+                echo "🗑️  Removing old deployment directory..."
+                # Remove everything except venv to save space
+                sudo find "$DEPLOYMENT_PATH" -mindepth 1 -maxdepth 1 ! -name "venv" -exec sudo rm -rf {} + 2>/dev/null || true
+              fi
+              
+              # Clone fresh
               git clone https://github.com/atharva-sardar02/ad-mint-ai.git "$DEPLOYMENT_PATH"
               cd "$DEPLOYMENT_PATH"
               sudo chown -R ubuntu:ubuntu "$DEPLOYMENT_PATH"
+              
+              # Restore .env file if we backed it up
+              if [ -f "$ENV_BACKUP" ]; then
+                echo "📝 Restoring .env file..."
+                sudo cp "$ENV_BACKUP" "$DEPLOYMENT_PATH/backend/.env"
+                sudo rm "$ENV_BACKUP"
+                sudo chmod 640 "$DEPLOYMENT_PATH/backend/.env"
+                sudo chown ubuntu:www-data "$DEPLOYMENT_PATH/backend/.env"
+              fi
             else
               # Pull latest code
               echo "📥 Pulling latest code from GitHub..."
@@ -133,6 +211,16 @@ jobs:
             echo "📦 Updating Python dependencies..."
             cd backend
             
+            # Check disk space before creating venv
+            AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
+            echo "💾 Available disk space: ${AVAILABLE_SPACE}KB"
+            
+            # Remove old venv if disk space is low (less than 500MB)
+            if [ "$AVAILABLE_SPACE" -lt 512000 ] && [ -d "venv" ]; then
+              echo "⚠️  Low disk space, removing old venv..."
+              rm -rf venv
+            fi
+            
             # Create venv if it doesn't exist
             if [ ! -d "venv" ]; then
               echo "🐍 Creating Python virtual environment..."
@@ -140,8 +228,8 @@ jobs:
             fi
             
             source venv/bin/activate
-            pip install --upgrade pip
-            pip install -r requirements.txt
+            pip install --upgrade pip --no-cache-dir
+            pip install -r requirements.txt --no-cache-dir
             
             # Initialize database (create tables if they don't exist)
             echo "🗄️  Initializing database (creating tables if needed)..."
@@ -161,6 +249,13 @@ jobs:
             fi
             echo "✅ Database migrations completed"
             
+            # Ensure .env file has correct permissions
+            if [ -f ".env" ]; then
+              echo "🔐 Setting .env file permissions..."
+              sudo chmod 640 .env
+              sudo chown ubuntu:www-data .env
+            fi
+            
             # Restart FastAPI service
             echo "🔄 Restarting FastAPI service..."
             sudo systemctl restart fastapi
@@ -169,6 +264,10 @@ jobs:
             sleep 3
             
             echo "✅ Backend deployment completed"
+            
+            # Show final disk usage
+            echo "💾 Final disk usage:"
+            df -h / | tail -1
           EOF
 
       - name: Health check
@@ -282,6 +381,18 @@ jobs:
             fi
             
             echo "✅ Rollback completed successfully"
+            
+            # Clean up old backup directories after successful rollback
+            echo "🧹 Cleaning up old backup directories..."
+            DEPLOYMENT_DIR=$(dirname "$DEPLOYMENT_PATH")
+            if [ -d "$DEPLOYMENT_DIR" ]; then
+              # Remove old .old-* directories
+              sudo find "$DEPLOYMENT_DIR" -maxdepth 1 -type d -name "${DEPLOYMENT_PATH##*/}.old-*" -exec sudo rm -rf {} + 2>/dev/null || true
+            fi
+            
+            # Show disk usage after cleanup
+            echo "💾 Disk usage after cleanup:"
+            df -h / | tail -1
           EOF
 
       - name: Cleanup SSH key
