@@ -14,7 +14,7 @@ import { useAuthStore } from "../store/authStore";
  */
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds
+  timeout: 300000, // 5 minutes - increased for long-running video generation operations
   headers: {
     "Content-Type": "application/json",
   },

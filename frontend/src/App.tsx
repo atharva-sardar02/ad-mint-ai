@@ -13,6 +13,8 @@ import { Gallery } from "./routes/Gallery";
 import { VideoDetail } from "./routes/VideoDetail";
 import { Profile } from "./routes/Profile";
 import { GenerationStatus } from "./routes/GenerationStatus";
+import { ComparisonDetail } from "./routes/ComparisonDetail";
+import { Queue } from "./routes/Queue";
 import { Editor } from "./routes/Editor";
 import "./App.css";
 
@@ -82,6 +84,14 @@ function App() {
             }
           />
           <Route
+            path="/queue"
+            element={
+              <ProtectedRoute>
+                <Queue />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/editor"
             element={
               <ProtectedRoute>
@@ -110,6 +120,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <GenerationStatus />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/comparison/:groupId"
+            element={
+              <ProtectedRoute>
+                <ComparisonDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video/:id"
+            element={
+              <ProtectedRoute>
+                <VideoDetail />
               </ProtectedRoute>
             }
           />

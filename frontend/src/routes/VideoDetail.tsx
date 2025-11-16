@@ -1,7 +1,7 @@
 /**
  * Video detail page component for viewing and managing a single video.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getGenerations } from "../lib/services/generations";
 import { deleteGeneration } from "../lib/services/generations";
@@ -10,6 +10,31 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toast } from "../components/ui/Toast";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
+
+/**
+ * Map coherence setting keys to user-friendly labels.
+ */
+const SETTING_LABELS: Record<string, string> = {
+  seed_control: "Seed Control",
+  ip_adapter_reference: "IP-Adapter (Reference Images)",
+  ip_adapter_sequential: "IP-Adapter (Sequential Images)",
+  lora: "LoRA Training",
+  enhanced_planning: "Enhanced LLM Planning",
+  vbench_quality_control: "VBench Quality Control",
+  post_processing_enhancement: "Post-Processing Enhancement",
+  controlnet: "ControlNet for Compositional Consistency",
+  csfd_detection: "CSFD Character Consistency Detection",
+};
+
+/**
+ * Get user-friendly label for a coherence setting key.
+ */
+const getSettingLabel = (key: string): string => {
+  return SETTING_LABELS[key] || key
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
 
 /**
  * VideoDetail component displays a single video generation with delete functionality.
@@ -33,19 +58,26 @@ export const VideoDetail: React.FC = () => {
     type: "success" | "error" | "info";
     isVisible: boolean;
   }>({ message: "", type: "info", isVisible: false });
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch generation details
   useEffect(() => {
+    let isMounted = true;
+
     const fetchGeneration = async () => {
       if (!id) {
-        setError("Video ID is required");
-        setLoading(false);
+        if (isMounted) {
+          setError("Video ID is required");
+          setLoading(false);
+        }
         return;
       }
 
       try {
-        setLoading(true);
-        setError(null);
+        if (isMounted) {
+          setLoading(true);
+          setError(null);
+        }
 
         // Fetch generations and find the one matching the ID
         // Note: Backend limits to 100 per page, so we paginate if needed
@@ -54,8 +86,11 @@ export const VideoDetail: React.FC = () => {
         let offset = 0;
         const limit = 100; // Backend maximum limit
         
-        while (!found) {
+        while (!found && isMounted) {
           const response = await getGenerations({ limit, offset, sort: "created_at_desc" });
+          
+          if (!isMounted) return;
+          
           found = response.generations.find((g) => g.id === id);
           
           if (found) {
@@ -73,16 +108,24 @@ export const VideoDetail: React.FC = () => {
           offset += limit;
         }
       } catch (err) {
+        if (!isMounted) return;
+        
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load video";
         setError(errorMessage);
         console.error("Error fetching generation:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchGeneration();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   // Fetch related versions (original or edited versions)
@@ -147,8 +190,13 @@ export const VideoDetail: React.FC = () => {
         isVisible: true,
       });
 
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
       // Redirect to gallery after a short delay
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         navigate("/gallery");
       }, 1000);
     } catch (err) {
@@ -166,6 +214,15 @@ export const VideoDetail: React.FC = () => {
       setDeleting(false);
     }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle cancel
   const handleCancelDelete = () => {
@@ -257,13 +314,22 @@ export const VideoDetail: React.FC = () => {
         />
 
         {/* Back button */}
-        <div className="mb-6">
+        <div className="mb-6 flex gap-2">
+          {generation.generation_group_id && (
+            <Button
+              onClick={() => navigate(`/comparison/${generation.generation_group_id}`)}
+              variant="secondary"
+              disabled={deleting}
+            >
+              ← Back to Comparison
+            </Button>
+          )}
           <Button
             onClick={() => navigate("/gallery")}
             variant="secondary"
             disabled={deleting}
           >
-            ← Back to Gallery
+            {generation.generation_group_id ? "← Gallery" : "← Back to Gallery"}
           </Button>
         </div>
 
@@ -404,6 +470,73 @@ export const VideoDetail: React.FC = () => {
               </h2>
               <p className="text-gray-900">{generation.prompt}</p>
             </div>
+
+            {/* Coherence Settings */}
+            {generation.coherence_settings && (
+              <div className="mb-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">
+                  Generation Settings
+                </h2>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Object.entries(generation.coherence_settings)
+                      .sort(([keyA, enabledA], [keyB, enabledB]) => {
+                        // Sort: enabled first, then alphabetically
+                        if (enabledA !== enabledB) {
+                          return enabledB ? 1 : -1;
+                        }
+                        return getSettingLabel(keyA).localeCompare(getSettingLabel(keyB));
+                      })
+                      .map(([key, enabled]) => {
+                        const label = getSettingLabel(key);
+                        // VBench is not implemented yet - grey it out
+                        const isNotImplemented = key === 'vbench_quality_control';
+                        
+                        return (
+                          <div
+                            key={key}
+                            className={`flex items-center space-x-2 ${
+                              enabled && !isNotImplemented 
+                                ? 'text-gray-900' 
+                                : isNotImplemented
+                                ? 'text-gray-400'
+                                : 'text-gray-500'
+                            }`}
+                          >
+                            <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              enabled && !isNotImplemented
+                                ? 'bg-green-100 border-green-500' 
+                                : isNotImplemented
+                                ? 'bg-gray-50 border-gray-200'
+                                : 'bg-gray-100 border-gray-300'
+                            }`}>
+                              {enabled && !isNotImplemented && (
+                                <svg
+                                  className="w-3 h-3 text-green-600"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                            <span className={`text-sm font-medium ${isNotImplemented ? 'line-through' : ''}`}>
+                              {label}
+                              {isNotImplemented && (
+                                <span className="ml-1 text-xs text-gray-400">(Not implemented)</span>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Metadata grid */}
             <div className="grid grid-cols-2 gap-4 mb-6">
