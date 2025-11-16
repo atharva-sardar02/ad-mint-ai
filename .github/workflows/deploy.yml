@@ -143,6 +143,15 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
             
+            # Initialize database (create tables if they don't exist)
+            echo "🗄️  Initializing database (creating tables if needed)..."
+            python -m app.db.init_db
+            if [ $? -ne 0 ]; then
+              echo "❌ Database initialization failed"
+              exit 1
+            fi
+            echo "✅ Database initialized"
+            
             # Run database migrations
             echo "🔄 Running database migrations..."
             python -m app.db.migrations.run_all
