@@ -3,6 +3,7 @@ Audio layer service for adding background music and sound effects to videos.
 """
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -61,7 +62,28 @@ def add_audio_layer(
     if cancellation_check and cancellation_check():
         raise RuntimeError("Audio layer processing cancelled by user")
     
+    # Set temp directory for MoviePy to use (ensures temp files are created in writable location)
+    temp_dir = os.environ.get('TMPDIR', '/tmp')
+    temp_dir_path = Path(temp_dir)
+    if not temp_dir_path.exists():
+        temp_dir_path.mkdir(parents=True, exist_ok=True)
+    # Set tempfile's tempdir to ensure MoviePy uses it
+    tempfile.tempdir = str(temp_dir_path.absolute())
+    # Also set TMPDIR in environment for FFmpeg and other subprocesses
+    os.environ['TMPDIR'] = str(temp_dir_path.absolute())
+    
+    # Change to temp directory so MoviePy creates temp files there (not in working directory)
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(str(temp_dir_path.absolute()))
+    except OSError as e:
+        logger.warning(f"Could not change to temp directory {temp_dir_path}: {e}. Continuing with current directory.")
+    
     logger.info(f"Adding audio layer to video: {video_path} (style: {music_style})")
+    
+    # Convert paths to absolute since we changed directory
+    video_path_abs = str(Path(video_path).absolute())
+    output_path_abs = str(Path(output_path).absolute())
     
     try:
         # Check cancellation before loading video
@@ -69,7 +91,7 @@ def add_audio_layer(
             raise RuntimeError("Audio layer processing cancelled by user")
         
         # Load video
-        video = VideoFileClip(video_path)
+        video = VideoFileClip(video_path_abs)
         video_duration = video.duration
         
         # Select music file based on style (graceful fallback if not found)
@@ -201,12 +223,12 @@ def add_audio_layer(
             final_video = video
         
         # Write output video
-        output_path_obj = Path(output_path)
+        output_path_obj = Path(output_path_abs)
         output_path_obj.parent.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Writing video with audio to {output_path}")
+        logger.info(f"Writing video with audio to {output_path_abs}")
         final_video.write_videofile(
-            output_path,
+            output_path_abs,
             codec='libx264',
             audio_codec='aac',
             fps=video.fps,
@@ -224,8 +246,8 @@ def add_audio_layer(
             final_audio.close()
         final_video.close()
         
-        logger.info(f"Audio layer added successfully: {output_path}")
-        return output_path
+        logger.info(f"Audio layer added successfully: {output_path_abs}")
+        return output_path_abs
         
     except RuntimeError as e:
         if "cancelled" in str(e).lower():
@@ -235,6 +257,12 @@ def add_audio_layer(
     except Exception as e:
         logger.error(f"Unexpected error during audio layer addition: {e}", exc_info=True)
         raise RuntimeError(f"Audio layer addition failed: {e}")
+    finally:
+        # Restore original working directory
+        try:
+            os.chdir(original_cwd)
+        except OSError:
+            pass  # Ignore errors when restoring directory
 
 
 def _select_music_file(style: str) -> Optional[Path]:
