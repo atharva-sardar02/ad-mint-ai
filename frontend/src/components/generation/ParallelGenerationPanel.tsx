@@ -172,11 +172,13 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
         }
       });
 
-      // Validate single settings
-      const settingsErrors = validateCoherenceSettings(promptSettings);
-      if (Object.keys(settingsErrors).length > 0) {
-        newErrors.promptSettings = "Coherence settings are invalid";
-      }
+      // Validate settings for each prompt variation
+      promptSettings.forEach((settings, index) => {
+        const settingsErrors = validateCoherenceSettings(settings);
+        if (Object.keys(settingsErrors).length > 0) {
+          newErrors[`promptSettings_${index}`] = `Settings for prompt ${index + 1} are invalid`;
+        }
+      });
     }
 
     setErrors(newErrors);

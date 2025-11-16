@@ -458,11 +458,12 @@ describe("editorApi", () => {
   });
 
   describe("saveEditingSession", () => {
-    const mockSaveResponse = {
-      message: "Editing session saved successfully",
-      session_id: "session-123",
-      saved_at: "2025-01-27T12:00:00Z",
-    };
+    // Mock response for future use
+    // const mockSaveResponse = {
+    //   message: "Editing session saved successfully",
+    //   session_id: "session-123",
+    //   saved_at: "2025-01-27T12:00:00Z",
+    // };
 
     it("should throw error for 401 Unauthorized", async () => {
       const error: any = {
@@ -526,12 +527,13 @@ describe("editorApi", () => {
   });
 
   describe("exportVideo", () => {
-    const mockExportResponse = {
-      message: "Video export started",
-      export_id: "export-123",
-      status: "processing",
-      estimated_time_seconds: 120,
-    };
+    // Mock response for future use
+    // const mockExportResponse = {
+    //   message: "Video export started",
+    //   export_id: "export-123",
+    //   status: "processing",
+    //   estimated_time_seconds: 120,
+    // };
 
     it("should throw error for 401 Unauthorized", async () => {
       const error: any = {

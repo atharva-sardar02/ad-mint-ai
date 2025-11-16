@@ -120,7 +120,6 @@ export const TrimControls: React.FC<TrimControlsProps> = ({
       const timeOnTimeline = (mouseX / timelineWidth) * totalDuration;
 
       const clipStartTime = selectedClip.start_time;
-      const clipEndTime = selectedClip.end_time;
       const clipDuration = selectedClip.duration;
 
       if (isDraggingStart) {
