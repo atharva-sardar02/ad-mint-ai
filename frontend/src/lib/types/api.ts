@@ -71,6 +71,7 @@ export type GenerationStatus = "pending" | "processing" | "completed" | "failed"
  */
 export interface GenerationListItem {
   id: string;
+  title?: string | null; // User-defined title for the video
   prompt: string;
   status: GenerationStatus;
   video_url: string | null;
@@ -79,6 +80,9 @@ export interface GenerationListItem {
   cost: number | null;
   created_at: string; // ISO datetime string
   completed_at: string | null; // ISO datetime string
+  generation_group_id?: string | null; // Group ID if part of parallel generation
+  variation_label?: string | null; // Variation label (A, B, C, etc.) if part of parallel generation
+  coherence_settings?: Record<string, boolean> | null; // Coherence technique settings
 }
 
 /**

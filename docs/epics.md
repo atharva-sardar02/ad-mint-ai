@@ -944,7 +944,7 @@ So that I can preserve my work and download the final result.
 
 **Scope:** 
 - **MVP (Stories 7.0-7.4):** Core coherence techniques essential for professional quality
-- **Growth (Stories 7.5-7.9):** Advanced quality control and optimization (nice-to-have)
+- **Growth (Stories 7.5-7.10):** Advanced quality control and optimization (nice-to-have)
 - Story 7.0 (Settings UI) is primarily a developer tool for iteration and testing
 
 ### Story 7.0: Coherence Settings UI Panel [MVP - Dev Tool]
@@ -1060,7 +1060,173 @@ So that the generated clips maintain consistent visual "DNA" and seamless transi
 
 ---
 
-### Story 7.2: LLM-Guided Multi-Scene Planning (VideoDirectorGPT-style) [MVP]
+### Story 7.2: Parallel Generation and Comparison Tool [MVP]
+
+As a user,
+I want to generate multiple video variations in parallel by tweaking settings or prompts,
+So that I can compare different outputs and select the best result for my needs.
+
+**Acceptance Criteria:**
+
+**Parallel Generation Interface:**
+**Given** I am on the video generation dashboard
+**When** I want to create multiple variations
+**Then** I see an option to enable "Parallel Generation Mode" with:
+- Toggle to enable/disable parallel generation
+- Ability to specify number of variations (2-5 variations)
+- Two comparison modes:
+  - **Settings Comparison:** Same prompt, different coherence settings
+  - **Prompt Comparison:** Same settings, different prompt variations
+
+**Settings Comparison Mode:**
+**Given** I have enabled parallel generation with settings comparison
+**When** I configure the generation
+**Then** I can:
+- Enter a single prompt
+- Create multiple setting profiles (e.g., "Profile A", "Profile B", "Profile C")
+- Configure different coherence settings for each profile:
+  - Different seed control settings
+  - Different IP-Adapter configurations
+  - Different enhanced planning options
+  - Different post-processing settings
+- See a preview of each profile's settings before submission
+- Submit all variations to generate in parallel
+
+**Prompt Comparison Mode:**
+**Given** I have enabled parallel generation with prompt comparison
+**When** I configure the generation
+**Then** I can:
+- Enter multiple prompt variations (2-5 prompts)
+- Use the same coherence settings for all prompts
+- See all prompts in a list/table format
+- Edit individual prompts independently
+- Submit all prompt variations to generate in parallel
+
+**Parallel Generation Execution:**
+**Given** I have submitted parallel generation requests
+**When** the system processes them
+**Then** it:
+- Creates multiple generation records (one per variation)
+- Links variations together as a "generation group" or "comparison set"
+- Processes all variations in parallel (background tasks run concurrently)
+- Tracks progress for each variation independently
+- Updates status for each generation separately
+
+**Comparison View:**
+**Given** I have multiple video variations generated
+**When** I view the comparison results
+**Then** I see:
+- Side-by-side or grid layout showing all variations
+- Video thumbnails for each variation
+- Metadata for each (prompt, settings used, cost, generation time)
+- Ability to play each video independently
+- Ability to select and download the preferred variation
+- Ability to delete individual variations or the entire comparison set
+- Visual indicators showing which settings/prompts differ between variations
+
+**Comparison Navigation:**
+**Given** I am viewing a comparison set
+**When** I interact with it
+**Then** I can:
+- Navigate to individual video detail pages from the comparison view
+- Return to comparison view from individual video pages
+- Filter or sort variations by quality metrics (if available)
+- See cost breakdown per variation and total cost for the comparison set
+
+**Backend Support:**
+**Given** parallel generation is requested
+**When** the backend processes the request
+**Then** it:
+- Accepts array of generation requests in a single API call
+- Creates generation_group record to link related generations
+- Processes all generations concurrently (uses async/background tasks)
+- Tracks group_id in generation records for querying related videos
+- Supports querying all generations in a group via API
+
+**Parallel Clip Creation (Single Video Variation):**
+**Given** a single video variation is being generated with multiple scenes
+**When** the system generates video clips for all scenes
+**Then** it:
+- Checks if parallel clip creation is enabled in coherence settings (default: enabled if API allows)
+- If enabled, creates all clips for the video variation in parallel using concurrent API calls to Replicate
+- If disabled, generates clips sequentially (one after another)
+- Speeds up generation significantly when parallel mode is enabled (reduces total generation time from sum of clip times to max of clip times)
+- Handles errors gracefully: if one clip fails, other clips continue processing
+- Tracks progress for each clip independently
+- Updates overall generation progress based on completed clips
+
+**Parallel Clip Creation Settings:**
+**Given** I am configuring a video generation
+**When** I view coherence settings
+**Then** I see:
+- Toggle for "Parallel Clip Creation" (enabled by default if supported)
+- Description: "Generate all clips for a video in parallel to speed up generation"
+- Warning if disabled: "Clips will be generated sequentially, which may take longer"
+- Estimated time savings when enabled (e.g., "~3x faster for 5-scene videos")
+
+**Prerequisites:** Story 3.1 (Prompt Processing), Story 7.0 (Coherence Settings UI)
+
+**Technical Notes:**
+- **Frontend:**
+  - Add "Parallel Generation" toggle to Dashboard component
+  - Create `ParallelGenerationPanel` component with:
+    - Mode selector (Settings Comparison vs Prompt Comparison)
+    - Variation count selector (2-5)
+    - Dynamic form for each variation (settings profiles or prompt inputs)
+    - Preview/summary view before submission
+  - Create `ComparisonView` component for displaying results:
+    - Grid layout with video cards
+    - Side-by-side video player
+    - Metadata display
+    - Selection and download functionality
+  - Update Dashboard to handle parallel generation submission
+  - Create comparison detail page route (`/comparison/{group_id}`)
+- **Backend:**
+  - Add `generation_groups` table:
+    - `id` (UUID, primary key)
+    - `user_id` (FK to users)
+    - `created_at` (timestamp)
+    - `comparison_type` (enum: 'settings', 'prompt')
+  - Add `generation_group_id` field to `generations` table (FK, nullable)
+  - Create `/api/generate/parallel` endpoint:
+    - Accepts array of `GenerateRequest` objects
+    - Creates generation_group record
+    - Creates multiple generation records linked to group
+    - Processes all in parallel using background tasks
+    - Returns group_id and array of generation_ids
+  - Create `/api/comparison/{group_id}` endpoint:
+    - Returns all generations in a group with metadata
+    - Includes comparison-specific metadata (which settings/prompts differ)
+  - Update generation service to support parallel processing
+  - Ensure proper error handling (if one variation fails, others continue)
+- **Database:**
+  - Migration to add `generation_groups` table
+  - Migration to add `generation_group_id` to `generations` table
+  - Index on `generation_group_id` for efficient queries
+- **UI/UX:**
+  - Make it clear this is a comparison/experimentation tool
+  - Show estimated total cost before submission (sum of all variations)
+  - Provide clear visual distinction between comparison mode and single generation
+  - Allow users to save favorite setting profiles for reuse
+- **Performance:**
+  - Parallel processing should not overwhelm the system
+  - Consider rate limiting for parallel requests
+  - Monitor concurrent generation capacity
+- **Parallel Clip Creation Implementation:**
+  - Add `parallel_clip_creation` boolean field to `CoherenceSettings` schema (default: True)
+  - Update `generate_all_clips()` function in `video_generation.py` to support parallel execution:
+    - Use `asyncio.gather()` or `asyncio.create_task()` to run all clip generation calls concurrently
+    - Maintain proper error handling: if one clip fails, others should continue
+    - Update progress tracking to handle parallel clip completion
+    - Ensure cancellation checks work correctly with parallel execution
+  - Update `process_generation()` in `generations.py` to pass parallel_clip_creation setting to clip generation service
+  - Add UI toggle in `CoherenceSettingsPanel` component for parallel clip creation
+  - Document performance improvements and any rate limiting considerations
+  - Test with various scene counts (3-5 scenes) to verify speedup
+
+---
+
+### Story 7.3: LLM-Guided Multi-Scene Planning (VideoDirectorGPT-style) [MVP]
 
 As a developer,
 I want to enhance scene planning with VideoDirectorGPT-style consistency groupings and entity descriptions,
@@ -1128,7 +1294,7 @@ So that the LLM generates explicit consistency markers and shot lists that ensur
 
 ---
 
-### Story 7.3: IP-Adapter Integration for Character/Product Identity Preservation [MVP]
+### Story 7.4: IP-Adapter Integration for Character/Product Identity Preservation [MVP]
 
 As a developer,
 I want to implement IP-Adapter for identity preservation,
@@ -1173,7 +1339,7 @@ So that characters and products maintain consistent appearance across multiple s
 - Logs IP-Adapter usage for cost and quality tracking
 - Stores reference images and IP-Adapter metadata with generation
 
-**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 3.2 (Video Generation)
+**Prerequisites:** Story 7.3 (Enhanced Scene Planning), Story 3.2 (Video Generation)
 
 **Technical Notes:**
 - Research and select IP-Adapter implementation (diffusers library, ComfyUI workflows, or custom)
@@ -1186,7 +1352,7 @@ So that characters and products maintain consistent appearance across multiple s
 
 ---
 
-### Story 7.4: LoRA Training Pipeline for Recurring Character/Product Identity [MVP]
+### Story 7.5: LoRA Training Pipeline for Recurring Character/Product Identity [MVP]
 
 As a developer,
 I want to implement LoRA training infrastructure and pipeline for recurring characters and products,
@@ -1303,7 +1469,7 @@ So that brand mascots, spokespersons, and flagship products maintain perfect vis
 - Stores LoRA metadata with generation record
 - Shows LoRA usage in generation history
 
-**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 7.3 (IP-Adapter)
+**Prerequisites:** Story 7.3 (Enhanced Scene Planning), Story 7.4 (IP-Adapter)
 
 **Technical Notes:**
 - **Infrastructure Options:**
@@ -1328,7 +1494,7 @@ So that brand mascots, spokespersons, and flagship products maintain perfect vis
 
 ---
 
-### Story 7.5: VBench Integration for Automated Quality Control [MVP]
+### Story 7.6: VBench Integration for Automated Quality Control [MVP]
 
 As a developer,
 I want to integrate VBench metrics for automated quality assessment,
@@ -1387,7 +1553,7 @@ So that the system can automatically evaluate video quality and trigger regenera
 
 ---
 
-### Story 7.6: Enhanced Post-Processing with Brand Palette Preservation [MVP]
+### Story 7.7: Enhanced Post-Processing with Brand Palette Preservation [MVP]
 
 As a developer,
 I want to enhance post-processing with brand-aware color grading and transition optimization,
@@ -1436,7 +1602,7 @@ So that final videos maintain brand identity while improving visual coherence.
 - Maintains video quality (no degradation, 1080p minimum)
 - Completes processing efficiently
 
-**Prerequisites:** Story 3.3 (Video Assembly), Story 7.5 (VBench Integration)
+**Prerequisites:** Story 3.3 (Video Assembly), Story 7.6 (VBench Integration)
 
 **Technical Notes:**
 - Enhance existing post-processing service with brand palette awareness
@@ -1449,7 +1615,7 @@ So that final videos maintain brand identity while improving visual coherence.
 
 ---
 
-### Story 7.7: Cross-Scene Entity Consistency Detection (CSFD Score) [MVP]
+### Story 7.8: Cross-Scene Entity Consistency Detection (CSFD Score) [MVP]
 
 As a developer,
 I want to implement CSFD (Cross-Scene Face Distance) scoring for character-driven ads,
@@ -1486,7 +1652,7 @@ So that the system can quantify and ensure character consistency across multiple
 - Triggers regeneration for scenes exceeding CSFD threshold (optional, if enabled)
 - Makes CSFD scores available for quality feedback loop
 
-**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 7.5 (VBench Integration)
+**Prerequisites:** Story 7.3 (Enhanced Scene Planning), Story 7.6 (VBench Integration)
 
 **Technical Notes:**
 - Implement face detection and embedding extraction (ArcFace, FaceNet, or similar)
@@ -1499,7 +1665,7 @@ So that the system can quantify and ensure character consistency across multiple
 
 ---
 
-### Story 7.8: ControlNet Integration for Compositional Consistency [MVP]
+### Story 7.9: ControlNet Integration for Compositional Consistency [MVP]
 
 As a developer,
 I want to implement ControlNet for enforcing compositional and structural consistency,
@@ -1545,7 +1711,7 @@ So that scene layouts, character positions, and perspectives remain consistent a
 - Logs ControlNet usage for analysis
 - Stores ControlNet configuration with generation record
 
-**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 7.3 (IP-Adapter), Story 7.4 (LoRA)
+**Prerequisites:** Story 7.3 (Enhanced Scene Planning), Story 7.4 (IP-Adapter), Story 7.5 (LoRA)
 
 **Technical Notes:**
 - Research ControlNet implementation options (diffusers, ComfyUI, or custom)
@@ -1558,7 +1724,7 @@ So that scene layouts, character positions, and perspectives remain consistent a
 
 ---
 
-### Story 7.9: Quality Feedback Loop with Research Metrics [MVP]
+### Story 7.10: Quality Feedback Loop with Research Metrics [MVP]
 
 As a developer,
 I want to implement a comprehensive quality feedback loop using VBench, CSFD, and coherence metrics,
@@ -1603,7 +1769,7 @@ So that the system continuously improves prompt optimization and consistency tec
 - Adjust system parameters based on data
 - Export quality reports for analysis
 
-**Prerequisites:** Story 7.5 (VBench Integration), Story 7.7 (CSFD Score), Story 7.6 (Post-Processing)
+**Prerequisites:** Story 7.6 (VBench Integration), Story 7.8 (CSFD Score), Story 7.7 (Post-Processing)
 
 **Technical Notes:**
 - Enhance quality_metrics table to store all research-recommended metrics
@@ -1647,10 +1813,10 @@ So that the system continuously improves prompt optimization and consistency tec
 - **FR-027:** Clip Splitting → Epic 6, Story 6.4
 - **FR-028:** Clip Merging → Epic 6, Story 6.5
 - **FR-029:** Editor Save and Export → Epic 6, Story 6.6
-- **FR-030:** Video Coherence Analysis → Epic 7, Story 7.5 (VBench), Story 7.7 (CSFD), Story 7.6 (Post-Processing)
-- **FR-031:** Coherence Enhancement → Epic 7, Story 7.1 (Seed Control), Story 7.3 (IP-Adapter), Story 7.4 (LoRA), Story 7.6 (Post-Processing), Story 7.8 (ControlNet)
-- **FR-032:** Prompt Optimization via LLM → Epic 7, Story 7.2 (Enhanced Planning), Story 7.9 (Feedback Loop)
-- **FR-033:** Quality Feedback Loop → Epic 7, Story 7.9
+- **FR-030:** Video Coherence Analysis → Epic 7, Story 7.6 (VBench), Story 7.8 (CSFD), Story 7.7 (Post-Processing)
+- **FR-031:** Coherence Enhancement → Epic 7, Story 7.1 (Seed Control), Story 7.4 (IP-Adapter), Story 7.5 (LoRA), Story 7.7 (Post-Processing), Story 7.9 (ControlNet)
+- **FR-032:** Prompt Optimization via LLM → Epic 7, Story 7.3 (Enhanced Planning), Story 7.10 (Feedback Loop)
+- **FR-033:** Quality Feedback Loop → Epic 7, Story 7.10
 - **FR-034:** Profile Display → Epic 5, Story 5.1 (duplicate of FR-022)
 - **FR-035:** User Stats Update → Epic 5, Story 5.2 (duplicate of FR-023)
 
@@ -1667,7 +1833,7 @@ This epic breakdown decomposes all 35 functional requirements from the PRD into 
 4. **Epic 4 (Video Management)** ✅ COMPLETED - Enables users to view and manage their videos (4 stories)
 5. **Epic 5 (User Profile)** ✅ COMPLETED - Provides usage tracking and account information (2 stories)
 6. **Epic 6 (Video Editing)** - Enables users to edit generated videos with timeline-based editor (6 stories)
-7. **Epic 7 (Multi-Scene Coherence & Quality Optimization)** [MVP: Stories 7.0-7.4] - Implements state-of-the-art generation-time consistency techniques (seed control, IP-Adapter, LoRA training with infrastructure setup, VideoDirectorGPT-style planning) to ensure professional multi-scene coherence. MVP includes dev tool for testing coherence settings (Story 7.0), seed control (7.1), enhanced LLM planning (7.2), IP-Adapter (7.3), and LoRA training pipeline (7.4). Growth phase (7.5-7.9) includes advanced quality control (VBench, CSFD, ControlNet) and feedback loops. Quality is priority; cost and generation time are not constraints.
+7. **Epic 7 (Multi-Scene Coherence & Quality Optimization)** [MVP: Stories 7.0-7.4] - Implements state-of-the-art generation-time consistency techniques (seed control, IP-Adapter, LoRA training with infrastructure setup, VideoDirectorGPT-style planning) to ensure professional multi-scene coherence. MVP includes dev tool for testing coherence settings (Story 7.0), seed control (7.1), parallel generation comparison tool (7.2), enhanced LLM planning (7.3), IP-Adapter (7.4), and LoRA training pipeline (7.5). Growth phase (7.6-7.10) includes advanced quality control (VBench, CSFD, ControlNet) and feedback loops. Quality is priority; cost and generation time are not constraints.
 
 **Next Steps in BMad Method:**
 1. **UX Design** (if UI exists) - Run: `*create-ux-design` workflow
