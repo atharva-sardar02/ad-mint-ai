@@ -70,7 +70,7 @@ async def health():
         dict: Health status with database, storage, and external API checks
     """
     from app.core.config import settings
-    from app.db.session import engine
+    from app.db.base import engine
     from sqlalchemy import text
     
     health_status = {
