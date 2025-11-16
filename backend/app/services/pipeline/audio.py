@@ -62,6 +62,27 @@ def add_audio_layer(
     if cancellation_check and cancellation_check():
         raise RuntimeError("Audio layer processing cancelled by user")
     
+    # Get original working directory BEFORE changing directories
+    original_cwd = os.getcwd()
+    
+    # Convert paths to absolute BEFORE changing directory
+    # This ensures paths are resolved relative to the original working directory
+    if not Path(video_path).is_absolute():
+        # If relative, resolve from original working directory
+        video_path_abs = str(Path(original_cwd) / video_path)
+    else:
+        video_path_abs = video_path
+    
+    if not Path(output_path).is_absolute():
+        # If relative, resolve from original working directory
+        output_path_abs = str(Path(original_cwd) / output_path)
+    else:
+        output_path_abs = output_path
+    
+    # Normalize paths (resolve any .. or .)
+    video_path_abs = str(Path(video_path_abs).resolve())
+    output_path_abs = str(Path(output_path_abs).resolve())
+    
     # Set temp directory for MoviePy to use (ensures temp files are created in writable location)
     temp_dir = os.environ.get('TMPDIR', '/tmp')
     temp_dir_path = Path(temp_dir)
@@ -73,17 +94,12 @@ def add_audio_layer(
     os.environ['TMPDIR'] = str(temp_dir_path.absolute())
     
     # Change to temp directory so MoviePy creates temp files there (not in working directory)
-    original_cwd = os.getcwd()
     try:
         os.chdir(str(temp_dir_path.absolute()))
     except OSError as e:
         logger.warning(f"Could not change to temp directory {temp_dir_path}: {e}. Continuing with current directory.")
     
-    logger.info(f"Adding audio layer to video: {video_path} (style: {music_style})")
-    
-    # Convert paths to absolute since we changed directory
-    video_path_abs = str(Path(video_path).absolute())
-    output_path_abs = str(Path(output_path).absolute())
+    logger.info(f"Adding audio layer to video: {video_path_abs} (style: {music_style})")
     
     try:
         # Check cancellation before loading video
