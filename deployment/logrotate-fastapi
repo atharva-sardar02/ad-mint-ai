@@ -1,0 +1,17 @@
+# Logrotate configuration for FastAPI application logs
+# Install: sudo cp deployment/logrotate-fastapi /etc/logrotate.d/fastapi
+
+/var/log/fastapi/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    missingok
+    create 0644 www-data www-data
+    sharedscripts
+    postrotate
+        systemctl reload fastapi > /dev/null 2>&1 || true
+    endscript
+}
+

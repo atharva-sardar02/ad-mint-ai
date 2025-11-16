@@ -43,6 +43,9 @@ class GenerateRequest(BaseModel):
         default=None,
         description="Optional coherence technique settings. If not provided, defaults will be applied."
     )
+    model: Optional[str] = Field(None, description="Specific model to use (optional, uses default fallback chain if not specified)")
+    num_clips: Optional[int] = Field(None, ge=1, le=10, description="Number of clips to generate (optional, uses scene plan if not specified)")
+    use_llm: Optional[bool] = Field(True, description="Whether to use LLM enhancement (default: True)")
 
 
 class StatusResponse(BaseModel):

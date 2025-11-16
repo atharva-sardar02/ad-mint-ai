@@ -27,6 +27,7 @@ from app.schemas.generation import (
     GenerationListItem,
     ParallelGenerateRequest,
     ParallelGenerateResponse,
+    Scene,
     ScenePlan,
     StatusResponse,
     VariationDetail,
@@ -41,15 +42,21 @@ from app.services.cancellation import request_cancellation, handle_cancellation
 from app.services.pipeline.progress_tracking import update_generation_progress, update_generation_status
 from app.services.pipeline.llm_enhancement import enhance_prompt_with_llm
 from app.services.pipeline.overlays import add_overlays_to_clips
-from app.services.pipeline.scene_planning import plan_scenes
+from app.services.pipeline.scene_planning import plan_scenes, create_basic_scene_plan_from_prompt
 from app.services.pipeline.stitching import stitch_video_clips
 from app.services.pipeline.audio import add_audio_layer
 from app.services.pipeline.export import export_final_video
 from app.services.pipeline.cache import get_cached_clip, cache_clip, should_cache_prompt
-from app.services.pipeline.video_generation import generate_video_clip, MODEL_COSTS, REPLICATE_MODELS
+from app.services.pipeline.video_generation import (
+    generate_video_clip,
+    generate_video_clip_with_model,
+    MODEL_COSTS,
+    REPLICATE_MODELS
+)
 from app.services.pipeline.seed_manager import get_seed_for_generation
 
 logger = logging.getLogger(__name__)
+
 
 router = APIRouter(prefix="/api", tags=["generations"])
 
@@ -57,7 +64,13 @@ router = APIRouter(prefix="/api", tags=["generations"])
 TEXT_OVERLAYS_ENABLED = True
 
 
-async def process_generation(generation_id: str, prompt: str):
+async def process_generation(
+    generation_id: str, 
+    prompt: str,
+    preferred_model: Optional[str] = None,
+    num_clips: Optional[int] = None,
+    use_llm: bool = True
+):
     """
     Background task to process video generation.
     This runs asynchronously after the API returns a response.
@@ -76,37 +89,68 @@ async def process_generation(generation_id: str, prompt: str):
         logger.info(f"[{generation_id}] Generation record found, starting processing")
         
         try:
-            # Update status to processing
-            update_generation_progress(
-                db=db,
-                generation_id=generation_id,
-                progress=10,
-                current_step="LLM Enhancement",
-                status="processing"
-            )
-            logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
-            
-            # Call LLM enhancement service
-            logger.info(f"[{generation_id}] Calling LLM enhancement service...")
-            ad_spec = await enhance_prompt_with_llm(prompt)
-            logger.info(f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}")
-            
-            # Store LLM specification
-            generation.llm_specification = ad_spec.model_dump()
-            generation.framework = ad_spec.framework
-            db.commit()
-            update_generation_progress(
-                db=db,
-                generation_id=generation_id,
-                progress=20,
-                current_step="Scene Planning"
-            )
-            logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
-            
-            # Call scene planning module
-            logger.info(f"[{generation_id}] Calling scene planning module...")
-            scene_plan = plan_scenes(ad_spec, target_duration=15)
+            if use_llm:
+                # Update status to processing
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=10,
+                    current_step="LLM Enhancement",
+                    status="processing"
+                )
+                logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
+                
+                # Call LLM enhancement service
+                logger.info(f"[{generation_id}] Calling LLM enhancement service...")
+                ad_spec = await enhance_prompt_with_llm(prompt)
+                logger.info(f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}")
+                
+                # Store LLM specification
+                generation.llm_specification = ad_spec.model_dump()
+                generation.framework = ad_spec.framework
+                db.commit()
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=20,
+                    current_step="Scene Planning"
+                )
+                logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
+                
+                # Call scene planning module
+                logger.info(f"[{generation_id}] Calling scene planning module...")
+                scene_plan = plan_scenes(ad_spec, target_duration=15)
+            else:
+                # Skip LLM enhancement, create basic scene plan directly
+                logger.info(f"[{generation_id}] LLM layer disabled, creating basic scene plan from prompt")
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=20,
+                    current_step="Scene Planning (No LLM)",
+                    status="processing"
+                )
+                
+                # Create basic scene plan from prompt
+                num_scenes_for_plan = num_clips if num_clips else 3
+                scene_plan = create_basic_scene_plan_from_prompt(
+                    prompt=prompt,
+                    target_duration=15,
+                    num_scenes=num_scenes_for_plan
+                )
+                
+                # Store basic specification
+                generation.framework = scene_plan.framework
+                generation.llm_specification = None  # No LLM spec when disabled
+                db.commit()
             logger.info(f"[{generation_id}] Scene planning completed - {len(scene_plan.scenes)} scenes planned, total duration: {scene_plan.total_duration}s")
+            
+            # If num_clips is specified, limit the scenes
+            if num_clips is not None and num_clips > 0:
+                logger.info(f"[{generation_id}] Limiting scenes to {num_clips} as requested")
+                scene_plan.scenes = scene_plan.scenes[:num_clips]
+                scene_plan.total_duration = sum(s.duration for s in scene_plan.scenes)
+                logger.info(f"[{generation_id}] Adjusted to {len(scene_plan.scenes)} scenes, total duration: {scene_plan.total_duration}s")
             
             # Store scene plan
             generation.scene_plan = scene_plan.model_dump()
@@ -153,107 +197,152 @@ async def process_generation(generation_id: str, prompt: str):
                 return generation.cancellation_requested if generation else False
             
             try:
-                # Generate all video clips
+                # Generate all video clips in parallel
                 num_scenes = len(scene_plan.scenes)
                 progress_start = 30
                 progress_end = 70
-                progress_per_scene = (progress_end - progress_start) / num_scenes if num_scenes > 0 else 0
-                
-                clip_paths = []
-                total_video_cost = 0.0
                 use_cache = should_cache_prompt(prompt)
                 
                 if use_cache:
                     logger.info(f"[{generation_id}] Cache enabled for this prompt")
                 
-                for i, scene in enumerate(scene_plan.scenes, start=1):
-                    # Check cancellation before each scene
+                # Update progress to show we're starting parallel clip generation
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=progress_start,
+                    current_step=f"Generating {num_scenes} video clips in parallel"
+                )
+                logger.info(f"[{generation_id}] Starting parallel generation of {num_scenes} clips")
+                
+                # Helper function to generate a single clip
+                async def generate_single_clip(scene: Scene, scene_index: int) -> tuple[str, str, float, int]:
+                    """Generate a single clip and return (clip_path, model_used, cost, scene_number)."""
+                    scene_number = scene_index + 1  # 1-based for display
+                    
+                    # Check cancellation
                     if check_cancellation():
-                        logger.info(f"[{generation_id}] Generation cancelled before scene {i}")
-                        update_generation_status(
-                            db=db,
-                            generation_id=generation_id,
-                            status="failed",
-                            error_message="Cancelled by user"
-                        )
-                        return
+                        raise RuntimeError("Generation cancelled by user")
                     
-                    # Update progress at start of clip generation
-                    progress = int(progress_start + (i - 1) * progress_per_scene)
-                    update_generation_progress(
-                        db=db,
-                        generation_id=generation_id,
-                        progress=progress,
-                        current_step=f"Generating video clip {i} of {num_scenes}"
-                    )
-                    
-                    logger.info(f"[{generation_id}] Generating clip {i}/{num_scenes} - Scene type: {scene.scene_type}, Duration: {scene.duration}s")
+                    logger.info(f"[{generation_id}] Starting clip {scene_number}/{num_scenes} - Scene type: {scene.scene_type}, Duration: {scene.duration}s")
                     logger.info(f"[{generation_id}] Visual prompt: {scene.visual_prompt[:80]}...")
                     
                     # Check cache first (scene index is 0-based)
                     cached_clip = None
                     model_used = None
                     if use_cache:
-                        cached_clip = get_cached_clip(prompt, i - 1)
+                        cached_clip = get_cached_clip(prompt, scene_index)
                     
                     if cached_clip:
-                        logger.info(f"[{generation_id}] Using cached clip for scene {i}: {cached_clip}")
+                        logger.info(f"[{generation_id}] Using cached clip for scene {scene_number}: {cached_clip}")
                         clip_path = cached_clip
                         clip_cost = 0.0  # Cached clips are free
                         model_used = "cached"  # Mark as cached for logging
                     else:
-                        # Update progress to show we're calling the API (this can take 30-60+ seconds)
+                        # Update progress to show we're calling the API
                         update_generation_progress(
                             db=db,
                             generation_id=generation_id,
-                            progress=progress,
-                            current_step=f"Calling API for clip {i} of {num_scenes} (this may take 30-60 seconds)"
+                            progress=progress_start,
+                            current_step=f"Calling API for clip {scene_number} of {num_scenes} (parallel generation)"
                         )
                         
                         # Generate video clip
-                        logger.info(f"[{generation_id}] Calling Replicate API for clip {i}...")
+                        logger.info(f"[{generation_id}] Calling Replicate API for clip {scene_number}...")
                         clip_path, model_used = await generate_video_clip(
                             scene=scene,
                             output_dir=temp_output_dir,
                             generation_id=generation_id,
-                            scene_number=i,
+                            scene_number=scene_number,
                             cancellation_check=check_cancellation,
-                            seed=seed  # Pass seed for visual consistency (None if seed_control disabled)
+                            seed=seed,  # Pass seed for visual consistency (None if seed_control disabled)
+                            preferred_model=preferred_model  # Pass preferred model if specified
                         )
-                        logger.info(f"[{generation_id}] Clip {i} generated successfully: {clip_path} (model: {model_used})")
+                        logger.info(f"[{generation_id}] Clip {scene_number} generated successfully: {clip_path} (model: {model_used})")
                         
                         # Cache the clip if caching is enabled
                         if use_cache:
-                            cache_clip(prompt, i - 1, clip_path)
+                            cache_clip(prompt, scene_index, clip_path)
                         
                         # Calculate cost using the actual model that was used
                         model_cost_per_sec = MODEL_COSTS.get(model_used, 0.05)
                         clip_cost = model_cost_per_sec * scene.duration
-                        logger.info(f"[{generation_id}] Clip {i} cost calculated: ${clip_cost:.4f} (model: {model_used}, ${model_cost_per_sec}/sec × {scene.duration}s)")
-                    
-                    clip_paths.append(clip_path)
-                    total_video_cost += clip_cost
-                    
-                    # Update progress after clip completion (mid-point between start and next)
-                    progress_after_clip = int(progress_start + i * progress_per_scene)
-                    update_generation_progress(
-                        db=db,
-                        generation_id=generation_id,
-                        progress=progress_after_clip,
-                        current_step=f"Completed clip {i} of {num_scenes}"
-                    )
-                    
-                    logger.info(f"[{generation_id}] Clip {i} cost: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f} (model: {model_used})")
+                        logger.info(f"[{generation_id}] Clip {scene_number} cost calculated: ${clip_cost:.4f} (model: {model_used}, ${model_cost_per_sec}/sec × {scene.duration}s)")
                     
                     # Track cost with actual model used (only for non-cached clips)
                     if not cached_clip:
                         track_video_generation_cost(
                             db=db,
                             generation_id=generation_id,
-                            scene_number=i,
+                            scene_number=scene_number,
                             cost=clip_cost,
                             model_name=model_used
                         )
+                    
+                    return (clip_path, model_used, clip_cost, scene_number)
+                
+                # Generate all clips in parallel using asyncio.gather
+                clip_tasks = [
+                    generate_single_clip(scene, i) 
+                    for i, scene in enumerate(scene_plan.scenes)
+                ]
+                
+                # Wait for all clips to complete (in parallel)
+                clip_results = await asyncio.gather(*clip_tasks, return_exceptions=True)
+                
+                # Process results and handle any errors
+                clip_paths = []
+                total_video_cost = 0.0
+                completed_clips = 0
+                
+                for result in clip_results:
+                    if isinstance(result, Exception):
+                        logger.error(f"[{generation_id}] Clip generation failed: {result}", exc_info=True)
+                        if "cancelled" in str(result).lower():
+                            update_generation_status(
+                                db=db,
+                                generation_id=generation_id,
+                                status="failed",
+                                error_message="Cancelled by user"
+                            )
+                            return
+                        raise result
+                    
+                    clip_path, model_used, clip_cost, scene_number = result
+                    clip_paths.append(clip_path)
+                    total_video_cost += clip_cost
+                    completed_clips += 1
+                    
+                    logger.info(f"[{generation_id}] Clip {scene_number} completed: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f} (model: {model_used})")
+                    
+                    # Update progress as clips complete
+                    progress = int(progress_start + (completed_clips * (progress_end - progress_start) / num_scenes))
+                    update_generation_progress(
+                        db=db,
+                        generation_id=generation_id,
+                        progress=progress,
+                        current_step=f"Completed {completed_clips}/{num_scenes} clips (parallel generation)"
+                    )
+                
+                # Sort clip_paths by scene number to maintain order
+                # Since clips are generated in parallel, they may complete out of order
+                # We need to ensure they're ordered by scene number (1, 2, 3, ...)
+                clip_paths_ordered = [None] * num_scenes
+                for result in clip_results:
+                    if not isinstance(result, Exception):
+                        clip_path, _, _, scene_number = result
+                        clip_paths_ordered[scene_number - 1] = clip_path
+                
+                # Filter out None values and ensure we have all clips
+                clip_paths = [cp for cp in clip_paths_ordered if cp is not None]
+                
+                if len(clip_paths) != num_scenes:
+                    logger.warning(
+                        f"[{generation_id}] Expected {num_scenes} clips but got {len(clip_paths)}. "
+                        f"Some clips may have failed."
+                    )
+                
+                logger.info(f"[{generation_id}] All {len(clip_paths)} clips generated in parallel, total cost: ${total_video_cost:.4f}")
                 
                 # Store temp clip paths
                 generation.temp_clip_paths = clip_paths
@@ -557,7 +646,15 @@ async def create_generation(
     logger.info(f"Created generation {generation_id}")
     
     # Add background task to process the generation
-    background_tasks.add_task(process_generation, generation_id, request.prompt)
+    # Pass model, num_clips, and use_llm if specified
+    background_tasks.add_task(
+        process_generation, 
+        generation_id, 
+        request.prompt,
+        request.model,
+        request.num_clips,
+        request.use_llm if request.use_llm is not None else True
+    )
     
     # Return immediately - processing happens in background
     return GenerateResponse(
@@ -721,8 +818,44 @@ async def create_parallel_generation(
             # Start generation task concurrently using asyncio
             # This allows true parallel processing instead of sequential BackgroundTasks
             # The task will run in the background even after the response is sent
-            asyncio.create_task(process_generation(generation.id, variation.prompt))
-            logger.info(f"Started background task for generation {generation.id} (variation {i+1})")
+            # Extract per-variation settings
+            variation_model = variation.model if hasattr(variation, 'model') else None
+            variation_num_clips = variation.num_clips if hasattr(variation, 'num_clips') else None
+            variation_use_llm = variation.use_llm if hasattr(variation, 'use_llm') else True
+            
+            # Determine if this is single clip generation (bypass pipeline)
+            # Single clip mode: model is required, num_clips is set, and use_llm is False
+            is_single_clip = (
+                variation_model is not None and 
+                variation_num_clips is not None and 
+                variation_num_clips > 0 and
+                variation_use_llm is False
+            )
+            
+            if is_single_clip:
+                # Use single clip generation (bypasses entire pipeline)
+                if variation_model not in MODEL_COSTS:
+                    logger.warning(f"Invalid model {variation_model} for variation {i+1}, skipping single clip generation")
+                    errors.append(f"Variation {i+1}: Invalid model for single clip generation")
+                    continue
+                
+                asyncio.create_task(process_single_clip_generation(
+                    generation.id,
+                    variation.prompt,
+                    variation_model,
+                    variation_num_clips
+                ))
+                logger.info(f"Started single clip generation task for generation {generation.id} (variation {i+1})")
+            else:
+                # Use full pipeline generation
+                asyncio.create_task(process_generation(
+                    generation.id, 
+                    variation.prompt,
+                    preferred_model=variation_model,
+                    num_clips=variation_num_clips,
+                    use_llm=variation_use_llm
+                ))
+                logger.info(f"Started full pipeline generation task for generation {generation.id} (variation {i+1})")
             
         except Exception as e:
             logger.error(f"Failed to create generation for variation {i+1}: {e}")
@@ -755,6 +888,63 @@ async def create_parallel_generation(
         status="pending",
         message=f"Parallel generation started with {len(generation_ids)} variations"
     )
+
+
+@router.get("/queue", status_code=status.HTTP_200_OK)
+async def get_generation_queue(
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum number of active generations to return"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the current queue of active video generations (pending and processing).
+    Shows what's currently being generated to verify parallel execution.
+    
+    Args:
+        limit: Maximum number of active generations to return (default: 50, max: 200)
+        current_user: Current authenticated user
+        db: Database session
+    
+    Returns:
+        Dict with active generations grouped by status, showing:
+        - pending: Generations waiting to start
+        - processing: Generations currently being processed
+        - Each generation shows: id, title, prompt preview, progress, current_step, created_at
+    """
+    # Get active generations for the user (limit to most recent for performance)
+    active_generations = db.query(Generation).filter(
+        Generation.user_id == current_user.id,
+        Generation.status.in_(["pending", "processing"])
+    ).order_by(Generation.created_at.desc()).limit(limit).all()
+    
+    # Group by status
+    pending = []
+    processing = []
+    
+    for gen in active_generations:
+        gen_info = {
+            "id": gen.id,
+            "title": gen.title,
+            "prompt": gen.prompt[:100] + "..." if len(gen.prompt) > 100 else gen.prompt,
+            "progress": gen.progress,
+            "current_step": gen.current_step,
+            "status": gen.status,
+            "created_at": gen.created_at.isoformat() if gen.created_at else None,
+            "num_scenes": gen.num_scenes,
+            "generation_group_id": gen.generation_group_id,
+        }
+        
+        if gen.status == "pending":
+            pending.append(gen_info)
+        elif gen.status == "processing":
+            processing.append(gen_info)
+    
+    return {
+        "pending": pending,
+        "processing": processing,
+        "total_active": len(active_generations),
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 @router.get("/coherence/settings/defaults", status_code=status.HTTP_200_OK)
@@ -825,13 +1015,30 @@ async def get_generation_status(
         if not relative_path:
             return None
         from app.core.config import settings
+        
         # If already a full URL, return as-is
         if relative_path.startswith("http://") or relative_path.startswith("https://"):
             return relative_path
-        # Convert relative path to full URL
-        base_url = settings.STATIC_BASE_URL.rstrip("/")
-        path = relative_path.lstrip("/")
-        return f"{base_url}/{path}"
+        
+        # If storage mode is S3, generate presigned URL
+        if settings.STORAGE_MODE == "s3":
+            try:
+                from app.services.storage.s3_storage import get_s3_storage
+                s3_storage = get_s3_storage()
+                # Generate presigned URL (expires in 1 hour)
+                presigned_url = s3_storage.generate_presigned_url(relative_path, expiration=3600)
+                return presigned_url
+            except Exception as e:
+                logger.warning(f"Failed to generate presigned URL for {relative_path}: {e}, falling back to static URL")
+                # Fall back to static URL if S3 fails
+                base_url = settings.STATIC_BASE_URL.rstrip("/")
+                path = relative_path.lstrip("/")
+                return f"{base_url}/{path}"
+        else:
+            # Convert relative path to full URL (local storage)
+            base_url = settings.STATIC_BASE_URL.rstrip("/")
+            path = relative_path.lstrip("/")
+            return f"{base_url}/{path}"
     
     return StatusResponse(
         generation_id=generation.id,
@@ -1143,8 +1350,8 @@ async def get_generations(
     if q:
         query = query.filter(Generation.prompt.ilike(f"%{q}%"))
 
-    # Get total count before pagination
-    total = query.count()
+    # Get total count before pagination (optimized: use count on primary key)
+    total = query.with_entities(func.count(Generation.id)).scalar() or 0
 
     # Apply sorting
     if sort == "created_at_asc":
@@ -1155,19 +1362,42 @@ async def get_generations(
     # Apply pagination
     generations = query.offset(offset).limit(limit).all()
 
-    # Helper function to convert relative paths to full URLs
-    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
-        """Convert relative path to full URL for frontend consumption."""
+    # Helper function to convert relative paths to full URLs (optimized for performance)
+    def get_full_url(relative_path: Optional[str], skip_s3: bool = False) -> Optional[str]:
+        """
+        Convert relative path to full URL for frontend consumption.
+        
+        Args:
+            relative_path: Relative file path
+            skip_s3: If True, skip S3 presigned URL generation and return static URL (faster)
+        """
         if not relative_path:
             return None
         from app.core.config import settings
+        
         # If already a full URL, return as-is
         if relative_path.startswith("http://") or relative_path.startswith("https://"):
             return relative_path
-        # Convert relative path to full URL
-        base_url = settings.STATIC_BASE_URL.rstrip("/")
-        path = relative_path.lstrip("/")
-        return f"{base_url}/{path}"
+        
+        # If storage mode is S3 and we're not skipping
+        if settings.STORAGE_MODE == "s3" and not skip_s3:
+            try:
+                from app.services.storage.s3_storage import get_s3_storage
+                s3_storage = get_s3_storage()
+                # Generate presigned URL (expires in 1 hour)
+                presigned_url = s3_storage.generate_presigned_url(relative_path, expiration=3600)
+                return presigned_url
+            except Exception as e:
+                logger.warning(f"Failed to generate presigned URL for {relative_path}: {e}, falling back to static URL")
+                # Fall back to static URL if S3 fails
+                base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
+                path = relative_path.lstrip("/")
+                return f"{base_url}/{path}" if base_url else relative_path
+        else:
+            # Convert relative path to full URL (local storage or S3 with skip_s3=True)
+            base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
+            path = relative_path.lstrip("/")
+            return f"{base_url}/{path}" if base_url else relative_path
     
     # Pre-fetch variation labels for all generations in groups (optimize N+1 queries)
     # Get unique group IDs from the current page of generations
@@ -1196,6 +1426,8 @@ async def get_generations(
             # Continue without variation labels if there's an error
     
     # Convert to Pydantic models
+    # Optimize: Only generate S3 presigned URLs for completed videos (they have files)
+    # For pending/processing videos, skip expensive S3 URL generation
     generation_items = []
     for gen in generations:
         # Calculate variation label if part of a parallel generation group
@@ -1206,14 +1438,18 @@ async def get_generations(
                 # Convert index to letter (0 -> A, 1 -> B, etc.)
                 variation_label = chr(65 + idx)  # 65 is ASCII for 'A'
         
+        # Only generate S3 presigned URLs for completed videos (performance optimization)
+        # Pending/processing videos don't have videos/thumbnails yet, so skip expensive S3 calls
+        skip_s3_urls = gen.status not in ["completed"]
+        
         generation_items.append(
             GenerationListItem(
                 id=gen.id,
                 title=gen.title,
                 prompt=gen.prompt,
                 status=gen.status,
-                video_url=get_full_url(gen.video_url),
-                thumbnail_url=get_full_url(gen.thumbnail_url),
+                video_url=get_full_url(gen.video_url, skip_s3=skip_s3_urls),
+                thumbnail_url=get_full_url(gen.thumbnail_url, skip_s3=skip_s3_urls),
                 duration=gen.duration,
                 cost=gen.cost,
                 created_at=gen.created_at,
@@ -1324,6 +1560,258 @@ async def download_clip(
         media_type="video/mp4",
         filename=filename
     )
+
+
+@router.post("/generate-single-clip", status_code=status.HTTP_202_ACCEPTED)
+async def create_single_clip_generation(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> GenerateResponse:
+    """
+    Generate a single video clip without using the full pipeline.
+    Bypasses LLM enhancement, scene planning, and stitching.
+    
+    Args:
+        request: GenerateRequest with prompt, model (required), and optional num_clips
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        GenerateResponse with generation_id and status
+    
+    Raises:
+        HTTPException: 422 if validation fails, 400 if model not specified
+    """
+    if not request.model:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "MODEL_REQUIRED",
+                    "message": "Model selection is required for single clip generation"
+                }
+            }
+        )
+    
+    if request.model not in MODEL_COSTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "INVALID_MODEL",
+                    "message": f"Model '{request.model}' is not available. Available models: {list(MODEL_COSTS.keys())}"
+                }
+            }
+        )
+    
+    logger.info(f"Creating single clip generation for user {current_user.id}, model: {request.model}")
+    
+    # Create Generation record with status=pending
+    generation = Generation(
+        user_id=current_user.id,
+        prompt=request.prompt,
+        status="pending",
+        progress=0,
+        current_step="Initializing single clip generation"
+    )
+    db.add(generation)
+    db.commit()
+    db.refresh(generation)
+    
+    generation_id = generation.id
+    logger.info(f"Created single clip generation {generation_id}")
+    
+    # Add background task to process the single clip generation
+    background_tasks.add_task(
+        process_single_clip_generation,
+        generation_id,
+        request.prompt,
+        request.model,
+        request.num_clips or 1
+    )
+    
+    # Return immediately - processing happens in background
+    return GenerateResponse(
+        generation_id=generation_id,
+        status="pending",
+        message="Single clip generation started"
+    )
+
+
+async def process_single_clip_generation(
+    generation_id: str,
+    prompt: str,
+    model_name: str,
+    num_clips: int = 1
+):
+    """
+    Background task to generate single clip(s) without pipeline.
+    """
+    logger.info(f"[{generation_id}] Starting single clip generation task")
+    logger.info(f"[{generation_id}] Model: {model_name}, Clips: {num_clips}, Prompt: {prompt[:100]}...")
+    
+    # Create a new database session for the background task
+    db = SessionLocal()
+    try:
+        generation = db.query(Generation).filter(Generation.id == generation_id).first()
+        if not generation:
+            logger.error(f"[{generation_id}] Generation not found in background task")
+            return
+        
+        try:
+            # Update status to processing
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=10,
+                current_step="Generating video clip(s)",
+                status="processing"
+            )
+            
+            # Setup temp storage directory
+            temp_dir = Path("output/temp")
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_output_dir = str(temp_dir / generation_id)
+            
+            # Create cancellation check function
+            def check_cancellation() -> bool:
+                db.refresh(generation)
+                return generation.cancellation_requested if generation else False
+            
+            clip_paths = []
+            total_cost = 0.0
+            duration = 5  # Default duration for single clips
+            
+            # Update progress to show we're starting parallel clip generation
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=10,
+                current_step=f"Generating {num_clips} clips in parallel with {model_name}"
+            )
+            logger.info(f"[{generation_id}] Starting parallel generation of {num_clips} clips")
+            
+            # Helper function to generate a single clip
+            async def generate_single_clip_parallel(clip_index: int) -> tuple[str, str, float]:
+                """Generate a single clip and return (clip_path, model_used, cost)."""
+                # Check cancellation
+                if check_cancellation():
+                    raise RuntimeError("Generation cancelled by user")
+                
+                logger.info(f"[{generation_id}] Starting clip {clip_index}/{num_clips} with model {model_name}")
+                
+                clip_path, model_used = await generate_video_clip_with_model(
+                    prompt=prompt,
+                    duration=duration,
+                    output_dir=temp_output_dir,
+                    generation_id=generation_id,
+                    model_name=model_name,
+                    cancellation_check=check_cancellation,
+                    clip_index=clip_index
+                )
+                
+                clip_cost = MODEL_COSTS.get(model_used, 0.05) * duration
+                logger.info(f"[{generation_id}] Clip {clip_index} generated: {clip_path} (cost: ${clip_cost:.4f})")
+                
+                # Track cost
+                track_video_generation_cost(
+                    db=db,
+                    generation_id=generation_id,
+                    scene_number=clip_index,
+                    cost=clip_cost,
+                    model_name=model_used
+                )
+                
+                return (clip_path, model_used, clip_cost)
+            
+            # Generate all clips in parallel using asyncio.gather
+            clip_tasks = [
+                generate_single_clip_parallel(i) 
+                for i in range(1, num_clips + 1)
+            ]
+            
+            # Wait for all clips to complete (in parallel)
+            clip_results = await asyncio.gather(*clip_tasks, return_exceptions=True)
+            
+            # Process results and handle any errors
+            completed_clips = 0
+            
+            for i, result in enumerate(clip_results, start=1):
+                if isinstance(result, Exception):
+                    logger.error(f"[{generation_id}] Clip {i} generation failed: {result}", exc_info=True)
+                    if "cancelled" in str(result).lower():
+                        update_generation_status(
+                            db=db,
+                            generation_id=generation_id,
+                            status="failed",
+                            error_message="Cancelled by user"
+                        )
+                        return
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message=f"Failed to generate clip {i}: {str(result)}"
+                    )
+                    return
+                
+                clip_path, model_used, clip_cost = result
+                clip_paths.append(clip_path)
+                total_cost += clip_cost
+                completed_clips += 1
+                
+                logger.info(f"[{generation_id}] Clip {i} completed: ${clip_cost:.4f}, total cost so far: ${total_cost:.4f}")
+                
+                # Update progress as clips complete
+                progress = int(10 + (completed_clips * 80 / num_clips))
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=progress,
+                    current_step=f"Completed {completed_clips}/{num_clips} clips (parallel generation)"
+                )
+            
+            logger.info(f"[{generation_id}] All {len(clip_paths)} clips generated in parallel, total cost: ${total_cost:.4f}")
+            
+            # Store clip paths
+            generation.temp_clip_paths = clip_paths
+            generation.num_scenes = len(clip_paths)
+            db.commit()
+            
+            # Update progress to completed
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=100,
+                current_step="Completed",
+                status="completed"
+            )
+            
+            # Update total cost (single clip generation doesn't use LLM, so llm_cost=0)
+            track_complete_generation_cost(
+                db=db,
+                generation_id=generation_id,
+                video_cost=total_cost,
+                llm_cost=0.0
+            )
+            
+            # Update user statistics
+            update_user_statistics_on_completion(db=db, generation_id=generation_id)
+            
+            logger.info(f"[{generation_id}] Single clip generation completed successfully. Total cost: ${total_cost:.4f}")
+            
+        except Exception as e:
+            logger.error(f"[{generation_id}] Error in single clip generation: {e}", exc_info=True)
+            update_generation_status(
+                db=db,
+                generation_id=generation_id,
+                status="failed",
+                error_message=str(e)
+            )
+    finally:
+        db.close()
 
 
 @router.delete("/generations/{generation_id}", response_model=DeleteResponse, status_code=status.HTTP_200_OK)
