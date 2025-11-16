@@ -17,6 +17,12 @@ sys.path.insert(0, str(project_root))
 from app.db.migrations.add_video_url_and_thumbnail_url import run_migration as migrate_video_url
 from app.db.migrations.add_llm_specification_and_scene_plan import run_migration as migrate_llm_spec
 from app.db.migrations.add_temp_clip_paths_and_cancellation import run_migration as migrate_temp_clips
+from app.db.migrations.add_title_to_generations import run_migration as migrate_title
+from app.db.migrations.add_seed_value import run_migration as migrate_seed
+from app.db.migrations.add_parent_generation_id import run_migration as migrate_parent_id
+from app.db.migrations.add_generation_groups import run_migration as migrate_groups
+from app.db.migrations.add_coherence_settings import run_migration as migrate_coherence
+from app.db.migrations.create_editing_sessions_table import run_migration as migrate_editing_sessions
 
 
 def run_all_migrations():
@@ -30,6 +36,12 @@ def run_all_migrations():
         ("Add video_url and thumbnail_url", migrate_video_url),
         ("Add llm_specification and scene_plan", migrate_llm_spec),
         ("Add temp_clip_paths and cancellation_requested", migrate_temp_clips),
+        ("Add title to generations", migrate_title),
+        ("Add seed_value to generations", migrate_seed),
+        ("Add parent_generation_id to generations", migrate_parent_id),
+        ("Add generation_groups", migrate_groups),
+        ("Add coherence_settings", migrate_coherence),
+        ("Create editing_sessions table", migrate_editing_sessions),
     ]
     
     print("🔄 Starting database migrations...")
