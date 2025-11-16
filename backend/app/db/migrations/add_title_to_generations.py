@@ -43,10 +43,10 @@ def run_migration():
     is_sqlite = db_url.startswith("sqlite")
     is_postgres = "postgresql" in db_url or "postgres" in db_url
     
-    with engine.connect() as conn:
-        try:
-            if is_sqlite:
-                # SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we'll catch errors
+    try:
+        if is_sqlite:
+            # SQLite: use connect() and manual commit
+            with engine.connect() as conn:
                 try:
                     conn.execute(text(
                         "ALTER TABLE generations ADD COLUMN title VARCHAR(200)"
@@ -59,28 +59,26 @@ def run_migration():
                         raise
                 
                 conn.commit()
-            
-            elif is_postgres:
-                # PostgreSQL supports IF NOT EXISTS
+        
+        elif is_postgres:
+            # PostgreSQL: use begin() for proper transaction handling (SQLAlchemy 2.0)
+            with engine.begin() as conn:
                 conn.execute(text(
                     "ALTER TABLE generations ADD COLUMN IF NOT EXISTS title VARCHAR(200)"
                 ))
                 print("✅ Added title column to generations table (or already exists)")
-                
-                conn.commit()
-            
-            else:
-                print(f"⚠️  Unknown database type: {db_url}")
-                print("Please run migration manually for your database")
-                return False
-            
-            print("✅ Migration completed successfully")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Migration failed: {e}")
-            conn.rollback()
-            raise
+        
+        else:
+            print(f"⚠️  Unknown database type: {db_url}")
+            print("Please run migration manually for your database")
+            return False
+        
+        print("✅ Migration completed successfully")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Migration failed: {e}")
+        raise
 
 
 if __name__ == "__main__":
