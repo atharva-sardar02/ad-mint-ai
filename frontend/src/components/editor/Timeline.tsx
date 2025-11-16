@@ -102,6 +102,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [dragOverTrackIndex, setDragOverTrackIndex] = useState<number | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [dragPreviewPos, setDragPreviewPos] = useState<{ x: number; time: number } | null>(null);
+  const [dragEnabled, setDragEnabled] = useState(false);
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   
   // Use prop selectedClipIds if provided, otherwise use local state
   // For backward compatibility, also support selectedClipId prop
@@ -132,19 +134,21 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Calculate number of tracks and track assignments
   const { numTracks, clipTrackAssignments } = useMemo(() => {
-    // Auto-assign clips to tracks based on scene_number if no explicit assignments
+    // Auto-assign clips to track 0 (first track) if no explicit assignments
     const assignments: Record<string, number> = { ...trackAssignments };
     
     clips.forEach((clip) => {
       if (!(clip.clip_id in assignments)) {
-        // Auto-assign based on scene number (each scene gets its own track)
-        assignments[clip.clip_id] = (clip.scene_number || 1) - 1;
+        // All clips default to track 0 (single timeline)
+        assignments[clip.clip_id] = 0;
       }
     });
     
+    // Calculate max track index from assignments, with minimum of 0 (ensures at least 1 track)
     const maxTrack = Object.values(assignments).reduce((max, track) => Math.max(max, track), 0);
+    // Ensure at least 1 track exists
     return {
-      numTracks: maxTrack + 1,
+      numTracks: Math.max(maxTrack + 1, 1),
       clipTrackAssignments: assignments,
     };
   }, [clips, trackAssignments]);
@@ -248,25 +252,38 @@ export const Timeline: React.FC<TimelineProps> = ({
     [onClipSelect, selectedClipIds.length]
   );
 
-  // Handle clip drag start (mouse-based)
-  const handleClipDragStart = useCallback((e: React.MouseEvent, clipId: string) => {
+  // Handle clip mouse down - start long press timer for drag
+  const handleClipMouseDown = useCallback((e: React.MouseEvent, clipId: string) => {
     // Only allow left mouse button
     if (e.button !== 0) return;
     
     e.stopPropagation();
-    setDraggedClipId(clipId);
-    setDragStartPos({ x: e.clientX, y: e.clientY });
-    // Don't set isDraggingClip yet - wait for mouse movement
+    
+    // Set up long press timer (300ms) to enable drag mode
+    const timer = setTimeout(() => {
+      setDragEnabled(true);
+      setDraggedClipId(clipId);
+      setDragStartPos({ x: e.clientX, y: e.clientY });
+    }, 300);
+    
+    setLongPressTimer(timer);
   }, []);
 
   // Handle clip drag end
   const handleClipDragEnd = useCallback(() => {
+    // Clear long press timer if active
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    
     setDraggedClipId(null);
     setIsDraggingClip(false);
     setDragOverTrackIndex(null);
     setDragStartPos(null);
     setDragPreviewPos(null);
-  }, []);
+    setDragEnabled(false); // Reset drag mode
+  }, [longPressTimer]);
 
   // Handle playhead drag start
   const handlePlayheadMouseDown = useCallback(
@@ -326,8 +343,11 @@ export const Timeline: React.FC<TimelineProps> = ({
         clipPositions.forEach(pos => {
           const clipLeft = pos.x;
           const clipRight = pos.x + pos.width;
-          const clipTop = TIMELINE_HEIGHT / 2 - CLIP_HEIGHT / 2;
-          const clipBottom = TIMELINE_HEIGHT / 2 + CLIP_HEIGHT / 2;
+          // Calculate clip Y position based on track
+          const trackY = HEADER_HEIGHT + (pos.trackIndex * TRACK_HEIGHT);
+          const clipY = trackY + (TRACK_HEIGHT - CLIP_HEIGHT) / 2;
+          const clipTop = clipY;
+          const clipBottom = clipY + CLIP_HEIGHT;
           
           // Check if clip overlaps with selection box
           if (!(clipRight < boxLeft || clipLeft > boxRight || clipBottom < boxTop || clipTop > boxBottom)) {
@@ -416,7 +436,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         document.removeEventListener("mouseup", handleMouseUp);
       };
     }
-  }, [isDraggingPlayhead, isDraggingTimeline, isDraggingSelection, isDraggingClip, draggedClipId, dragStartPos, dragOverTrackIndex, dragPreviewPos, selectionStart, throttledZoom, totalDuration, onSeek, clipPositions, selectedClipIds.length, numTracks, onClipTrackChange, onClipPositionChange, handleClipDragEnd]);
+  }, [isDraggingPlayhead, isDraggingTimeline, isDraggingSelection, isDraggingClip, draggedClipId, dragStartPos, dragOverTrackIndex, dragPreviewPos, selectionStart, throttledZoom, totalDuration, onSeek, clipPositions, selectedClipIds.length, numTracks, onClipTrackChange, onClipPositionChange, handleClipDragEnd, dragEnabled]);
 
   // Handle zoom with mouse wheel (Ctrl/Cmd + scroll) - throttled via useThrottle hook
   const handleWheel = useCallback(
@@ -569,7 +589,8 @@ export const Timeline: React.FC<TimelineProps> = ({
         ref={containerRef}
         className="relative overflow-x-auto overflow-y-auto timeline-scroll-container"
         style={{ 
-          height: Math.min(timelineHeight, 600),
+          height: Math.min(timelineHeight + 35, 600), // Add 60px padding for labels and previews
+          paddingBottom: '40px', // Extra padding at bottom
         }}
         onWheel={handleWheel}
         onScroll={(e) => {
@@ -602,7 +623,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         <svg
           ref={timelineRef}
           width={timelineWidth}
-          height={timelineHeight}
+          height={timelineHeight + 40} // Add extra height for text labels below clips
           className="absolute top-0 left-0"
           onMouseDown={handleTimelineMouseDown}
           onClick={handleTimelineClick}
@@ -749,18 +770,20 @@ export const Timeline: React.FC<TimelineProps> = ({
                     }
                     strokeWidth={effectiveSelectedClipIds.includes(pos.clip.clip_id) ? 2 : 1}
                     rx={4}
-                    cursor="move"
+                    cursor={dragEnabled ? "grabbing" : "pointer"}
                     onClick={(e) => {
-                      // Only trigger click if not dragging
-                      if (!isDraggingClip) {
+                      // Clear long press timer on click
+                      if (longPressTimer) {
+                        clearTimeout(longPressTimer);
+                        setLongPressTimer(null);
+                      }
+                      // Only trigger click if not dragging or in drag mode
+                      if (!isDraggingClip && !dragEnabled) {
                         handleClipClick(e, pos.clip.clip_id);
                       }
                     }}
                     onMouseDown={(e) => {
-                      // Check if clicking on empty space (not on trim handles)
-                      if (e.button === 0) { // Left mouse button only
-                        handleClipDragStart(e, pos.clip.clip_id);
-                      }
+                      handleClipMouseDown(e, pos.clip.clip_id);
                     }}
                     className="clip-block"
                   />

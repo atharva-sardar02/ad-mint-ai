@@ -27,7 +27,11 @@ from app.schemas.editor import (
     ExportVideoRequest,
     ExportVideoResponse,
     ExportStatusResponse,
+    UpdateClipPositionRequest,
+    UpdateClipPositionResponse,
     ClipInfo,
+    EditingSessionListResponse,
+    EditingSessionListItem,
 )
 from app.services.editor.editor_service import (
     extract_clips_from_generation,
@@ -37,6 +41,7 @@ from app.services.editor.editor_service import (
 from app.services.editor.trim_service import apply_trim_to_editing_session
 from app.services.editor.split_service import apply_split_to_editing_session
 from app.services.editor.merge_service import apply_merge_to_editing_session
+from app.services.editor.position_service import update_clip_position
 from app.services.editor.save_service import save_editing_session
 from app.services.editor.export_service import export_edited_video, EXPORT_STAGES
 from app.services.pipeline.progress_tracking import update_generation_progress, update_generation_status
@@ -44,6 +49,52 @@ from app.services.pipeline.progress_tracking import update_generation_progress, 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["editor"])
+
+
+@router.get("/editing-sessions", response_model=EditingSessionListResponse, status_code=status.HTTP_200_OK)
+async def get_editing_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> EditingSessionListResponse:
+    """
+    Get list of all editing sessions for the current user.
+    
+    Returns:
+        EditingSessionListResponse with list of editing sessions
+    """
+    logger.info(f"User {current_user.id} requesting editing sessions list")
+    
+    # Query editing sessions for the current user
+    editing_sessions = db.query(EditingSession).filter(
+        EditingSession.user_id == current_user.id
+    ).order_by(
+        EditingSession.updated_at.desc()
+    ).all()
+    
+    sessions = []
+    for session in editing_sessions:
+        # Get associated generation for title and thumbnail
+        generation = session.generation
+        if not generation:
+            continue
+        
+        sessions.append(EditingSessionListItem(
+            id=session.id,
+            generation_id=session.generation_id,
+            title=generation.title or f"Video {generation.id[:8]}",
+            thumbnail_url=get_full_url(generation.thumbnail_url) if generation.thumbnail_url else None,
+            duration=generation.duration,
+            status=session.status,
+            updated_at=session.updated_at,
+            created_at=session.created_at,
+        ))
+    
+    logger.info(f"User {current_user.id} has {len(sessions)} editing sessions")
+    
+    return EditingSessionListResponse(
+        total=len(sessions),
+        sessions=sessions
+    )
 
 
 @router.get("/editor/{generation_id}", response_model=EditorDataResponse, status_code=status.HTTP_200_OK)
@@ -120,6 +171,8 @@ async def get_editor_data(
     # Reconstruct clips from editing_state if it exists and has been modified
     clips = original_clips
     trim_state = {}
+    track_assignments = {}
+    clip_positions = {}
     if editing_session.editing_state:
         editing_state = editing_session.editing_state
         clips_state = editing_state.get("clips", [])
@@ -138,10 +191,33 @@ async def get_editor_data(
                 clip_id = clip_state.get("id")
                 original_clip = original_clips_map.get(clip_id)
                 
-                # Calculate duration from start_time and end_time
-                start_time = clip_state.get("start_time", 0.0)
-                end_time = clip_state.get("end_time", 0.0)
-                duration = end_time - start_time
+                # Get trim values if they exist
+                trim_start = clip_state.get("trim_start")
+                trim_end = clip_state.get("trim_end")
+                
+                # Calculate duration: use trim values if available, otherwise use start_time/end_time
+                if trim_start is not None and trim_end is not None:
+                    # Apply trim: duration is the trimmed portion
+                    duration = trim_end - trim_start
+                    # Keep original start_time, but adjust end_time based on trim
+                    start_time = clip_state.get("start_time", 0.0)
+                    end_time = start_time + duration
+                else:
+                    # No trim, use original start_time and end_time
+                    start_time = clip_state.get("start_time", 0.0)
+                    end_time = clip_state.get("end_time", 0.0)
+                    duration = end_time - start_time
+                
+                # Extract track_index and position from clip_state
+                track_index = clip_state.get("track_index")
+                if track_index is not None:
+                    track_assignments[clip_id] = track_index
+                
+                # If start_time differs from original, it's a position override
+                if start_time is not None:
+                    original_clip_for_compare = original_clips_map.get(clip_id)
+                    if original_clip_for_compare and abs(start_time - original_clip_for_compare.start_time) > 0.01:
+                        clip_positions[clip_id] = start_time
                 
                 # Use original clip as base for metadata, or create minimal structure
                 if original_clip:
@@ -191,18 +267,68 @@ async def get_editor_data(
                         "trimEnd": trim_end if trim_end is not None else duration,
                     }
         else:
-            # No splits, just extract trim state
+            # No splits, but may have trims - update clip durations and extract trim state
+            # Create a new list to avoid modifying original_clips directly
+            clips = [ClipInfo(
+                clip_id=clip.clip_id,
+                scene_number=clip.scene_number,
+                original_path=clip.original_path,
+                clip_url=clip.clip_url,
+                duration=clip.duration,
+                start_time=clip.start_time,
+                end_time=clip.end_time,
+                thumbnail_url=clip.thumbnail_url,
+                text_overlay=clip.text_overlay,
+            ) for clip in original_clips]
+            
             for clip_state in clips_state:
                 clip_id = clip_state.get("id")
                 trim_start = clip_state.get("trim_start")
                 trim_end = clip_state.get("trim_end")
-                if clip_id and (trim_start is not None or trim_end is not None):
-                    original_clip = next((c for c in original_clips if c.clip_id == clip_id), None)
-                    if original_clip:
+                
+                # Find the corresponding clip
+                clip_index = next((i for i, c in enumerate(clips) if c.clip_id == clip_id), None)
+                if clip_index is not None:
+                    original_clip = clips[clip_index]
+                    original_duration = original_clip.duration  # Store original duration before modification
+                    
+                    # If trim values exist, update the clip's duration and end_time
+                    if trim_start is not None and trim_end is not None:
+                        # Update clip duration to reflect trim
+                        trimmed_duration = trim_end - trim_start
+                        # Use start_time from clip_state if available, otherwise use original
+                        clip_start_time = clip_state.get("start_time", original_clip.start_time)
+                        clips[clip_index] = ClipInfo(
+                            clip_id=original_clip.clip_id,
+                            scene_number=original_clip.scene_number,
+                            original_path=original_clip.original_path,
+                            clip_url=original_clip.clip_url,
+                            duration=trimmed_duration,
+                            start_time=clip_start_time,
+                            end_time=clip_start_time + trimmed_duration,
+                            thumbnail_url=original_clip.thumbnail_url,
+                            text_overlay=original_clip.text_overlay,
+                        )
+                    
+                    # Extract trim state for UI (use original duration for trimEnd default)
+                    if trim_start is not None or trim_end is not None:
                         trim_state[clip_id] = {
                             "trimStart": trim_start if trim_start is not None else 0.0,
-                            "trimEnd": trim_end if trim_end is not None else original_clip.duration,
+                            "trimEnd": trim_end if trim_end is not None else original_duration,
                         }
+                    
+                    # Extract track assignment and position from clip_state
+                    track_index = clip_state.get("track_index")
+                    if track_index is not None:
+                        track_assignments[clip_id] = track_index
+                    
+                    # If start_time differs from original, it's a position override
+                    clip_start_time = clip_state.get("start_time")
+                    if clip_start_time is not None:
+                        # Find original clip to compare
+                        original_clip = next((c for c in original_clips if c.clip_id == clip_id), None)
+                        if original_clip and abs(clip_start_time - original_clip.start_time) > 0.01:
+                            clip_positions[clip_id] = clip_start_time
     
     # Calculate total duration from clips
     total_duration = sum(clip.duration for clip in clips) if clips else 0.0
@@ -226,6 +352,8 @@ async def get_editor_data(
         aspect_ratio=generation.aspect_ratio or "9:16",
         framework=generation.framework,
         trim_state=trim_state if trim_state else None,
+        track_assignments=track_assignments if track_assignments else None,
+        clip_positions=clip_positions if clip_positions else None,
     )
 
 
@@ -584,6 +712,124 @@ async def merge_clips(
             detail={
                 "error": {
                     "code": "INVALID_MERGE_REQUEST",
+                    "message": str(e)
+                }
+            }
+        )
+
+
+@router.post("/editor/{generation_id}/position", response_model=UpdateClipPositionResponse, status_code=status.HTTP_200_OK)
+async def update_clip_position_endpoint(
+    generation_id: str,
+    request: UpdateClipPositionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> UpdateClipPositionResponse:
+    """
+    Update clip position and track assignment.
+    
+    This endpoint:
+    - Verifies user ownership of the generation
+    - Updates clip position (start_time) and track_index in editing session
+    - Returns updated clip information
+    
+    Args:
+        generation_id: UUID of the generation to edit
+        request: UpdateClipPositionRequest with clip_id, start_time, and track_index
+        current_user: Authenticated user (from JWT)
+        db: Database session
+        
+    Returns:
+        UpdateClipPositionResponse with updated clip information
+        
+    Raises:
+        HTTPException: 404 if generation or clip not found
+        HTTPException: 403 if user doesn't own the generation
+    """
+    logger.info(
+        f"User {current_user.id} requesting position update for clip {request.clip_id} "
+        f"in generation {generation_id}"
+    )
+    
+    # Load generation record
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        logger.warning(f"Generation {generation_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Verify user ownership
+    if generation.user_id != current_user.id:
+        logger.warning(
+            f"User {current_user.id} attempted to update clip position in generation {generation_id} "
+            f"owned by {generation.user_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to edit this generation"
+                }
+            }
+        )
+    
+    # Require an existing editing session
+    editing_session = (
+        db.query(EditingSession)
+        .filter(EditingSession.generation_id == generation_id)
+        .filter(EditingSession.user_id == current_user.id)
+        .first()
+    )
+    
+    if not editing_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "EDITING_SESSION_NOT_FOUND",
+                    "message": "Editing session not found"
+                }
+            },
+        )
+    
+    try:
+        # Update clip position
+        updated_clip = update_clip_position(
+            editing_session=editing_session,
+            clip_id=request.clip_id,
+            new_start_time=request.start_time,
+            new_track_index=request.track_index,
+            db=db
+        )
+        
+        logger.info(
+            f"Successfully updated clip {request.clip_id} position in generation {generation_id}: "
+            f"start_time={request.start_time}, track_index={request.track_index}"
+        )
+        
+        return UpdateClipPositionResponse(
+            message="Clip position updated successfully",
+            clip_id=request.clip_id,
+            start_time=request.start_time,
+            track_index=request.track_index,
+            updated_state=editing_session.editing_state,
+        )
+    except ValueError as e:
+        logger.warning(f"Invalid position update request for clip {request.clip_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "INVALID_POSITION",
                     "message": str(e)
                 }
             }

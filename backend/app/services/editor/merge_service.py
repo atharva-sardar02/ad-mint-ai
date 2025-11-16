@@ -173,6 +173,9 @@ def apply_merge_to_editing_session(
     # Generate new clip ID for merged clip
     merged_clip_id = f"merged-{str(uuid.uuid4())[:8]}"
     
+    # Preserve track_index from first clip (clips being merged should be on same track)
+    merged_track_index = clips_to_merge[0].get("track_index", 0) if clips_to_merge else 0
+    
     # Create merged clip
     merged_clip = {
         "id": merged_clip_id,
@@ -185,6 +188,7 @@ def apply_merge_to_editing_session(
         "merged_with": clip_ids,  # Track which clips were merged
         "text_overlay": merged_text_overlay,
         "scene_number": merged_scene_number,
+        "track_index": merged_track_index,
     }
     
     # Replace clips with merged clip
