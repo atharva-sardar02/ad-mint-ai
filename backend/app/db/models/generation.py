@@ -35,9 +35,11 @@ class Generation(Base):
     scene_plan = Column(JSON, nullable=True)  # Scene breakdown JSON (ScenePlan)
     temp_clip_paths = Column(JSON, nullable=True)  # Array of temp video clip file paths
     cancellation_requested = Column(Boolean, default=False)  # Cancellation flag
+    parent_generation_id = Column(String(36), ForeignKey("generations.id"), nullable=True, index=True)  # Link to original generation for edited videos
     created_at = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
-    # Relationship
+    # Relationships
     user = relationship("User", back_populates="generations")
+    parent_generation = relationship("Generation", remote_side=[id], backref="edited_versions")
 

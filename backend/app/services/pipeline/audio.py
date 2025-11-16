@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.schemas.generation import ScenePlan
 
 from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip, afx
+from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ def add_audio_layer(
             if music_clip.duration > video_duration:
                 logger.debug(f"Trimming music from {music_clip.duration}s to {video_duration}s")
                 music_clip = music_clip.subclipped(0, video_duration)
-            elif music_clip.duration < video_duration:
+            elif music_clip.duration < video_duration and music_clip.duration > 0:
                 # Loop music if shorter than video (for MVP, just repeat once)
                 logger.debug(f"Music ({music_clip.duration}s) shorter than video ({video_duration}s), looping")
                 loops_needed = int(video_duration / music_clip.duration) + 1
@@ -105,7 +106,7 @@ def add_audio_layer(
             
             # Adjust music volume to 30%
             logger.debug("Adjusting music volume to 30%")
-            music_clip = music_clip.with_effects([afx.MultiplyVolume(0.3)])
+            music_clip = music_clip.with_effects([MultiplyVolume(0.3)])
         else:
             logger.info("No music file available - video will be exported without background music")
         
@@ -140,7 +141,7 @@ def add_audio_layer(
                     # Create SFX clips at each transition point
                     for transition_time in transition_times:
                         if transition_time < video_duration:  # Only if within video duration
-                            sfx_at_transition = base_sfx.set_start(transition_time)
+                            sfx_at_transition = base_sfx.with_start(transition_time)
                             sfx_clips.append(sfx_at_transition)
                             logger.debug(f"Added SFX at transition: {transition_time:.2f}s")
                 else:
@@ -157,7 +158,7 @@ def add_audio_layer(
                     sfx_clip = AudioFileClip(str(sfx_file))
                     if sfx_clip.duration > 0.5:
                         sfx_clip = sfx_clip.subclipped(0, 0.5)
-                    sfx_clip = sfx_clip.set_start(0)
+                    sfx_clip = sfx_clip.with_start(0)
                     sfx_clips.append(sfx_clip)
             except Exception as e:
                 logger.debug(f"Could not add sound effect at start: {e}")

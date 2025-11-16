@@ -64,7 +64,7 @@ def stitch_video_clips(
             # MoviePy will handle frame rate conversion
             if clip.fps and clip.fps != 24:
                 logger.debug(f"Normalizing clip {i} frame rate from {clip.fps} to 24 fps")
-                clip = clip.set_fps(24)
+                clip = clip.with_fps(24)
             
             clips.append(clip)
         
@@ -129,7 +129,7 @@ def stitch_video_clips(
         # Ensure consistent frame rate (24 fps default)
         if final_video.fps != 24:
             logger.debug(f"Setting final video frame rate to 24 fps (was {final_video.fps})")
-            final_video = final_video.set_fps(24)
+            final_video = final_video.with_fps(24)
         
         # Write output video
         output_path_obj = Path(output_path)

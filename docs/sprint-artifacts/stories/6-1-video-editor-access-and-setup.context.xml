@@ -1,0 +1,118 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>6</epicId>
+    <storyId>1</storyId>
+    <title>Video Editor Access and Setup</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/6-1-video-editor-access-and-setup.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to access a video editor from my completed video</iWant>
+    <soThat>I can edit and refine my generated video</soThat>
+    <tasks>
+      - Task 1: Create Editor Database Model (AC: 3)
+      - Task 2: Create Editor API Endpoint (AC: 3)
+      - Task 3: Extract Scene Clips from Generation (AC: 1, 3)
+      - Task 4: Create Editor Frontend Route (AC: 1, 2)
+      - Task 5: Add Edit Video Button to Video Detail Page (AC: 1)
+      - Task 6: Add Editor Tab to Navbar (AC: 2)
+      - Task 7: Create Gallery Panel Component (AC: 2)
+      - Task 8: Create Editor API Client (AC: 1, 2, 3)
+      - Task 9: Testing (AC: 1, 2, 3, 4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Editor Access from Video Detail Page: Given viewing completed video, When clicking "Edit Video" button, Then editor opens with video and scene clips, original preserved, Exit button returns to detail page
+    2. Editor Access from Navbar: Given authenticated, When clicking "Editor" tab, Then editor opens in empty state with gallery panel visible for video selection
+    3. Backend Editor Data Loading: Given user requests to edit video, When system processes request, Then verifies ownership, loads scene clips, returns metadata, creates editing session record
+    4. Original Video Preservation: Given accessing editor, When editor loads, Then original video file remains unchanged and backup reference maintained
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 6: Video Editing - Story 6.1" snippet="As a user, I want to access a video editor from my completed video, so that I can edit and refine my generated video. Editor Access: Given viewing completed video on detail page, When clicking 'Edit Video' button, Then editor opens and loads video with scene clips available, original preserved as backup." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="AC-EDIT-001, AC-EDIT-001B, AC-EDIT-001C" snippet="Editor access acceptance criteria: Access from video detail page with Edit Video button, access from navbar tab with empty state and gallery panel, backend verifies ownership and loads scene clips, creates editing session record. Original video preserved as backup." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="Data Models and Contracts" snippet="EditingSession model with id, generation_id (FK), user_id (FK), original_video_path, editing_state (JSON), status, timestamps. EditorDataResponse schema with generation_id, original_video_url, clips array, total_duration, aspect_ratio, framework." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="APIs and Interfaces" snippet="GET /api/editor/{generation_id} endpoint: Loads editor data, verifies ownership, returns clip information. Response includes generation_id, original_video_url, clips array with clip_id, scene_number, original_path, clip_url, duration, start_time, end_time, thumbnail_url, text_overlay metadata." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="Workflows and Sequencing" snippet="Editor Access Workflow: User clicks Edit Video button, frontend navigates to /editor/{generation_id}, calls GET /api/editor/{generation_id}, backend verifies ownership and loads clips, returns editor data, frontend renders editor interface. Gallery Integration: User selects video from gallery panel, frontend loads that video into editor." />
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-024: Video Editor Access" snippet="System shall provide an editor interface accessible from completed video detail page. Editor shall load video with all individual scene clips available for editing. Editor shall maintain original video as backup for restoration." />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure" snippet="Backend structure: app/api/routes/ for API routes, app/db/models/ for ORM models, app/schemas/ for Pydantic schemas, app/services/ for business logic. Frontend structure: src/routes/ for page components, src/components/ for reusable components, src/lib/ for API clients." />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Implementation Patterns" snippet="Naming conventions: React components PascalCase, API routes /api/* prefix, database tables snake_case. Error handling: PRD error format with code and message. Service layer pattern for business logic." />
+    </docs>
+    <code>
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="1-42" reason="Generation model contains temp_clip_paths (JSON) and scene_plan (JSON) fields needed to extract scene clips for editor. Model has user_id for ownership verification." />
+      <artifact path="backend/app/api/routes/auth.py" kind="route" symbol="get_current_user dependency" lines="16-66" reason="Authentication dependency pattern to reuse for editor endpoints. Shows JWT token verification and user retrieval from database." />
+      <artifact path="backend/app/api/routes/generations.py" kind="route" symbol="router, get_current_user" lines="1-50" reason="Example route file structure with authentication dependency. Shows pattern for protected endpoints with user ownership verification." />
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_current_user" lines="16-66" reason="FastAPI dependency for authentication. Reuse this pattern for editor endpoints to verify user ownership of generations." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="ScenePlan, Scene, GenerationListItem" lines="87-116" reason="Pydantic schemas for scene data. ScenePlan contains scenes array with scene_number, duration, visual_prompt. Reference for creating editor response schemas." />
+      <artifact path="backend/app/services/cost_tracking.py" kind="service" symbol="update_user_statistics_on_completion" reason="Service layer pattern example. Shows how to create service functions with database transactions, error handling, and logging. Follow this pattern for editor services." />
+      <artifact path="frontend/src/routes/VideoDetail.tsx" kind="component" symbol="VideoDetail" lines="1-50" reason="Video detail page component. Need to add Edit Video button here for completed videos. Shows component structure, state management, and navigation patterns." />
+      <artifact path="frontend/src/components/layout/Navbar.tsx" kind="component" symbol="Navbar" lines="1-207" reason="Navigation bar component. Need to add Editor tab between Gallery and Profile. Shows routing structure, authentication state checking, and mobile menu patterns." />
+      <artifact path="frontend/src/lib/services/generations.ts" kind="api-client" symbol="getGenerations" reason="API client pattern for frontend. Shows how to structure API calls with authentication, error handling, and TypeScript types. Reference for creating editorApi.ts." />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="httpx" version=">=0.24.0" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    Backend Framework: FastAPI with SQLAlchemy ORM. Use dependency injection for authentication (get_current_user). Database models use UUID primary keys, foreign key relationships, timestamps. API routes follow /api/* prefix pattern. Error responses use PRD format: {"error": {"code": "...", "message": "..."}}. Service layer pattern: business logic in app/services/ directory. Database transactions for atomicity. Frontend: React Router page-based routing. Local component state for editor UI, Zustand for global auth state. TypeScript for type safety. Component naming: PascalCase. API client pattern: centralized in src/lib/ with typed responses. Authentication: JWT token required for all editor endpoints. Verify user ownership on every request (check generation.user_id matches current_user.id). Original video files must never be modified, only referenced for backup.
+  </constraints>
+
+  <interfaces>
+    <interface name="GET /api/editor/{generation_id}" kind="REST endpoint" signature="GET /api/editor/{generation_id} - Headers: Authorization: Bearer {jwt_token} - Response 200: {generation_id, original_video_url, original_video_path, clips: [{clip_id, scene_number, original_path, clip_url, duration, start_time, end_time, thumbnail_url, text_overlay}], total_duration, aspect_ratio, framework} - Errors: 401 Unauthorized, 403 Not owner, 404 Generation not found" path="backend/app/api/routes/editor.py" />
+    <interface name="EditingSession Model" kind="SQLAlchemy ORM model" signature="class EditingSession(Base): id (String PK), generation_id (String FK), user_id (String FK), original_video_path (String), editing_state (JSON), status (String), created_at (DateTime), updated_at (DateTime), exported_video_path (String)" path="backend/app/db/models/editing_session.py" />
+    <interface name="EditorDataResponse Schema" kind="Pydantic model" signature="class EditorDataResponse(BaseModel): generation_id (str), original_video_url (str), original_video_path (str), clips (List[ClipInfo]), total_duration (float), aspect_ratio (str), framework (Optional[str])" path="backend/app/schemas/editor.py" />
+    <interface name="ClipInfo Schema" kind="Pydantic model" signature="class ClipInfo(BaseModel): clip_id (str), scene_number (int), original_path (str), clip_url (str), duration (float), start_time (float), end_time (float), thumbnail_url (Optional[str]), text_overlay (Optional[dict])" path="backend/app/schemas/editor.py" />
+    <interface name="get_current_user dependency" kind="FastAPI dependency" signature="def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> User" path="backend/app/api/deps.py" />
+    <interface name="Editor Component" kind="React component" signature="export const Editor: React.FC = () => { ... } - Props: route params (generationId optional) - Routes: /editor (empty state), /editor/:generationId (with video loaded)" path="frontend/src/routes/Editor.tsx" />
+    <interface name="loadEditorData function" kind="TypeScript function" signature="export async function loadEditorData(generationId: string): Promise&lt;EditorData&gt; - Calls GET /api/editor/{generation_id} - Returns typed editor data - Handles errors (404, 403, network)" path="frontend/src/lib/editorApi.ts" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend testing uses pytest with FastAPI TestClient for integration tests. Test structure follows existing patterns in backend/tests/test_auth_routes.py and backend/tests/test_generations.py with dependency overrides for database session. Unit tests should test service functions (clip extraction, editing session creation, ownership verification) in isolation with mocked database sessions. Integration tests verify complete API flows: authentication → endpoint call → database operations → response. Use fixtures for test data (sample_user, sample_generation). Frontend testing uses Vitest with React Testing Library following patterns in frontend/src/__tests__/VideoDetail.test.tsx and frontend/src/__tests__/Gallery.test.tsx. Component tests should verify rendering, user interactions (button clicks, navigation), state management, and API call handling with mocked responses. Integration tests verify complete flows: page load → API call → display → navigation. All tests should use proper mocking of dependencies (API calls, localStorage, navigation via React Router). Test error cases: 404 (generation not found), 403 (not owner), network errors.
+    </standards>
+    <locations>
+      Backend tests: backend/tests/test_editor_service.py (new file to create), backend/tests/test_editor_routes.py (new file to create)
+      Frontend tests: frontend/src/__tests__/Editor.test.tsx (new file to create), frontend/src/__tests__/GalleryPanel.test.tsx (new file to create), frontend/src/__tests__/editorApi.test.ts (new file to create)
+      Test setup: backend/tests/conftest.py (existing), frontend/src/__tests__/setup.ts (existing)
+    </locations>
+    <ideas>
+      <test acId="AC-6.1.1" idea="Test Edit Video button appears on VideoDetail page for completed videos (status='completed') and navigates to /editor/{generation_id} route" />
+      <test acId="AC-6.1.1" idea="Test editor loads video data when accessed from video detail page, displays video player and scene clips" />
+      <test acId="AC-6.1.1" idea="Test Exit Editor button navigates back to video detail page" />
+      <test acId="AC-6.1.2" idea="Test Editor tab appears in Navbar when user is authenticated and navigates to /editor route (empty state)" />
+      <test acId="AC-6.1.2" idea="Test GalleryPanel component displays user's videos and allows selection to load into editor" />
+      <test acId="AC-6.1.3" idea="Test GET /api/editor/{generation_id} endpoint verifies user ownership (returns 403 if generation.user_id != current_user.id)" />
+      <test acId="AC-6.1.3" idea="Test GET /api/editor/{generation_id} extracts scene clips from generation.temp_clip_paths or scene_plan and returns correct clip information" />
+      <test acId="AC-6.1.3" idea="Test GET /api/editor/{generation_id} creates EditingSession record in database with correct generation_id and user_id" />
+      <test acId="AC-6.1.3" idea="Test GET /api/editor/{generation_id} returns 404 if generation not found" />
+      <test acId="AC-6.1.4" idea="Test original video path is preserved in EditingSession.original_video_path and never modified during editor access" />
+      <test acId="AC-6.1.4" idea="Test original video file remains unchanged after editor loads (verify file modification time)" />
+      <test acId="AC-6.1.3" idea="Unit test: editor_service.extract_clips_from_generation() correctly parses temp_clip_paths JSON array and builds ClipInfo objects" />
+      <test acId="AC-6.1.3" idea="Unit test: editor_service.extract_clips_from_generation() handles missing temp_clip_paths gracefully (returns empty array, logs warning)" />
+      <test acId="AC-6.1.3" idea="Integration test: Complete flow from VideoDetail page → Edit Video button → Editor component → API call → display video and clips" />
+    </ideas>
+  </tests>
+</story-context>
+

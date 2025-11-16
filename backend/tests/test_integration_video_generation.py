@@ -95,7 +95,7 @@ async def test_complete_flow_scene_plan_to_clips_with_overlays(sample_scene_plan
                     mock_text_clip = MagicMock()
                     mock_text_clip.h = 100
                     mock_text_clip.set_duration.return_value = mock_text_clip
-                    mock_text_clip.set_position.return_value = mock_text_clip
+                    mock_text_clip.with_position.return_value = mock_text_clip
                     mock_text_clip.fx.return_value = mock_text_clip
                     mock_text.return_value = mock_text_clip
                     

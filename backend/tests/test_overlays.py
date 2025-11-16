@@ -59,8 +59,6 @@ def test_get_shadow_color():
 
 def test_apply_animation_fade_in(sample_text_overlay):
     """Test fade in animation."""
-    from moviepy.editor import TextClip
-    
     # Mock TextClip
     with patch('app.services.pipeline.overlays.TextClip') as mock_text_clip:
         mock_clip = MagicMock()
@@ -79,12 +77,10 @@ def test_apply_animation_fade_in(sample_text_overlay):
 
 def test_position_text_clip_top(mock_video_clip, sample_text_overlay):
     """Test positioning text at top."""
-    from moviepy.editor import TextClip
-    
     with patch('app.services.pipeline.overlays.TextClip') as mock_text_clip:
         mock_text = MagicMock()
         mock_text.h = 100
-        mock_text.set_position.return_value = mock_text
+        mock_text.with_position.return_value = mock_text
         mock_text_clip.return_value = mock_text
         
         positioned = _position_text_clip(
@@ -94,17 +90,15 @@ def test_position_text_clip_top(mock_video_clip, sample_text_overlay):
         )
         
         assert positioned is not None
-        mock_text.set_position.assert_called_once()
+        mock_text.with_position.assert_called_once()
 
 
 def test_position_text_clip_center(mock_video_clip, sample_text_overlay):
     """Test positioning text at center."""
-    from moviepy.editor import TextClip
-    
     with patch('app.services.pipeline.overlays.TextClip') as mock_text_clip:
         mock_text = MagicMock()
         mock_text.h = 100
-        mock_text.set_position.return_value = mock_text
+        mock_text.with_position.return_value = mock_text
         mock_text_clip.return_value = mock_text
         
         positioned = _position_text_clip(
@@ -114,17 +108,15 @@ def test_position_text_clip_center(mock_video_clip, sample_text_overlay):
         )
         
         assert positioned is not None
-        mock_text.set_position.assert_called_once()
+        mock_text.with_position.assert_called_once()
 
 
 def test_position_text_clip_bottom(mock_video_clip, sample_text_overlay):
     """Test positioning text at bottom."""
-    from moviepy.editor import TextClip
-    
     with patch('app.services.pipeline.overlays.TextClip') as mock_text_clip:
         mock_text = MagicMock()
         mock_text.h = 100
-        mock_text.set_position.return_value = mock_text
+        mock_text.with_position.return_value = mock_text
         mock_text_clip.return_value = mock_text
         
         positioned = _position_text_clip(
@@ -134,7 +126,7 @@ def test_position_text_clip_bottom(mock_video_clip, sample_text_overlay):
         )
         
         assert positioned is not None
-        mock_text.set_position.assert_called_once()
+        mock_text.with_position.assert_called_once()
 
 
 @pytest.mark.skip(reason="Requires actual video file and MoviePy - integration test")

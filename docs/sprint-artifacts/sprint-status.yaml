@@ -69,13 +69,13 @@ development_status:
   5-2-user-stats-update: done
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-video-editor-access-and-setup: backlog
-  6-2-timeline-interface: backlog
-  6-3-clip-trimming: backlog
-  6-4-clip-splitting: backlog
-  6-5-clip-merging: backlog
-  6-6-editor-save-and-export: backlog
+  epic-6: contexted
+  6-1-video-editor-access-and-setup: done
+  6-2-timeline-interface: done
+  6-3-clip-trimming: done
+  6-4-clip-splitting: done
+  6-5-clip-merging: done
+  6-6-editor-save-and-export: done
   epic-6-retrospective: optional
 
   epic-7: backlog
