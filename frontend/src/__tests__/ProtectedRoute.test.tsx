@@ -9,7 +9,6 @@ import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuthStore } from "../store/authStore";
 
 // Mock react-router-dom Navigate component
-const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return {

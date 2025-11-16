@@ -5,7 +5,7 @@
 import apiClient from "./apiClient";
 import { API_ENDPOINTS } from "./config";
 import type { ApiError } from "./types/api";
-import { AuthError, NetworkError } from "./types/api";
+import { NetworkError } from "./types/api";
 
 /**
  * User type matching the backend User model.

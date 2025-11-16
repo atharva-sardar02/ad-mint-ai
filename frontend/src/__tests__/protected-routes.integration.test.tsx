@@ -131,7 +131,7 @@ describe("Protected Routes Integration Tests", () => {
     });
 
     it("should default to /dashboard when no saved URL exists", () => {
-      const mockLocation = {
+      const mockLocation: { state: { from?: string } | null; pathname: string } = {
         state: null,
         pathname: "/login",
       };

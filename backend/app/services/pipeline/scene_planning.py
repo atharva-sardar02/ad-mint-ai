@@ -4,7 +4,7 @@ Scene planning module that processes LLM output and generates enriched scene pla
 import logging
 from typing import Dict, List
 
-from app.schemas.generation import AdSpecification, Scene, ScenePlan
+from app.schemas.generation import AdSpecification, Scene, ScenePlan, TextOverlay
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +156,71 @@ def _adjust_durations(scenes: List[Scene], target_duration: int) -> List[Scene]:
         ))
     
     return adjusted_scenes
+
+
+def create_basic_scene_plan_from_prompt(
+    prompt: str, 
+    target_duration: int = 15,
+    num_scenes: int = 3
+) -> ScenePlan:
+    """
+    Create a basic scene plan directly from user prompt without LLM enhancement.
+    Used when LLM layer is disabled.
+    
+    Args:
+        prompt: User's text prompt
+        target_duration: Target total duration in seconds (default: 15)
+        num_scenes: Number of scenes to create (default: 3, max 5)
+    
+    Returns:
+        ScenePlan: Basic scene plan with scenes generated from prompt
+    """
+    logger.info(f"Creating basic scene plan from prompt (no LLM): {prompt[:100]}...")
+    
+    # Limit num_scenes to valid range
+    num_scenes = max(3, min(5, num_scenes))
+    
+    # Calculate duration per scene
+    duration_per_scene = max(3, min(7, target_duration // num_scenes))
+    remaining_duration = target_duration - (duration_per_scene * (num_scenes - 1))
+    
+    # Create simple scenes from prompt
+    scenes = []
+    for i in range(1, num_scenes + 1):
+        # Use the prompt as visual prompt, with slight variations
+        if i == 1:
+            visual_prompt = f"{prompt}. Opening scene, establishing shot, cinematic quality"
+        elif i == num_scenes:
+            visual_prompt = f"{prompt}. Closing scene, call to action, professional finish"
+        else:
+            visual_prompt = f"{prompt}. Scene {i}, dynamic composition, engaging visuals"
+        
+        # Determine duration (last scene gets remaining duration)
+        scene_duration = remaining_duration if i == num_scenes else duration_per_scene
+        
+        scene = Scene(
+            scene_number=i,
+            scene_type=f"Scene {i}",
+            visual_prompt=visual_prompt,
+            text_overlay=TextOverlay(
+                text="" if i < num_scenes else "Learn More",
+                position="bottom" if i < num_scenes else "center",
+                font_size=48,
+                color="#FFFFFF",
+                animation="fade_in"
+            ),
+            duration=scene_duration
+        )
+        scenes.append(scene)
+    
+    scene_plan = ScenePlan(
+        scenes=scenes,
+        total_duration=sum(scene.duration for scene in scenes),
+        framework="AIDA"  # Default framework when LLM is disabled
+    )
+    
+    logger.info(f"Basic scene plan created: {len(scenes)} scenes, {scene_plan.total_duration}s total")
+    return scene_plan
 
 
 # ScenePlan is imported from app.schemas.generation

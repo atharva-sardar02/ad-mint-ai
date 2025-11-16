@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 from moviepy import VideoFileClip
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 # Output directories
@@ -114,9 +116,43 @@ def export_final_video(
         video.close()
         graded_video.close()
         
-        # Return relative paths (for database storage)
-        video_url = f"videos/{video_filename}"
-        thumbnail_url = f"thumbnails/{thumbnail_filename}"
+        # Upload to S3 if storage mode is S3
+        if settings.STORAGE_MODE == "s3":
+            try:
+                from app.services.storage.s3_storage import get_s3_storage
+                s3_storage = get_s3_storage()
+                
+                # Upload video to S3
+                video_s3_key = f"videos/{video_filename}"
+                s3_storage.upload_file(
+                    str(video_output_path),
+                    video_s3_key,
+                    content_type="video/mp4"
+                )
+                
+                # Upload thumbnail to S3
+                thumbnail_s3_key = f"thumbnails/{thumbnail_filename}"
+                s3_storage.upload_file(
+                    str(thumbnail_output_path),
+                    thumbnail_s3_key,
+                    content_type="image/jpeg"
+                )
+                
+                logger.info(f"Files uploaded to S3: {video_s3_key}, {thumbnail_s3_key}")
+                
+                # Return S3 keys (for database storage)
+                video_url = video_s3_key
+                thumbnail_url = thumbnail_s3_key
+                
+            except Exception as e:
+                logger.error(f"Failed to upload to S3, falling back to local paths: {e}")
+                # Fall back to local paths if S3 upload fails
+                video_url = f"videos/{video_filename}"
+                thumbnail_url = f"thumbnails/{thumbnail_filename}"
+        else:
+            # Return relative paths (for database storage)
+            video_url = f"videos/{video_filename}"
+            thumbnail_url = f"thumbnails/{thumbnail_filename}"
         
         logger.info(f"Final video exported successfully: {video_url}, thumbnail: {thumbnail_url}")
         return (video_url, thumbnail_url)
