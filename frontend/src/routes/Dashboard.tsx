@@ -13,7 +13,7 @@ import { BasicSettingsPanel } from "../components/basic/BasicSettingsPanel";
 import type { BasicSettings } from "../components/basic/BasicSettingsPanel";
 import { ParallelGenerationPanel } from "../components/generation";
 import { generationService } from "../lib/generationService";
-import type { StatusResponse, GenerateRequest, ComparisonType } from "../lib/generationService";
+import type { StatusResponse, GenerateRequest } from "../lib/generationService";
 import { useNavigate } from "react-router-dom";
 import { getUserProfile } from "../lib/userService";
 import type { UserProfile } from "../lib/types/api";
@@ -29,7 +29,7 @@ interface ValidationErrors {
  * Dashboard component with prompt input form for video generation.
  */
 export const Dashboard: React.FC = () => {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
 
   const [prompt, setPrompt] = useState("");
@@ -273,14 +273,15 @@ export const Dashboard: React.FC = () => {
    */
   const isValid = prompt.length >= MIN_PROMPT_LENGTH;
 
-  const handleLogout = () => {
-    // Clear polling before logout
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    logout();
-  };
+  // Logout handler reserved for future use
+  // const handleLogout = () => {
+  //   // Clear polling before logout
+  //   if (pollingIntervalRef.current) {
+  //     clearInterval(pollingIntervalRef.current);
+  //     pollingIntervalRef.current = null;
+  //   }
+  //   logout();
+  // };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -296,8 +297,15 @@ export const Dashboard: React.FC = () => {
     // Validate coherence settings
     const coherenceErrors = validateCoherenceSettings(coherenceSettings);
     if (Object.keys(coherenceErrors).length > 0) {
+      // Convert ValidationErrors to string map (filter out undefined)
+      const coherenceErrorsString: { [key: string]: string } = {};
+      Object.entries(coherenceErrors).forEach(([key, value]) => {
+        if (value) {
+          coherenceErrorsString[key] = value;
+        }
+      });
       setErrors({
-        coherence_settings: coherenceErrors,
+        coherence_settings: coherenceErrorsString,
       });
       return;
     }
@@ -358,7 +366,7 @@ export const Dashboard: React.FC = () => {
   /**
    * Handle parallel generation submission.
    */
-  const handleParallelSubmit = async (variations: GenerateRequest[], comparisonType: ComparisonType) => {
+  const handleParallelSubmit = async (variations: GenerateRequest[], comparisonType: "settings" | "prompt") => {
     setIsLoading(true);
     setApiError("");
     setErrors({});

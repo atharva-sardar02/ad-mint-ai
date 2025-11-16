@@ -86,6 +86,8 @@ export const authService = {
       }
 
       throwNetworkError();
+      // Unreachable, but satisfies TypeScript
+      throw new Error("Unexpected error");
     }
   },
 
@@ -121,6 +123,8 @@ export const authService = {
       }
 
       throwNetworkError();
+      // Unreachable, but satisfies TypeScript
+      throw new Error("Unexpected error");
     }
   },
 
@@ -162,6 +166,8 @@ export const authService = {
       }
 
       throwNetworkError();
+      // Unreachable, but satisfies TypeScript
+      throw new Error("Unexpected error");
     }
   },
 };

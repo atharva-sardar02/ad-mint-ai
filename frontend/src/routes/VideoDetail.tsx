@@ -52,7 +52,7 @@ export const VideoDetail: React.FC = () => {
     original?: GenerationListItem;
     edited?: GenerationListItem[];
   }>({});
-  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [_loadingVersions, setLoadingVersions] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -437,7 +437,7 @@ export const VideoDetail: React.FC = () => {
                   {/* View Original button (if viewing edited version) */}
                   {relatedVersions.original && (
                     <Button
-                      onClick={() => navigate(`/gallery/${relatedVersions.original.id}`)}
+                      onClick={() => navigate(`/gallery/${relatedVersions.original!.id}`)}
                       variant="secondary"
                       className="text-sm"
                     >
