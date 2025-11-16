@@ -1,4 +1,4 @@
-# generated: 2025-11-14 17:05
+# generated: 2025-11-15 18:04
 # project: ad-mint-ai
 # project_key: 
 # tracking_system: file-system
@@ -29,7 +29,7 @@
 # - SM typically drafts next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
 
-generated: 2025-11-14 17:05
+generated: 2025-11-15 18:04
 project: ad-mint-ai
 project_key: 
 tracking_system: file-system
@@ -79,9 +79,15 @@ development_status:
   6-6-editor-save-and-export: backlog
   epic-6-retrospective: optional
 
-  epic-7: backlog
-  7-1-video-coherence-analysis: backlog
-  7-2-coherence-enhancement: backlog
-  7-3-llm-powered-prompt-optimization: backlog
-  7-4-quality-feedback-loop: backlog
+  epic-7: contexted
+  7-0-coherence-settings-ui-panel: ready-for-dev
+  7-1-seed-control-and-latent-reuse-for-visual-coherence: backlog
+  7-2-llm-guided-multi-scene-planning-videodirectorgpt-style: backlog
+  7-3-ip-adapter-integration-for-characterproduct-identity-preservation: backlog
+  7-4-lora-training-pipeline-for-recurring-characterproduct-identity: backlog
+  7-5-vbench-integration-for-automated-quality-control: backlog
+  7-6-enhanced-post-processing-with-brand-palette-preservation: backlog
+  7-7-cross-scene-entity-consistency-detection-csfd-score: backlog
+  7-8-controlnet-integration-for-compositional-consistency: backlog
+  7-9-quality-feedback-loop-with-research-metrics: backlog
   epic-7-retrospective: optional

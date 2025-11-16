@@ -1037,194 +1037,681 @@ So that I can preserve my work and download the final result.
 
 ---
 
-## Epic 7: Video Quality Optimization
+## Epic 7: Multi-Scene Coherence & Quality Optimization
 
-**Goal:** Automatically enhance video quality through coherence analysis, visual consistency improvements, and LLM-powered prompt optimization to deliver the best possible video output.
+**Goal:** Implement state-of-the-art generation-time consistency techniques and automated quality control to ensure professional multi-scene video coherence—the core differentiator for professional ad generation. This epic incorporates bleeding-edge research techniques prioritizing prevention (generation-time consistency) over correction (post-processing).
 
-### Story 7.1: Video Coherence Analysis
+**Scope:** 
+- **MVP (Stories 7.0-7.4):** Core coherence techniques essential for professional quality
+- **Growth (Stories 7.5-7.9):** Advanced quality control and optimization (nice-to-have)
+- Story 7.0 (Settings UI) is primarily a developer tool for iteration and testing
 
-As a developer,
-I want to automatically analyze visual consistency across video clips,
-So that the system can identify and improve coherence issues.
-
-**Acceptance Criteria:**
-
-**Coherence Analysis:**
-**Given** a video with multiple clips has been generated
-**When** the coherence analysis service processes it
-**Then** it analyzes:
-- Color consistency across clips (hue, saturation, brightness)
-- Lighting consistency (exposure, shadows, highlights)
-- Visual style consistency (texture, sharpness, grain)
-- Motion consistency (camera movement, object motion)
-- Narrative flow and visual continuity
-
-**Analysis Output:**
-**Given** coherence analysis completes
-**When** the system processes results
-**Then** it generates:
-- Coherence score (0-100) indicating overall consistency
-- List of detected inconsistencies with severity levels
-- Optimal transition points between clips
-- Recommendations for enhancement adjustments
-
-**Integration:**
-**Given** coherence analysis is implemented
-**When** a video generation completes
-**Then** the system:
-- Automatically runs coherence analysis (optional, can be triggered manually)
-- Stores analysis results in database
-- Makes results available for enhancement service
-
-**Prerequisites:** Story 3.3 (Video Assembly)
-
-**Technical Notes:**
-- Use OpenCV for color analysis (histogram comparison, color space analysis)
-- Implement lighting analysis (exposure detection, shadow/highlight detection)
-- Use computer vision techniques for style consistency (texture analysis, edge detection)
-- Create coherence_analysis table to store results, implement analysis service module
-
----
-
-### Story 7.2: Coherence Enhancement
+### Story 7.0: Coherence Settings UI Panel [MVP - Dev Tool]
 
 As a developer,
-I want to automatically apply enhancements to improve video coherence,
-So that the final video has smooth, consistent visual flow.
+I want to see and control which coherence techniques are applied to video generation,
+So that I can iterate on videos, test different settings, and optimize quality during development.
 
 **Acceptance Criteria:**
 
-**Automatic Enhancement:**
-**Given** coherence analysis has identified inconsistencies
-**When** the enhancement service processes the video
-**Then** it automatically applies:
-- Color grading adjustments to match clips (adjust hue, saturation, brightness)
-- Transition optimizations for smoother visual flow (crossfade duration, easing)
-- Lighting adjustments (exposure correction, contrast normalization)
-- Style normalization (texture matching, sharpness adjustment)
+**Coherence Settings Panel (Dev Tool):**
+**Given** I am a developer testing video generation
+**When** I view the generation form or dev dashboard
+**Then** I see a coherence settings panel with checkboxes for:
+- ☑ Seed Control (enabled by default, recommended)
+- ☑ IP-Adapter for Character/Product Consistency (enabled by default if entities detected)
+- ☐ LoRA Training (disabled by default, requires trained LoRA)
+- ☑ Enhanced LLM Planning (enabled by default, recommended)
+- ☑ VBench Quality Control (enabled by default, recommended)
+- ☑ Post-Processing Enhancement (enabled by default, recommended)
+- ☐ ControlNet for Compositional Consistency (disabled by default, advanced)
+- ☐ CSFD Character Consistency Detection (disabled by default, character-driven ads only)
 
-**Brand Guideline Preservation:**
-**Given** enhancements are being applied
-**When** the system processes adjustments
-**Then** it:
-- Maintains brand color guidelines from original generation
-- Preserves intended visual style and mood
-- Applies enhancements within acceptable ranges
-- Does not over-correct or change artistic intent
-
-**Enhancement Application:**
-**Given** enhancements are ready to apply
-**When** the system processes the video
-**Then** it:
-- Applies enhancements during video stitching phase (or post-processing)
-- Processes clips individually before final assembly
-- Maintains video quality (no degradation, 1080p minimum)
-- Completes enhancement in reasonable time (<30 seconds for 15s video)
-
-**Prerequisites:** Story 7.1, Story 3.3
-
-**Technical Notes:**
-- Use OpenCV/MoviePy for color grading, implement color matching algorithms
-- Apply LUTs (Look-Up Tables) for consistent color grading, use histogram matching
-- Optimize transitions based on analysis, adjust crossfade durations dynamically
-- Integrate with video stitching pipeline, apply enhancements before final export
-
----
-
-### Story 7.3: LLM-Powered Prompt Optimization
-
-As a user,
-I want my prompts to be optimized by AI,
-So that I get better quality videos from my initial ideas.
-
-**Acceptance Criteria:**
-
-**Prompt Optimization Request:**
-**Given** I am on the video generation page
-**When** I enter a prompt and click "Optimize Prompt" (optional button)
-**Then** the system:
-- Sends my prompt to LLM (GPT-4/Claude) for analysis
-- Analyzes prompt for clarity, specificity, and visual generation potential
-- Generates an optimized version of my prompt
-
-**Optimized Prompt Features:**
-**Given** the LLM has analyzed my prompt
-**When** it generates the optimized version
-**Then** it includes:
-- Relevant visual style keywords (cinematic, vibrant, minimalist, etc.)
-- Composition and framing details (close-up, wide shot, angle specifications)
-- Brand-appropriate descriptive elements (luxury, tech, eco-friendly, etc.)
-- Enhanced product feature descriptions (more specific, visual-focused)
-- Improved scene-by-scene visual prompts (if multi-scene)
-
-**Optimization Presentation:**
-**Given** an optimized prompt has been generated
-**When** the system presents it to me
+**Settings Display:**
+**Given** I view the coherence settings panel
+**When** I examine each option
 **Then** I see:
-- Original prompt displayed
-- Optimized prompt displayed with highlighted improvements
-- Explanation of what was improved and why
-- Option to accept, modify, or reject the optimized prompt
+- Checkbox/toggle for each technique
+- Brief description of what each technique does
+- Default state (enabled/disabled)
+- Estimated impact on generation time (if applicable)
+- Estimated impact on cost (if applicable)
+- Tooltip with more details on hover/click
 
-**Prompt Usage:**
-**Given** I have accepted an optimized prompt
-**When** I proceed with video generation
-**Then** the system uses the optimized prompt for generation
-**And** the optimized prompt is stored with the generation record
+**Settings Persistence:**
+**Given** I configure coherence settings
+**When** I submit the video generation
+**Then** the system:
+- Sends selected settings to backend API
+- Stores settings with generation record
+- Applies only selected techniques during generation
+- Remembers my preferences for next generation (optional)
+
+**Settings Validation:**
+**Given** I configure coherence settings
+**When** I select/deselect options
+**Then** the system:
+- Shows dependencies (e.g., "IP-Adapter requires Enhanced Planning")
+- Disables incompatible options
+- Shows warnings for recommended combinations
+- Validates settings before submission
 
 **Prerequisites:** Story 3.1 (Prompt Processing)
 
 **Technical Notes:**
-- Create prompt optimization service, integrate with LLM API (OpenAI/Claude)
-- Design prompt optimization prompt template, analyze user input for improvement opportunities
-- Create UI component for prompt optimization, show before/after comparison
-- Store optimization history, track which optimizations lead to better results
+- Create `CoherenceSettingsPanel` React component
+- Add to Dashboard page, expandable/collapsible section
+- Use checkboxes or toggles for each technique
+- Store settings in component state, send to API with generation request
+- Backend: Add `coherence_settings` JSON field to generation model
+- Default settings: Enable recommended techniques, disable advanced/optional ones
+- Show estimated cost impact for each technique (time is not a constraint, quality is priority)
+- Add tooltips/help text explaining each technique
 
 ---
 
-### Story 7.4: Quality Feedback Loop
+### Story 7.1: Seed Control and Latent Reuse for Visual Coherence [MVP]
 
 As a developer,
-I want the system to learn from video quality outcomes,
-So that prompt optimization and coherence enhancement improve over time.
+I want to implement seed control and latent reuse across all scenes in a video,
+So that the generated clips maintain consistent visual "DNA" and seamless transitions.
 
 **Acceptance Criteria:**
 
-**Quality Metrics Tracking:**
-**Given** a video has been generated
-**When** the system processes quality metrics
-**Then** it tracks:
-- Coherence score from analysis (Story 7.1)
-- Visual consistency metrics
-- User acceptance rate (did user download/use the video?)
-- Regeneration rate (did user regenerate with same prompt?)
-- User feedback (if rating system exists)
-
-**Learning from Outcomes:**
-**Given** quality metrics are being tracked
-**When** the system analyzes patterns
+**Seed Control:**
+**Given** a video generation with multiple scenes is initiated
+**When** the system generates video clips for each scene
 **Then** it:
-- Identifies which prompt optimizations lead to better results
-- Learns which coherence enhancements are most effective
-- Adjusts optimization algorithms based on successful outcomes
-- Refines enhancement parameters based on user preferences
+- Checks if seed control is enabled in coherence settings (default: enabled)
+- Uses the same random seed for all scenes in the video (if enabled)
+- Ensures the underlying latent structure is linked across scenes
+- Maintains base level of visual similarity through shared seed
+- Stores seed value with generation record for reproducibility
+- Skips seed control if disabled by user
 
-**Continuous Improvement:**
-**Given** the feedback loop is active
-**When** new videos are generated
+**Latent Reuse:**
+**Given** scenes are being generated sequentially
+**When** transitioning between scenes that should be continuous
 **Then** the system:
-- Applies learned improvements to new generations
-- Refines prompt optimization suggestions
-- Adjusts coherence enhancement algorithms
-- Improves overall video quality over time
+- Initializes the latent noise for a new scene with the final latent state of the previous scene
+- Creates seamless visual continuity between linked scenes
+- Applies latent reuse only when scenes are marked as continuous in the scene plan
+- Maintains temporal coherence for long continuous narratives
 
-**Prerequisites:** Story 7.1, Story 7.2, Story 7.3
+**Visual Coherence:**
+**Given** seed control and latent reuse are implemented
+**When** a multi-scene video is generated
+**Then** the system:
+- Maintains consistent visual style across all scenes
+- Reduces style drift between clips
+- Creates smoother transitions between scenes
+- Improves overall multi-scene coherence score
+
+**Prerequisites:** Story 3.1 (Prompt Processing), Story 3.2 (Video Generation)
 
 **Technical Notes:**
-- Create quality_metrics table to store scores and outcomes
-- Implement analytics service to analyze patterns, use machine learning for pattern recognition (optional)
-- Update optimization algorithms based on data, A/B test different approaches
-- Store anonymized data for learning, respect user privacy
+- Implement seed management in video generation service, store seed per generation
+- Use same seed parameter across all Replicate API calls for scenes in same video
+- Implement latent reuse mechanism for continuous scenes (requires model support or post-processing)
+- For Replicate API: Use seed parameter in API calls, ensure seed persistence across scene generation
+- Store seed value in generation record for debugging and reproducibility
+- Document seed control strategy in technical documentation
+
+---
+
+### Story 7.2: LLM-Guided Multi-Scene Planning (VideoDirectorGPT-style) [MVP]
+
+As a developer,
+I want to enhance scene planning with VideoDirectorGPT-style consistency groupings and entity descriptions,
+So that the LLM generates explicit consistency markers and shot lists that ensure coherent multi-scene narratives.
+
+**Acceptance Criteria:**
+
+**Enhanced Scene Planning:**
+**Given** a user prompt is processed by the LLM
+**When** the scene planning module generates the video plan
+**Then** it includes:
+- Explicit consistency groupings for entities (e.g., "Character A must look the same in Scene 1 and Scene 3")
+- Entity descriptions with consistency requirements (product appearance, character identity, brand colors)
+- Shot list with detailed metadata:
+  - Shot number and scene number
+  - Shot description (action and composition)
+  - Duration/runtime
+  - Camera movement (pan, tilt, dolly, static)
+  - Shot size (wide, medium, close-up)
+  - Perspective (POV, over-shoulder, bird's eye)
+  - Lens type (35mm, 50mm, telephoto)
+- Scene dependencies and narrative flow markers
+- Consistency markers indicating which entities must remain consistent across scenes
+
+**Consistency Groupings:**
+**Given** the LLM has analyzed the prompt
+**When** it generates the video plan
+**Then** it:
+- Identifies all entities that appear in multiple scenes (characters, products, brand elements)
+- Creates consistency groups for each entity
+- Specifies visual requirements for each entity (colors, style, appearance)
+- Marks which scenes require entity consistency
+
+**Shot List Generation:**
+**Given** the scene plan includes shot list metadata
+**When** video clips are generated
+**Then** the system:
+- Uses shot list metadata to enhance visual prompts
+- Incorporates camera movement keywords in generation prompts
+- Applies framing and composition details from shot list
+- Maintains consistency based on shot list specifications
+
+**Integration:**
+**Given** enhanced scene planning is implemented
+**When** a video generation is initiated
+**Then** the system:
+- Checks if enhanced planning is enabled in coherence settings (default: enabled)
+- Uses enhanced planning output for all subsequent generation steps (if enabled)
+- Falls back to basic planning if disabled
+- Passes consistency markers to video generation service
+- Uses entity descriptions for IP-Adapter (Story 7.3) and seed control (Story 7.1)
+- Stores complete planning output in generation record
+
+**Prerequisites:** Story 3.1 (Prompt Processing)
+
+**Technical Notes:**
+- Enhance LLM prompt template to include VideoDirectorGPT-style planning instructions
+- Expand scene planning JSON schema to include:
+  - `consistency_groups`: Array of entities with scene appearances
+  - `shot_list`: Array of shots with camera metadata
+  - `entity_descriptions`: Detailed descriptions of entities requiring consistency
+- Update scene planner module to parse and utilize new planning structure
+- Integrate shot list metadata into visual prompt generation
+- Store enhanced planning output in database for analysis and debugging
+
+---
+
+### Story 7.3: IP-Adapter Integration for Character/Product Identity Preservation [MVP]
+
+As a developer,
+I want to implement IP-Adapter for identity preservation,
+So that characters and products maintain consistent appearance across multiple scenes without requiring model training.
+
+**Acceptance Criteria:**
+
+**IP-Adapter Implementation:**
+**Given** a video generation includes entities requiring consistency (characters, products)
+**When** the system generates video clips
+**Then** it:
+- Uses IP-Adapter to condition generation on reference images
+- Preserves facial features and identity for characters
+- Maintains product appearance across scenes
+- Applies identity preservation without requiring LoRA training
+
+**Reference Image Management:**
+**Given** entities require consistency
+**When** the system processes the scene plan
+**Then** it:
+- Identifies entities that need reference images (from consistency groupings)
+- Generates or retrieves reference images for each entity
+- Stores reference images in asset manager
+- Associates reference images with generation record
+
+**Identity Preservation:**
+**Given** reference images are available for entities
+**When** video clips are generated
+**Then** the system:
+- Uses IP-Adapter to inject reference image embeddings into generation process
+- Conditions each scene's generation on relevant entity reference images
+- Maintains identity consistency across all scenes featuring the entity
+- Handles multiple entities in the same scene
+
+**Integration:**
+**Given** IP-Adapter is implemented
+**When** a video generation includes character or product consistency requirements
+**Then** the system:
+- Checks if IP-Adapter is enabled in coherence settings (default: enabled if entities detected)
+- Automatically applies IP-Adapter when consistency groups are present and enabled
+- Falls back to standard generation when disabled or no consistency requirements exist
+- Logs IP-Adapter usage for cost and quality tracking
+- Stores reference images and IP-Adapter metadata with generation
+
+**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 3.2 (Video Generation)
+
+**Technical Notes:**
+- Research and select IP-Adapter implementation (diffusers library, ComfyUI workflows, or custom)
+- Implement reference image generation service (text-to-image for entities)
+- Create asset manager for storing and retrieving reference images
+- Integrate IP-Adapter with Replicate API or video generation service
+- For Replicate: Use image input parameters if supported, or pre-process with IP-Adapter locally
+- Handle IP-Adapter configuration (strength, conditioning) per entity
+- Document IP-Adapter usage patterns and best practices
+
+---
+
+### Story 7.4: LoRA Training Pipeline for Recurring Character/Product Identity [MVP]
+
+As a developer,
+I want to implement LoRA training infrastructure and pipeline for recurring characters and products,
+So that brand mascots, spokespersons, and flagship products maintain perfect visual consistency across unlimited future ads with a one-time training investment.
+
+**Acceptance Criteria:**
+
+**Infrastructure Setup:**
+**Given** the system needs to support LoRA training
+**When** infrastructure is provisioned
+**Then** it:
+- Sets up GPU infrastructure (local GPU, RunPod, Vast.ai, or AWS SageMaker)
+- Configures training environment with required dependencies (PyTorch, diffusers, peft, accelerate)
+- Establishes secure connection between training infrastructure and main application
+- Implements job queue system for async training requests
+- Sets up monitoring and logging for training jobs
+- Configures storage for training datasets and trained models
+- Implements cost tracking for GPU usage
+
+**LoRA Training Pipeline:**
+**Given** a user wants to train a LoRA for a recurring character or product
+**When** the system processes the training request
+**Then** it:
+- Accepts training images (multiple angles, expressions, poses, lighting conditions)
+- Validates training dataset (minimum images, quality requirements)
+- Queues training job in async job system
+- Trains LoRA model using the provided images on GPU infrastructure
+- Monitors training progress and provides status updates
+- Stores trained LoRA model as reusable asset
+- Associates LoRA with user account or brand
+- Sends notification when training completes
+
+**Training Dataset Management:**
+**Given** a user wants to train a character/product LoRA
+**When** they upload training images
+**Then** the system:
+- Accepts images in multiple formats (JPG, PNG, WebP)
+- Validates image quality and resolution (minimum 512x512 recommended)
+- Requires minimum dataset size (10-20 images recommended, minimum 5)
+- Supports dataset augmentation (optional, automatic cropping, resizing, normalization)
+- Stores training dataset in secure storage (S3 or local filesystem)
+- Provides dataset preview and validation feedback
+- Allows users to add/remove images before training starts
+
+**LoRA Model Training:**
+**Given** a validated training dataset is available
+**When** the LoRA training service processes it
+**Then** it:
+- Transfers dataset to GPU infrastructure securely
+- Trains LoRA model using appropriate base model (Stable Diffusion XL or compatible)
+- Configures training parameters (rank: 4-32, learning rate: 1e-4 to 5e-4, epochs: 10-20, batch size: 1-4)
+- Monitors training progress and loss (logs every N steps)
+- Validates trained LoRA quality (test generation with sample prompts)
+- Stores trained LoRA model file (.safetensors format)
+- Transfers trained model back to main application storage
+- Cleans up temporary files on GPU infrastructure
+
+**Example Training Workflow:**
+**Given** a user wants to train a LoRA for their brand mascot
+**When** they complete the training workflow
+**Then** the system:
+- Provides UI for uploading training images (drag-and-drop or file picker)
+- Shows example training images (demonstrates angles, expressions, poses needed)
+- Validates dataset and provides feedback (e.g., "Need 3 more images with different angles")
+- Shows estimated training time and cost
+- Starts training job and shows progress (0% → 100% with ETA)
+- Sends email/notification when training completes
+- Provides test generation interface to validate LoRA quality
+- Allows user to retrain if quality is insufficient
+
+**LoRA Usage in Generation:**
+**Given** a trained LoRA model exists for an entity
+**When** video clips are generated featuring that entity
+**Then** the system:
+- Loads appropriate LoRA model during generation
+- Applies LoRA conditioning to ensure entity consistency
+- Maintains perfect visual fidelity across all scenes
+- Handles multiple LoRAs in same scene (character + product)
+- Falls back to IP-Adapter if LoRA not available or disabled
+- Caches LoRA models in memory for performance (if possible)
+
+**LoRA Asset Management:**
+**Given** LoRA models are being used
+**When** the system manages LoRA assets
+**Then** it:
+- Stores LoRA models in asset library (S3 or local filesystem with backup)
+- Associates LoRAs with specific entities (character names, product IDs)
+- Allows users to manage their LoRA library (upload, delete, update, test)
+- Tracks LoRA usage across generations (analytics)
+- Provides LoRA versioning for updates (retrain and replace)
+- Implements access control (users can only access their own LoRAs)
+- Provides LoRA sharing capability (optional, for team workspaces)
+
+**Infrastructure Requirements:**
+**Given** LoRA training is production-ready
+**When** the system is deployed
+**Then** it:
+- Has GPU infrastructure available (NVIDIA H100, A100, RTX 4090+, or cloud equivalent)
+- Implements job queue system (Redis, RabbitMQ, or database-backed queue)
+- Has sufficient storage for datasets and models (100GB+ recommended)
+- Implements cost tracking and budget limits per user
+- Has monitoring and alerting for training failures
+- Implements retry logic for transient failures
+- Has backup and disaster recovery for trained models
+
+**Integration:**
+**Given** LoRA training pipeline is implemented
+**When** a video generation includes entities with trained LoRAs
+**Then** the system:
+- Checks if LoRA is enabled in coherence settings (default: disabled, user must enable)
+- Automatically applies LoRA when available and enabled (preferred over IP-Adapter)
+- Uses IP-Adapter as fallback if LoRA disabled or not trained
+- Logs LoRA usage for quality tracking
+- Stores LoRA metadata with generation record
+- Shows LoRA usage in generation history
+
+**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 7.3 (IP-Adapter)
+
+**Technical Notes:**
+- **Infrastructure Options:**
+  - **Local GPU:** Direct GPU access if available (fastest, most control)
+  - **RunPod:** Cloud GPU service with API integration (recommended for MVP)
+  - **Vast.ai:** Cost-effective GPU marketplace
+  - **AWS SageMaker:** Enterprise-grade training infrastructure
+  - **Hybrid:** Start with RunPod/Vast.ai, migrate to local if scale requires
+- **Training Framework:** Use Kohya_ss or PEFT library (Hugging Face)
+- **Base Models:** Support Stable Diffusion XL, AnimateDiff, SkyReels compatible models
+- **Training Parameters:** 
+  - Rank: 16-32 for characters, 8-16 for products (start with 16)
+  - Learning rate: 1e-4 (adjust based on results)
+  - Epochs: 15-20 (monitor loss, early stopping if overfitting)
+  - Batch size: 1-2 (GPU memory dependent)
+- **Storage:** Store .safetensors files in S3 or local filesystem with versioning
+- **Integration:** Load LoRA weights during video generation inference
+- **For Replicate API:** Evaluate LoRA support, may need self-hosted models or pre-processing
+- **Cost Management:** Track GPU hours, implement user budget limits, show cost estimates
+- **Example Training Dataset:** Provide sample images showing required variety (angles, expressions, poses)
+- **Documentation:** Create user guide for preparing training datasets, best practices
+
+---
+
+### Story 7.5: VBench Integration for Automated Quality Control [MVP]
+
+As a developer,
+I want to integrate VBench metrics for automated quality assessment,
+So that the system can automatically evaluate video quality and trigger regeneration for low-quality clips.
+
+**Acceptance Criteria:**
+
+**VBench Metrics Integration:**
+**Given** a video clip has been generated
+**When** the quality control service processes it
+**Then** it evaluates:
+- Temporal quality (subject consistency, background consistency, motion smoothness, dynamic degree)
+- Frame-wise quality (aesthetic quality, imaging quality, object class alignment)
+- Text-video alignment (prompt adherence)
+- Multiple objects assessment (if applicable)
+
+**Automated Quality Assessment:**
+**Given** VBench metrics are computed for a clip
+**When** the system processes the results
+**Then** it:
+- Generates quality scores for each dimension (0-100 scale)
+- Computes overall quality score
+- Compares scores against quality thresholds
+- Identifies clips falling below acceptable quality
+
+**Quality Threshold Triggers:**
+**Given** a clip's quality scores are below thresholds
+**When** the system evaluates the results
+**Then** it:
+- Automatically triggers regeneration for low-quality clips
+- Logs quality issues for analysis
+- Tracks regeneration attempts and success rates
+- Updates generation progress to reflect regeneration
+
+**Quality Dashboard:**
+**Given** quality metrics are being tracked
+**When** a video generation completes
+**Then** the system:
+- Checks if VBench quality control is enabled in coherence settings (default: enabled)
+- Runs VBench evaluation only if enabled
+- Stores all VBench scores in database
+- Makes quality metrics available via API
+- Displays quality scores in video detail page (optional)
+- Uses metrics for quality feedback loop (Story 7.9)
+
+**Prerequisites:** Story 3.2 (Video Generation)
+
+**Technical Notes:**
+- Research VBench implementation (GitHub: Vchitect/VBench)
+- Integrate VBench evaluation service into video generation pipeline
+- Implement quality threshold configuration (configurable per quality dimension)
+- Create quality_metrics table to store VBench scores per clip
+- Add quality assessment step after each clip generation
+- Implement automatic regeneration logic with retry limits
+- Document quality thresholds and regeneration policies
+
+---
+
+### Story 7.6: Enhanced Post-Processing with Brand Palette Preservation [MVP]
+
+As a developer,
+I want to enhance post-processing with brand-aware color grading and transition optimization,
+So that final videos maintain brand identity while improving visual coherence.
+
+**Acceptance Criteria:**
+
+**Brand-Aware Color Grading:**
+**Given** a video with brand color guidelines
+**When** post-processing applies color grading
+**Then** it:
+- Preserves brand color palette from original generation
+- Applies color matching between clips while maintaining brand colors
+- Uses histogram matching to normalize colors across scenes
+- Applies LUTs (Look-Up Tables) for consistent color grading
+- Maintains brand visual identity throughout video
+
+**Transition Optimization:**
+**Given** multiple clips are being stitched together
+**When** transitions are applied
+**Then** the system:
+- Optimizes crossfade durations based on scene analysis
+- Adjusts transition easing for smoother flow
+- Uses motion matching for seamless scene linking
+- Applies appropriate transition types (hard cut, crossfade, dissolve) based on scene relationship
+
+**Lighting and Style Normalization:**
+**Given** clips may have varying lighting and style
+**When** post-processing normalizes the video
+**Then** it:
+- Adjusts exposure to match across clips
+- Normalizes contrast and saturation
+- Applies texture matching for style consistency
+- Enhances sharpness uniformly
+- Maintains artistic intent while improving coherence
+
+**Integration:**
+**Given** enhanced post-processing is implemented
+**When** a video generation completes stitching
+**Then** the system:
+- Checks if post-processing enhancement is enabled in coherence settings (default: enabled)
+- Applies brand-aware color grading before final export (if enabled)
+- Optimizes transitions based on scene analysis (if enabled)
+- Normalizes lighting and style (if enabled)
+- Skips enhancements if disabled (uses basic post-processing)
+- Maintains video quality (no degradation, 1080p minimum)
+- Completes processing efficiently
+
+**Prerequisites:** Story 3.3 (Video Assembly), Story 7.5 (VBench Integration)
+
+**Technical Notes:**
+- Enhance existing post-processing service with brand palette awareness
+- Implement histogram matching algorithms using OpenCV
+- Create LUT generation for brand color palettes
+- Integrate transition optimization based on VBench motion smoothness scores
+- Use MoviePy and OpenCV for color grading and normalization
+- Store brand color guidelines in generation record for post-processing
+- Document color grading strategies and brand preservation techniques
+
+---
+
+### Story 7.7: Cross-Scene Entity Consistency Detection (CSFD Score) [MVP]
+
+As a developer,
+I want to implement CSFD (Cross-Scene Face Distance) scoring for character-driven ads,
+So that the system can quantify and ensure character consistency across multiple scenes.
+
+**Acceptance Criteria:**
+
+**CSFD Score Calculation:**
+**Given** a video with a main character appearing in multiple scenes
+**When** the consistency detection service processes it
+**Then** it:
+- Extracts face embeddings from each scene featuring the character
+- Computes pairwise distances between face embeddings
+- Calculates CSFD score (lower = better consistency)
+- Identifies scenes with character appearance drift
+
+**Character Consistency Assessment:**
+**Given** CSFD scores are computed for all character appearances
+**When** the system evaluates consistency
+**Then** it:
+- Determines if CSFD score is below acceptable threshold (<0.3 for excellent)
+- Flags scenes with high CSFD scores (character drift)
+- Provides recommendations for regeneration of inconsistent scenes
+- Tracks character consistency across all videos
+
+**Integration:**
+**Given** CSFD scoring is implemented
+**When** a character-driven video generation completes
+**Then** the system:
+- Checks if CSFD detection is enabled in coherence settings (default: disabled, character ads only)
+- Automatically runs CSFD analysis if enabled and character consistency groups are present
+- Skips CSFD analysis if disabled
+- Stores CSFD scores in quality_metrics table (if enabled)
+- Triggers regeneration for scenes exceeding CSFD threshold (optional, if enabled)
+- Makes CSFD scores available for quality feedback loop
+
+**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 7.5 (VBench Integration)
+
+**Technical Notes:**
+- Implement face detection and embedding extraction (ArcFace, FaceNet, or similar)
+- Use computer vision library (OpenCV, face_recognition) for face detection
+- Implement embedding extraction and distance calculation
+- Create CSFD scoring service integrated with quality control pipeline
+- Store CSFD scores per scene in quality_metrics table
+- Configure CSFD threshold (recommended: <0.3 for excellent, <0.5 for good)
+- Document CSFD scoring methodology and thresholds
+
+---
+
+### Story 7.8: ControlNet Integration for Compositional Consistency [MVP]
+
+As a developer,
+I want to implement ControlNet for enforcing compositional and structural consistency,
+So that scene layouts, character positions, and perspectives remain consistent across scenes.
+
+**Acceptance Criteria:**
+
+**ControlNet Implementation:**
+**Given** a video generation includes scenes requiring compositional consistency
+**When** the system generates video clips
+**Then** it:
+- Uses ControlNet with depth maps for perspective consistency
+- Applies layout control for scene structure
+- Enforces character pose consistency using OpenPose
+- Maintains compositional consistency across related scenes
+
+**Depth Map Control:**
+**Given** scenes share similar environments or perspectives
+**When** depth maps are generated and applied
+**Then** the system:
+- Generates depth maps for reference scenes
+- Uses depth maps to condition subsequent scene generation
+- Maintains consistent perspective and spatial relationships
+- Ensures proper depth perception across scenes
+
+**Layout Control:**
+**Given** scenes require consistent layout (product placement, character position)
+**When** layout control is applied
+**Then** the system:
+- Defines layout structure for key scenes
+- Enforces layout consistency across scenes
+- Maintains product placement and positioning
+- Ensures visual composition matches storyboard
+
+**Integration:**
+**Given** ControlNet is implemented
+**When** a video generation includes compositional consistency requirements
+**Then** the system:
+- Checks if ControlNet is enabled in coherence settings (default: disabled, advanced feature)
+- Automatically applies ControlNet when enabled and layout/depth requirements are present
+- Skips ControlNet if disabled
+- Uses ControlNet in conjunction with IP-Adapter for full consistency (if both enabled)
+- Logs ControlNet usage for analysis
+- Stores ControlNet configuration with generation record
+
+**Prerequisites:** Story 7.2 (Enhanced Scene Planning), Story 7.3 (IP-Adapter), Story 7.4 (LoRA)
+
+**Technical Notes:**
+- Research ControlNet implementation options (diffusers, ComfyUI, or custom)
+- Implement depth map generation service (MiDaS or similar)
+- Create layout control service for scene structure
+- Integrate ControlNet with video generation pipeline
+- For Replicate: Evaluate ControlNet support or pre-process locally
+- Handle ControlNet configuration (strength, conditioning) per scene
+- Document ControlNet usage patterns and best practices
+
+---
+
+### Story 7.9: Quality Feedback Loop with Research Metrics [MVP]
+
+As a developer,
+I want to implement a comprehensive quality feedback loop using VBench, CSFD, and coherence metrics,
+So that the system continuously improves prompt optimization and consistency techniques based on successful outcomes.
+
+**Acceptance Criteria:**
+
+**Comprehensive Metrics Tracking:**
+**Given** a video has been generated
+**When** the quality feedback system processes it
+**Then** it tracks:
+- VBench scores (temporal quality, aesthetic quality, prompt alignment)
+- CSFD scores (character consistency, if applicable)
+- Coherence scores (color, lighting, style consistency)
+- User acceptance metrics (download rate, regeneration rate)
+- Generation success indicators
+
+**Pattern Recognition:**
+**Given** quality metrics are being tracked over multiple generations
+**When** the system analyzes patterns
+**Then** it:
+- Identifies which prompt optimizations lead to better VBench scores
+- Learns which consistency techniques (IP-Adapter, seed control, ControlNet) are most effective
+- Correlates scene planning quality with final video quality
+- Discovers optimal configurations for different ad types
+
+**Continuous Improvement:**
+**Given** the feedback loop has learned from outcomes
+**When** new videos are generated
+**Then** the system:
+- Applies learned improvements to scene planning
+- Adjusts consistency technique selection based on success rates
+- Refines quality thresholds based on user acceptance patterns
+- Improves overall video quality over time
+
+**Analytics and Reporting:**
+**Given** quality metrics are being tracked
+**When** system administrators review analytics
+**Then** they can:
+- View quality trends over time
+- Identify which techniques improve which metrics
+- Adjust system parameters based on data
+- Export quality reports for analysis
+
+**Prerequisites:** Story 7.5 (VBench Integration), Story 7.7 (CSFD Score), Story 7.6 (Post-Processing)
+
+**Technical Notes:**
+- Enhance quality_metrics table to store all research-recommended metrics
+- Implement analytics service for pattern recognition
+- Create quality dashboard for administrators (optional)
+- Use machine learning for pattern recognition (optional, can start with rule-based)
+- Store anonymized quality data for learning
+- Implement A/B testing framework for technique comparison
+- Document quality improvement strategies and learned patterns
 
 ---
 
@@ -1259,10 +1746,10 @@ So that prompt optimization and coherence enhancement improve over time.
 - **FR-027:** Clip Splitting → Epic 6, Story 6.4
 - **FR-028:** Clip Merging → Epic 6, Story 6.5
 - **FR-029:** Editor Save and Export → Epic 6, Story 6.6
-- **FR-030:** Video Coherence Analysis → Epic 7, Story 7.1
-- **FR-031:** Coherence Enhancement → Epic 7, Story 7.2
-- **FR-032:** Prompt Optimization via LLM → Epic 7, Story 7.3
-- **FR-033:** Quality Feedback Loop → Epic 7, Story 7.4
+- **FR-030:** Video Coherence Analysis → Epic 7, Story 7.5 (VBench), Story 7.7 (CSFD), Story 7.6 (Post-Processing)
+- **FR-031:** Coherence Enhancement → Epic 7, Story 7.1 (Seed Control), Story 7.3 (IP-Adapter), Story 7.4 (LoRA), Story 7.6 (Post-Processing), Story 7.8 (ControlNet)
+- **FR-032:** Prompt Optimization via LLM → Epic 7, Story 7.2 (Enhanced Planning), Story 7.9 (Feedback Loop)
+- **FR-033:** Quality Feedback Loop → Epic 7, Story 7.9
 - **FR-034:** Profile Display → Epic 5, Story 5.1 (duplicate of FR-022)
 - **FR-035:** User Stats Update → Epic 5, Story 5.2 (duplicate of FR-023)
 
@@ -1279,7 +1766,7 @@ This epic breakdown decomposes all 35 functional requirements from the PRD into 
 4. **Epic 4 (Video Management)** ✅ COMPLETED - Enables users to view and manage their videos (4 stories)
 5. **Epic 5 (User Profile)** ✅ COMPLETED - Provides usage tracking and account information (2 stories)
 6. **Epic 6 (Video Editing)** - Enables users to edit generated videos with timeline-based editor (6 stories)
-7. **Epic 7 (Video Quality Optimization)** - Automatically enhances video quality through coherence and prompt optimization (4 stories)
+7. **Epic 7 (Multi-Scene Coherence & Quality Optimization)** [MVP: Stories 7.0-7.4] - Implements state-of-the-art generation-time consistency techniques (seed control, IP-Adapter, LoRA training with infrastructure setup, VideoDirectorGPT-style planning) to ensure professional multi-scene coherence. MVP includes dev tool for testing coherence settings (Story 7.0), seed control (7.1), enhanced LLM planning (7.2), IP-Adapter (7.3), and LoRA training pipeline (7.4). Growth phase (7.5-7.9) includes advanced quality control (VBench, CSFD, ControlNet) and feedback loops. Quality is priority; cost and generation time are not constraints.
 
 **Next Steps in BMad Method:**
 1. **UX Design** (if UI exists) - Run: `*create-ux-design` workflow
