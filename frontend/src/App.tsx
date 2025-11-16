@@ -14,6 +14,7 @@ import { VideoDetail } from "./routes/VideoDetail";
 import { Profile } from "./routes/Profile";
 import { GenerationStatus } from "./routes/GenerationStatus";
 import { ComparisonDetail } from "./routes/ComparisonDetail";
+import { Queue } from "./routes/Queue";
 import "./App.css";
 
 /**
@@ -78,6 +79,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <VideoDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/queue"
+            element={
+              <ProtectedRoute>
+                <Queue />
               </ProtectedRoute>
             }
           />

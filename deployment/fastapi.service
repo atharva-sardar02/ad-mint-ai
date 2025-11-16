@@ -23,12 +23,12 @@ After=network.target
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/path/to/ad-mint-ai/backend
-Environment="PATH=/path/to/venv/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/var/www/ad-mint-ai/backend
+Environment="PATH=/var/www/ad-mint-ai/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
 # Load environment variables from .env file if it exists
-# Note: The deployment script will update paths. For manual setup, replace /path/to/ad-mint-ai with your deployment path.
-EnvironmentFile=-/path/to/ad-mint-ai/backend/.env
-ExecStart=/path/to/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+# Production: .env file at /var/www/ad-mint-ai/backend/.env with proper permissions (chmod 600)
+EnvironmentFile=-/var/www/ad-mint-ai/backend/.env
+ExecStart=/var/www/ad-mint-ai/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=10
 

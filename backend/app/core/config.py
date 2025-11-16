@@ -46,6 +46,15 @@ class Settings:
         "STATIC_BASE_URL", "http://localhost:8000/output"
     )
 
+    # AWS S3 configuration
+    AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    AWS_S3_VIDEO_BUCKET: str = os.getenv("AWS_S3_VIDEO_BUCKET", "ad-mint-ai-videos")
+    
+    # Storage mode: 'local' for local disk, 's3' for S3 storage
+    STORAGE_MODE: str = os.getenv("STORAGE_MODE", "local")
+
 
 settings = Settings()
 

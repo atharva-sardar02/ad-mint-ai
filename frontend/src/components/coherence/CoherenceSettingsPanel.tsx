@@ -371,7 +371,7 @@ export const CoherenceSettingsPanel: React.FC<CoherenceSettingsPanelProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <h3 className="text-lg font-semibold text-gray-900">
-              Advanced Coherence Settings
+              Coherence Settings
             </h3>
             <Tooltip content="Configure which coherence techniques are applied to your video generation. Some techniques have dependencies or may increase generation time and cost.">
               <svg

@@ -9,6 +9,8 @@ import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { ProgressBar } from "../components/ProgressBar";
 import { CoherenceSettingsPanel, validateCoherenceSettings } from "../components/coherence";
 import type { CoherenceSettings as CoherenceSettingsType } from "../components/coherence";
+import { BasicSettingsPanel } from "../components/basic/BasicSettingsPanel";
+import type { BasicSettings } from "../components/basic/BasicSettingsPanel";
 import { ParallelGenerationPanel } from "../components/generation";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse, GenerateRequest, ComparisonType } from "../lib/generationService";
@@ -17,7 +19,6 @@ import { getUserProfile } from "../lib/userService";
 import type { UserProfile } from "../lib/types/api";
 
 const MIN_PROMPT_LENGTH = 10;
-const MAX_PROMPT_LENGTH = 500;
 
 interface ValidationErrors {
   prompt?: string;
@@ -50,6 +51,12 @@ export const Dashboard: React.FC = () => {
     csfd_detection: false,
   });
   const [parallelMode, setParallelMode] = useState<boolean>(false);
+  const [basicSettings, setBasicSettings] = useState<BasicSettings>({
+    useSingleClip: false,
+    useLlm: true,
+    model: "",
+    numClips: 1,
+  });
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
@@ -155,8 +162,6 @@ export const Dashboard: React.FC = () => {
     if (prompt.trim() !== "") {
       if (prompt.length < MIN_PROMPT_LENGTH) {
         newErrors.prompt = `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`;
-      } else if (prompt.length > MAX_PROMPT_LENGTH) {
-        newErrors.prompt = `Prompt must be no more than ${MAX_PROMPT_LENGTH} characters`;
       }
     }
 
@@ -266,7 +271,7 @@ export const Dashboard: React.FC = () => {
   /**
    * Check if form is valid.
    */
-  const isValid = prompt.length >= MIN_PROMPT_LENGTH && prompt.length <= MAX_PROMPT_LENGTH;
+  const isValid = prompt.length >= MIN_PROMPT_LENGTH;
 
   const handleLogout = () => {
     // Clear polling before logout
@@ -283,9 +288,7 @@ export const Dashboard: React.FC = () => {
     // Validate prompt
     if (!isValid) {
       setErrors({
-        prompt: prompt.length < MIN_PROMPT_LENGTH
-          ? `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`
-          : `Prompt must be no more than ${MAX_PROMPT_LENGTH} characters`,
+        prompt: `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`,
       });
       return;
     }
@@ -304,7 +307,28 @@ export const Dashboard: React.FC = () => {
     setErrors({});
 
     try {
-      const response = await generationService.startGeneration(prompt, coherenceSettings, title || undefined);
+      let response;
+      if (basicSettings.useSingleClip) {
+        if (!basicSettings.model) {
+          setApiError("Please select a model for single clip generation");
+          setIsLoading(false);
+          return;
+        }
+        response = await generationService.startSingleClipGeneration(
+          prompt,
+          basicSettings.model,
+          basicSettings.numClips
+        );
+      } else {
+        response = await generationService.startGeneration(
+          prompt,
+          basicSettings.model || undefined,
+          basicSettings.numClips > 1 ? basicSettings.numClips : undefined,
+          basicSettings.useLlm,
+          coherenceSettings,
+          title || undefined
+        );
+      }
       
       // Set initial status for polling
       setActiveGeneration({
@@ -557,12 +581,17 @@ export const Dashboard: React.FC = () => {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="e.g., Create a luxury watch ad for Instagram showcasing elegance and precision..."
                 minLength={MIN_PROMPT_LENGTH}
-                maxLength={MAX_PROMPT_LENGTH}
                 rows={6}
                 error={errors.prompt}
-                helperText={`${prompt.length}/${MAX_PROMPT_LENGTH} characters (minimum ${MIN_PROMPT_LENGTH})`}
+                helperText={`${prompt.length} characters (minimum ${MIN_PROMPT_LENGTH})`}
                 disabled={isLoading}
                 required
+              />
+
+              <BasicSettingsPanel
+                settings={basicSettings}
+                onChange={setBasicSettings}
+                disabled={isLoading}
               />
 
               <CoherenceSettingsPanel

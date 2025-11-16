@@ -20,6 +20,9 @@ export interface GenerateRequest {
   prompt: string;
   title?: string; // Optional title for the video
   coherence_settings?: CoherenceSettings;
+  model?: string;
+  num_clips?: number;
+  use_llm?: boolean;
 }
 
 export interface GenerateResponse {
@@ -81,12 +84,37 @@ export interface ComparisonGroupResponse {
  */
 export const startGeneration = async (
   prompt: string,
+  model?: string,
+  numClips?: number,
+  useLlm: boolean = true,
   coherenceSettings?: CoherenceSettings,
   title?: string
 ): Promise<GenerateResponse> => {
   const response = await apiClient.post<GenerateResponse>(
     API_ENDPOINTS.GENERATIONS.CREATE,
-    { prompt, coherence_settings: coherenceSettings, title }
+    { 
+      prompt, 
+      model, 
+      num_clips: numClips, 
+      use_llm: useLlm,
+      coherence_settings: coherenceSettings, 
+      title 
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Start a single clip generation (bypasses pipeline).
+ */
+export const startSingleClipGeneration = async (
+  prompt: string,
+  model: string,
+  numClips: number = 1
+): Promise<GenerateResponse> => {
+  const response = await apiClient.post<GenerateResponse>(
+    API_ENDPOINTS.GENERATIONS.CREATE_SINGLE_CLIP,
+    { prompt, model, num_clips: numClips }
   );
   return response.data;
 };
@@ -149,15 +177,46 @@ export const getComparisonGroup = async (
   return response.data;
 };
 
+export interface QueueItem {
+  id: string;
+  title: string | null;
+  prompt: string;
+  progress: number;
+  current_step: string | null;
+  status: string;
+  created_at: string | null;
+  num_scenes: number | null;
+  generation_group_id: string | null;
+}
+
+export interface GenerationQueue {
+  pending: QueueItem[];
+  processing: QueueItem[];
+  total_active: number;
+  timestamp: string;
+}
+
+/**
+ * Get the current generation queue (active pending and processing generations).
+ */
+export const getGenerationQueue = async (): Promise<GenerationQueue> => {
+  const response = await apiClient.get<GenerationQueue>(
+    API_ENDPOINTS.GENERATIONS.QUEUE
+  );
+  return response.data;
+};
+
 /**
  * Generation service object with all methods.
  */
 export const generationService = {
   startGeneration,
+  startSingleClipGeneration,
   getGenerationStatus,
   cancelGeneration,
   getCoherenceSettingsDefaults,
   generateParallel,
   getComparisonGroup,
+  getGenerationQueue,
 };
 

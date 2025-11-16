@@ -389,20 +389,28 @@ export const VideoDetail: React.FC = () => {
                       })
                       .map(([key, enabled]) => {
                         const label = getSettingLabel(key);
+                        // VBench is not implemented yet - grey it out
+                        const isNotImplemented = key === 'vbench_quality_control';
                         
                         return (
                           <div
                             key={key}
                             className={`flex items-center space-x-2 ${
-                              enabled ? 'text-gray-900' : 'text-gray-500'
+                              enabled && !isNotImplemented 
+                                ? 'text-gray-900' 
+                                : isNotImplemented
+                                ? 'text-gray-400'
+                                : 'text-gray-500'
                             }`}
                           >
                             <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
-                              enabled 
+                              enabled && !isNotImplemented
                                 ? 'bg-green-100 border-green-500' 
+                                : isNotImplemented
+                                ? 'bg-gray-50 border-gray-200'
                                 : 'bg-gray-100 border-gray-300'
                             }`}>
-                              {enabled && (
+                              {enabled && !isNotImplemented && (
                                 <svg
                                   className="w-3 h-3 text-green-600"
                                   fill="currentColor"
@@ -416,7 +424,12 @@ export const VideoDetail: React.FC = () => {
                                 </svg>
                               )}
                             </div>
-                            <span className="text-sm font-medium">{label}</span>
+                            <span className={`text-sm font-medium ${isNotImplemented ? 'line-through' : ''}`}>
+                              {label}
+                              {isNotImplemented && (
+                                <span className="ml-1 text-xs text-gray-400">(Not implemented)</span>
+                              )}
+                            </span>
                           </div>
                         );
                       })}

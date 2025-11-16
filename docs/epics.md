@@ -57,7 +57,7 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 
 ## FR Coverage Map
 
-- **Epic 1 (Foundation):** ✅ COMPLETED - Covers infrastructure needs for all FRs - project setup, database, deployment pipeline
+- **Epic 1 (Foundation):** Stories 1.1-1.4 ✅ COMPLETED, Story 1.5 pending - Covers infrastructure needs for all FRs - project setup, database, deployment pipeline, production deployment
 - **Epic 2 (User Authentication):** ✅ COMPLETED - FR-001, FR-002, FR-003, FR-004
 - **Epic 3 (Video Generation Pipeline):** ✅ COMPLETED - FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012, FR-013, FR-014, FR-015, FR-016
 - **Epic 4 (Video Management):** ✅ COMPLETED - FR-017, FR-018, FR-019, FR-020, FR-021
@@ -67,11 +67,11 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 
 ---
 
-## Epic 1: Foundation & Infrastructure ✅ COMPLETED
+## Epic 1: Foundation & Infrastructure
 
 **Goal:** Establish the foundational infrastructure, project structure, database setup, and deployment pipeline that enables all subsequent development work.
 
-**Status:** All stories completed. Epic delivered and in production.
+**Status:** Stories 1.1-1.4 completed. Story 1.5 (Production Deployment) pending.
 
 ### Story 1.1: Project Setup and Repository Structure
 
@@ -186,6 +186,105 @@ So that I can deploy the application to AWS EC2.
 **Prerequisites:** Story 1.1, Story 1.2, Story 1.3
 
 **Technical Notes:** Create deployment documentation, set up Nginx reverse proxy, configure systemd service with auto-restart, set up log rotation
+
+---
+
+### Story 1.5: Production Deployment
+
+As a developer,
+I want a complete production deployment setup with CI/CD, monitoring, and security,
+So that the application can be deployed reliably to production with proper safeguards.
+
+**Acceptance Criteria:**
+
+**Deployment Infrastructure:**
+**Given** I have a production environment ready
+**When** I deploy the application
+**Then** the system:
+- Configures SSL/TLS certificates (Let's Encrypt or AWS Certificate Manager)
+- Sets up domain name and DNS configuration
+- Configures production database (PostgreSQL) with backups
+- Sets up file storage (S3 or equivalent) for video files
+- Configures environment variables for production secrets
+- Implements health check endpoints for monitoring
+
+**CI/CD Pipeline:**
+**Given** code is pushed to the repository
+**When** CI/CD pipeline runs
+**Then** it:
+- Runs automated tests (unit, integration, e2e)
+- Builds Docker images (if containerized) or prepares deployment artifacts
+- Runs security scans and dependency checks
+- Deploys to staging environment for validation
+- Promotes to production after staging approval
+- Sends deployment notifications
+
+**Security & Hardening:**
+**Given** the application is deployed
+**When** security measures are in place
+**Then** the system includes:
+- Firewall rules (only necessary ports open)
+- Rate limiting on API endpoints
+- CORS properly configured for production domain
+- Secure headers (HSTS, CSP, X-Frame-Options)
+- Database connection encryption
+- Secrets management (AWS Secrets Manager or equivalent)
+- Regular security updates and patching
+
+**Monitoring & Observability:**
+**Given** the application is running in production
+**When** monitoring is configured
+**Then** the system tracks:
+- Application health and uptime
+- API response times and error rates
+- Database performance metrics
+- Server resource usage (CPU, memory, disk)
+- Video generation success/failure rates
+- Cost tracking per generation
+- User activity and authentication events
+
+**Backup & Recovery:**
+**Given** production data exists
+**When** backup procedures are in place
+**Then** the system:
+- Automatically backs up database daily (with retention policy)
+- Backs up video files to secondary storage
+- Tests restore procedures regularly
+- Documents disaster recovery plan
+- Maintains point-in-time recovery capability
+
+**Rollback & Version Management:**
+**Given** a deployment fails or issues are detected
+**When** rollback is needed
+**Then** the system:
+- Maintains previous deployment artifacts
+- Can quickly revert to previous version
+- Preserves database migrations (forward/backward compatible)
+- Logs all deployment events for audit trail
+
+**Documentation:**
+**Given** deployment is complete
+**When** documentation is reviewed
+**Then** it includes:
+- Deployment runbook with step-by-step procedures
+- Environment configuration guide
+- Troubleshooting guide for common issues
+- Incident response procedures
+- Contact information for on-call support
+
+**Prerequisites:** Story 1.4 (Deployment Pipeline Basics), Story 1.2 (Database Schema), Story 1.3 (API Infrastructure)
+
+**Technical Notes:**
+- Use GitHub Actions, GitLab CI, or AWS CodePipeline for CI/CD
+- Consider Docker containerization for consistent deployments
+- Set up AWS CloudWatch, Datadog, or similar for monitoring
+- Use AWS RDS for managed PostgreSQL with automated backups
+- Configure AWS S3 for video file storage with lifecycle policies
+- Implement structured logging (JSON format) for better observability
+- Set up alerting for critical errors and performance degradation
+- Use infrastructure as code (Terraform, CloudFormation) for reproducibility
+- Configure auto-scaling if needed for high traffic
+- Set up CDN (CloudFront) for static assets and video delivery
 
 ---
 
@@ -1824,10 +1923,10 @@ So that the system continuously improves prompt optimization and consistency tec
 
 ## Summary
 
-This epic breakdown decomposes all 35 functional requirements from the PRD into 7 epics and 28 implementable stories. Each story is sized for focused development work, with detailed BDD-style acceptance criteria and technical implementation notes.
+This epic breakdown decomposes all 35 functional requirements from the PRD into 7 epics and 29 implementable stories. Each story is sized for focused development work, with detailed BDD-style acceptance criteria and technical implementation notes.
 
 **Epic Sequencing:**
-1. **Epic 1 (Foundation)** ✅ COMPLETED - Must be completed first, establishes infrastructure (4 stories)
+1. **Epic 1 (Foundation)** - Must be completed first, establishes infrastructure (5 stories: 1.1-1.4 ✅ COMPLETED, 1.5 pending)
 2. **Epic 2 (User Authentication)** ✅ COMPLETED - Enables user access, required before video features (4 stories)
 3. **Epic 3 (Video Generation Pipeline)** ✅ COMPLETED - Core product functionality (4 stories)
 4. **Epic 4 (Video Management)** ✅ COMPLETED - Enables users to view and manage their videos (4 stories)

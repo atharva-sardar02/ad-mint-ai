@@ -65,6 +65,12 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
   const [promptTitles, setPromptTitles] = useState<string[]>(["", ""]); // Titles for each prompt variation
   const [promptSettings, setPromptSettings] = useState<CoherenceSettingsType>(getDefaultCoherenceSettings());
   
+  // Per-variation settings (shared across both comparison modes)
+  const [useSingleClip, setUseSingleClip] = useState<boolean[]>([false, false]);
+  const [useLlm, setUseLlm] = useState<boolean[]>([true, true]);
+  const [model, setModel] = useState<string[]>(["", ""]);
+  const [numClips, setNumClips] = useState<number[]>([1, 1]);
+  
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   /**
@@ -85,6 +91,30 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
       }
     }
   }, [variationCount, comparisonType]);
+
+  /**
+   * Update per-variation settings when variation count changes.
+   */
+  useEffect(() => {
+    const currentCount = useSingleClip.length;
+    if (variationCount > currentCount) {
+      // Add new default values
+      const newSingleClip = Array.from({ length: variationCount - currentCount }, () => false);
+      const newUseLlm = Array.from({ length: variationCount - currentCount }, () => true);
+      const newModel = Array.from({ length: variationCount - currentCount }, () => "");
+      const newNumClips = Array.from({ length: variationCount - currentCount }, () => 1);
+      setUseSingleClip([...useSingleClip, ...newSingleClip]);
+      setUseLlm([...useLlm, ...newUseLlm]);
+      setModel([...model, ...newModel]);
+      setNumClips([...numClips, ...newNumClips]);
+    } else if (variationCount < currentCount) {
+      // Remove excess values
+      setUseSingleClip(useSingleClip.slice(0, variationCount));
+      setUseLlm(useLlm.slice(0, variationCount));
+      setModel(model.slice(0, variationCount));
+      setNumClips(numClips.slice(0, variationCount));
+    }
+  }, [variationCount]);
 
   /**
    * Update prompt variations when variation count changes (prompt comparison mode).
@@ -168,6 +198,9 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
           prompt: settingsPrompt,
           title: variationTitle,
           coherence_settings: profile,
+          model: model[index] || undefined,
+          num_clips: useSingleClip[index] ? (numClips[index] || 1) : undefined,
+          use_llm: useSingleClip[index] ? false : (useLlm[index] ?? true),
         };
       });
     } else {
@@ -179,6 +212,9 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
           prompt,
           title: variationTitle,
           coherence_settings: promptSettings,
+          model: model[index] || undefined,
+          num_clips: useSingleClip[index] ? (numClips[index] || 1) : undefined,
+          use_llm: useSingleClip[index] ? false : (useLlm[index] ?? true),
         };
       });
     }
@@ -211,6 +247,45 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
     const newTitles = [...promptTitles];
     newTitles[index] = title;
     setPromptTitles(newTitles);
+  };
+
+  /**
+   * Update per-variation settings.
+   */
+  const updateUseSingleClip = (index: number, value: boolean) => {
+    const newValues = [...useSingleClip];
+    newValues[index] = value;
+    setUseSingleClip(newValues);
+    // If enabling single clip, disable LLM
+    if (value) {
+      const newUseLlm = [...useLlm];
+      newUseLlm[index] = false;
+      setUseLlm(newUseLlm);
+    }
+  };
+
+  const updateUseLlm = (index: number, value: boolean) => {
+    const newValues = [...useLlm];
+    newValues[index] = value;
+    setUseLlm(newValues);
+    // If enabling LLM, disable single clip
+    if (value) {
+      const newSingleClip = [...useSingleClip];
+      newSingleClip[index] = false;
+      setUseSingleClip(newSingleClip);
+    }
+  };
+
+  const updateModel = (index: number, value: string) => {
+    const newValues = [...model];
+    newValues[index] = value;
+    setModel(newValues);
+  };
+
+  const updateNumClips = (index: number, value: number) => {
+    const newValues = [...numClips];
+    newValues[index] = value;
+    setNumClips(newValues);
   };
 
   return (
@@ -326,6 +401,79 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
                     <h3 className="text-lg font-semibold text-gray-800 mb-3">
                       Profile {String.fromCharCode(65 + index)}
                     </h3>
+                    
+                    {/* Per-variation basic settings */}
+                    <div className="mb-4 space-y-3 p-3 bg-gray-50 rounded-md">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Basic Settings</h4>
+                      
+                      {/* Single Clip Mode Toggle */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`useSingleClip_${index}`}
+                          checked={useSingleClip[index]}
+                          onChange={(e) => updateUseSingleClip(index, e.target.checked)}
+                          disabled={isLoading}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor={`useSingleClip_${index}`} className="text-sm font-medium text-gray-700">
+                          Generate single clip (bypass pipeline)
+                        </label>
+                      </div>
+
+                      {/* LLM Enhancement Toggle */}
+                      {!useSingleClip[index] && (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`useLlm_${index}`}
+                            checked={useLlm[index]}
+                            onChange={(e) => updateUseLlm(index, e.target.checked)}
+                            disabled={isLoading}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor={`useLlm_${index}`} className="text-sm font-medium text-gray-700">
+                            Use LLM enhancement (recommended)
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Model Selection */}
+                      <div>
+                        <Select
+                          label="Video Model"
+                          id={`model_${index}`}
+                          value={model[index] || ""}
+                          onChange={(e) => updateModel(index, e.target.value)}
+                          disabled={isLoading}
+                          required={useSingleClip[index]}
+                          options={[
+                            { value: "", label: useSingleClip[index] ? "Select a model (required)" : "Auto (use default)" },
+                            { value: "bytedance/seedance-1-lite", label: "Seedance-1-Lite (Primary)" },
+                            { value: "minimax-ai/minimax-video-01", label: "Minimax Video-01" },
+                            { value: "klingai/kling-video", label: "Kling 1.5" },
+                            { value: "runway/gen3-alpha-turbo", label: "Runway Gen-3 Alpha Turbo" },
+                            { value: "openai/sora-2", label: "Sora-2" },
+                          ]}
+                        />
+                      </div>
+
+                      {/* Number of Clips */}
+                      <div>
+                        <Select
+                          label="Number of Clips"
+                          id={`numClips_${index}`}
+                          value={numClips[index].toString()}
+                          onChange={(e) => updateNumClips(index, parseInt(e.target.value, 10))}
+                          disabled={isLoading}
+                          options={Array.from({ length: 10 }, (_, i) => ({
+                            value: (i + 1).toString(),
+                            label: (i + 1).toString(),
+                          }))}
+                        />
+                      </div>
+                    </div>
+
                     <CoherenceSettingsPanel
                       settings={profile}
                       onChange={(settings) => updateSettingsProfile(index, settings)}
@@ -349,7 +497,7 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
               </label>
               <div className="space-y-4">
                 {promptVariations.map((prompt, index) => (
-                  <div key={index} className="space-y-2">
+                  <div key={index} className="space-y-2 border border-gray-200 rounded-lg p-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Title (Optional) - {String.fromCharCode(65 + index)}
@@ -379,6 +527,78 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
                       {errors[`prompt_${index}`] && (
                         <ErrorMessage message={errors[`prompt_${index}`]} className="mt-1" />
                       )}
+                    </div>
+
+                    {/* Per-variation basic settings */}
+                    <div className="mt-3 space-y-3 p-3 bg-gray-50 rounded-md">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Basic Settings</h4>
+                      
+                      {/* Single Clip Mode Toggle */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`useSingleClip_prompt_${index}`}
+                          checked={useSingleClip[index]}
+                          onChange={(e) => updateUseSingleClip(index, e.target.checked)}
+                          disabled={isLoading}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor={`useSingleClip_prompt_${index}`} className="text-sm font-medium text-gray-700">
+                          Generate single clip (bypass pipeline)
+                        </label>
+                      </div>
+
+                      {/* LLM Enhancement Toggle */}
+                      {!useSingleClip[index] && (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`useLlm_prompt_${index}`}
+                            checked={useLlm[index]}
+                            onChange={(e) => updateUseLlm(index, e.target.checked)}
+                            disabled={isLoading}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor={`useLlm_prompt_${index}`} className="text-sm font-medium text-gray-700">
+                            Use LLM enhancement (recommended)
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Model Selection */}
+                      <div>
+                        <Select
+                          label="Video Model"
+                          id={`model_prompt_${index}`}
+                          value={model[index] || ""}
+                          onChange={(e) => updateModel(index, e.target.value)}
+                          disabled={isLoading}
+                          required={useSingleClip[index]}
+                          options={[
+                            { value: "", label: useSingleClip[index] ? "Select a model (required)" : "Auto (use default)" },
+                            { value: "bytedance/seedance-1-lite", label: "Seedance-1-Lite (Primary)" },
+                            { value: "minimax-ai/minimax-video-01", label: "Minimax Video-01" },
+                            { value: "klingai/kling-video", label: "Kling 1.5" },
+                            { value: "runway/gen3-alpha-turbo", label: "Runway Gen-3 Alpha Turbo" },
+                            { value: "openai/sora-2", label: "Sora-2" },
+                          ]}
+                        />
+                      </div>
+
+                      {/* Number of Clips */}
+                      <div>
+                        <Select
+                          label="Number of Clips"
+                          id={`numClips_prompt_${index}`}
+                          value={numClips[index].toString()}
+                          onChange={(e) => updateNumClips(index, parseInt(e.target.value, 10))}
+                          disabled={isLoading}
+                          options={Array.from({ length: 10 }, (_, i) => ({
+                            value: (i + 1).toString(),
+                            label: (i + 1).toString(),
+                          }))}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}

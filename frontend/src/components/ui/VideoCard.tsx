@@ -119,11 +119,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({ generation }) => {
             <span className="font-medium">Settings: </span>
             <span className="text-gray-500">
               {Object.entries(generation.coherence_settings)
-                .filter(([_, enabled]) => enabled)
+                .filter(([key, enabled]) => enabled && key !== 'vbench_quality_control') // Exclude VBench as it's not implemented
                 .map(([key, _]) => key.replace(/_/g, " "))
                 .slice(0, 3)
                 .join(", ")}
-              {Object.values(generation.coherence_settings).filter(Boolean).length > 3 && "..."}
+              {Object.entries(generation.coherence_settings).filter(([key, enabled]) => enabled && key !== 'vbench_quality_control').length > 3 && "..."}
             </span>
           </div>
         )}

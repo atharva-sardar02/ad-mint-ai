@@ -17,21 +17,23 @@ logger = logging.getLogger(__name__)
 
 # Replicate model configurations
 # Primary model: Seedance-1-Lite (ByteDance)
-# Fallback models: Minimax Video-01, Kling 1.5, Runway Gen-3 Alpha Turbo
+# Fallback models: Minimax Video-01, Kling 1.5, Runway Gen-3 Alpha Turbo, Sora-2
 REPLICATE_MODELS = {
     "primary": "bytedance/seedance-1-lite",
     "fallback_1": "minimax-ai/minimax-video-01",
     "fallback_2": "klingai/kling-video",
-    "fallback_3": "runway/gen3-alpha-turbo"
+    "fallback_3": "runway/gen3-alpha-turbo",
+    "sora_2": "openai/sora-2"
 }
 
 # Cost per second of video (approximate, varies by model)
-# Seedance-1-Lite: ~$0.04/sec (estimated), Minimax: ~$0.05/sec, Kling: ~$0.06/sec, Runway: ~$0.08/sec
+# Seedance-1-Lite: ~$0.04/sec (estimated), Minimax: ~$0.05/sec, Kling: ~$0.06/sec, Runway: ~$0.08/sec, Sora-2: ~$0.10/sec (estimated)
 MODEL_COSTS = {
     "bytedance/seedance-1-lite": 0.04,
     "minimax-ai/minimax-video-01": 0.05,
     "klingai/kling-video": 0.06,
-    "runway/gen3-alpha-turbo": 0.08
+    "runway/gen3-alpha-turbo": 0.08,
+    "openai/sora-2": 0.10
 }
 
 # Retry configuration
@@ -40,13 +42,99 @@ INITIAL_RETRY_DELAY = 1  # seconds
 MAX_RETRY_DELAY = 30  # seconds
 
 
+async def generate_video_clip_with_model(
+    prompt: str,
+    duration: int,
+    output_dir: str,
+    generation_id: str,
+    model_name: str,
+    cancellation_check: Optional[callable] = None,
+    clip_index: Optional[int] = None
+) -> tuple[str, str]:
+    """
+    Generate a single video clip with a specific model (bypasses pipeline).
+    
+    Args:
+        prompt: Visual prompt for video generation
+        duration: Duration in seconds (3-7)
+        output_dir: Directory to save the generated clip
+        generation_id: Generation ID for logging and cost tracking
+        model_name: Specific model to use (must be in REPLICATE_MODELS or MODEL_COSTS)
+        cancellation_check: Optional function to check if generation should be cancelled
+        clip_index: Optional index for multiple clips (used in filename)
+    
+    Returns:
+        tuple[str, str]: (Path to the generated video clip file, Model name used)
+    
+    Raises:
+        ValueError: If API key is missing or invalid, or model not found
+        RuntimeError: If video generation fails
+    """
+    if not settings.REPLICATE_API_TOKEN:
+        logger.error("REPLICATE_API_TOKEN not configured")
+        raise ValueError("Replicate API token is not configured")
+    
+    # Validate model name
+    if model_name not in MODEL_COSTS:
+        raise ValueError(f"Model '{model_name}' not found in available models")
+    
+    # Check cancellation before starting
+    if cancellation_check and cancellation_check():
+        raise RuntimeError("Generation cancelled by user")
+    
+    # Ensure output directory exists
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique filename (with index if generating multiple clips)
+    if clip_index is not None:
+        clip_filename = f"{generation_id}_single_clip_{clip_index}.mp4"
+    else:
+        clip_filename = f"{generation_id}_single_clip.mp4"
+    clip_path = output_path / clip_filename
+    
+    logger.info(f"Generating single clip with model {model_name} (generation {generation_id})")
+    logger.debug(f"Visual prompt: {prompt[:100]}...")
+    logger.debug(f"Target duration: {duration}s")
+    
+    try:
+        # Generate video with retry logic
+        video_url = await _generate_with_retry(
+            model_name=model_name,
+            prompt=prompt,
+            duration=duration,
+            cancellation_check=cancellation_check
+        )
+        
+        # Download video clip
+        logger.info(f"Downloading video clip from {video_url}")
+        await _download_video(video_url, clip_path)
+        
+        # Validate video (duration and aspect ratio)
+        await _validate_video(clip_path, duration)
+        
+        # Track cost
+        cost = MODEL_COSTS.get(model_name, 0.05) * duration
+        logger.info(
+            f"Video clip generated successfully (model: {model_name}, cost: ${cost:.4f})"
+        )
+        
+        # Return both clip path and model name used
+        return (str(clip_path), model_name)
+        
+    except Exception as e:
+        logger.error(f"Failed to generate clip with model {model_name}: {e}", exc_info=True)
+        raise RuntimeError(f"Video generation failed with model {model_name}: {e}")
+
+
 async def generate_video_clip(
     scene: Scene,
     output_dir: str,
     generation_id: str,
     scene_number: int,
     cancellation_check: Optional[callable] = None,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    preferred_model: Optional[str] = None
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -88,13 +176,23 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: primary -> fallback_1 -> fallback_2 -> fallback_3
-    models_to_try = [
+    # Try models in order: preferred_model (if specified) -> primary -> fallback_1 -> fallback_2 -> fallback_3
+    models_to_try = []
+    if preferred_model and preferred_model in MODEL_COSTS:
+        models_to_try.append(preferred_model)
+        logger.info(f"Using preferred model: {preferred_model}")
+    
+    # Add default fallback chain
+    models_to_try.extend([
         REPLICATE_MODELS["primary"],
         REPLICATE_MODELS["fallback_1"],
         REPLICATE_MODELS["fallback_2"],
         REPLICATE_MODELS["fallback_3"]
-    ]
+    ])
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    models_to_try = [m for m in models_to_try if not (m in seen or seen.add(m))]
     
     last_error = None
     
@@ -200,11 +298,20 @@ async def _generate_with_retry(
             
             # Prepare input parameters for Replicate
             # Note: Model-specific parameters may vary - adjust based on actual API
-            input_params = {
-                "prompt": prompt,
-                "duration": duration,
-                "aspect_ratio": "9:16",  # Vertical for MVP
-            }
+            if model_name == "openai/sora-2":
+                # Sora-2 requires aspect_ratio as "portrait" or "landscape"
+                input_params = {
+                    "prompt": prompt,
+                    "duration": duration,
+                    "aspect_ratio": "portrait",  # Vertical for MVP
+                }
+            else:
+                # Other models use aspect ratio as ratio string
+                input_params = {
+                    "prompt": prompt,
+                    "duration": duration,
+                    "aspect_ratio": "9:16",  # Vertical for MVP
+                }
             
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
@@ -268,9 +375,13 @@ async def _generate_with_retry(
             elif prediction.status == "canceled":
                 raise RuntimeError("Video generation was canceled")
             
-        except replicate.exceptions.RateLimitError as e:
+        except replicate.exceptions.ReplicateError as e:
             last_error = e
-            if attempt < MAX_RETRIES:
+            # Check if it's a rate limit error (status 429) or validation error
+            error_str = str(e).lower()
+            is_rate_limit = "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
+            
+            if is_rate_limit and attempt < MAX_RETRIES:
                 # Exponential backoff for rate limits
                 delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
                 logger.warning(
@@ -279,12 +390,8 @@ async def _generate_with_retry(
                 )
                 await asyncio.sleep(delay)
                 continue
-            raise RuntimeError(f"Rate limit exceeded after {MAX_RETRIES} attempts: {e}")
-        
-        except replicate.exceptions.ReplicateError as e:
-            last_error = e
+            
             # Check if error is related to unsupported seed parameter
-            error_str = str(e).lower()
             if use_seed and "seed" in error_str and ("invalid" in error_str or "not supported" in error_str or "unknown" in error_str):
                 logger.warning(
                     f"Model {model_name} may not support seed parameter: {e}. "
@@ -298,6 +405,10 @@ async def _generate_with_retry(
                     await asyncio.sleep(delay)
                     continue
             
+            # Don't retry on validation errors (422) - these are parameter issues
+            if "422" in str(e) or "validation" in error_str:
+                raise RuntimeError(f"Invalid parameters for model {model_name}: {e}")
+            
             if attempt < MAX_RETRIES:
                 # Exponential backoff for other API errors
                 delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
@@ -307,6 +418,7 @@ async def _generate_with_retry(
                 )
                 await asyncio.sleep(delay)
                 continue
+            
             raise RuntimeError(f"Replicate API error after {MAX_RETRIES} attempts: {e}")
         
         except Exception as e:
