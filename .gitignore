@@ -177,3 +177,5 @@ docs/.doctrees/
 *.deb
 *.rpm
 **.pyc
+
+ClipForge/
