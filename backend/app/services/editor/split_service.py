@@ -142,6 +142,9 @@ def apply_split_to_editing_session(
     first_clip_id = f"{clip_id}-{str(uuid.uuid4())[:8]}"
     second_clip_id = f"{clip_id}-{str(uuid.uuid4())[:8]}"
     
+    # Preserve track_index from original clip
+    original_track_index = clip_to_split.get("track_index", 0)
+    
     first_clip = {
         "id": first_clip_id,
         "original_path": original_metadata["original_path"],
@@ -153,6 +156,7 @@ def apply_split_to_editing_session(
         "merged_with": clip_to_split.get("merged_with", []),
         "text_overlay": original_metadata.get("text_overlay"),
         "scene_number": original_metadata.get("scene_number"),
+        "track_index": original_track_index,
     }
     
     # Create second clip (from split point to end)
@@ -167,6 +171,7 @@ def apply_split_to_editing_session(
         "merged_with": clip_to_split.get("merged_with", []),
         "text_overlay": original_metadata.get("text_overlay"),
         "scene_number": original_metadata.get("scene_number"),
+        "track_index": original_track_index,
     }
     
     # Replace original clip with two new clips in clips array

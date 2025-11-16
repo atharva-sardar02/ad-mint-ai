@@ -4,9 +4,11 @@ FastAPI application entry point.
 import logging
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 from app.api.routes import auth, editor, generations, users
 from app.core.config import settings
@@ -23,10 +25,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS middleware - allow all origins
+# CORS middleware - allow configured origins
+# Note: When allow_credentials=True, we cannot use allow_origins=["*"]
+# We must specify exact origins
+logger.info(f"CORS allowed origins: {settings.CORS_ALLOWED_ORIGINS}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,  # Use configured origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,7 +75,7 @@ async def health():
         dict: Health status with database, storage, and external API checks
     """
     from app.core.config import settings
-    from app.db.session import engine
+    from app.db.base import engine
     from sqlalchemy import text
     
     health_status = {

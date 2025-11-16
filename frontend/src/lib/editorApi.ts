@@ -6,6 +6,60 @@ import type { EditorData, ClipInfo } from "./types/api";
 import { AuthError, NetworkError } from "./types/api";
 
 /**
+ * Get list of editing sessions (edited videos).
+ *
+ * @returns Promise resolving to list of editing sessions
+ * @throws {AuthError} If user is not authenticated (401)
+ * @throws {NetworkError} If network request fails
+ */
+export async function getEditingSessions(): Promise<{
+  total: number;
+  sessions: Array<{
+    id: string;
+    generation_id: string;
+    title: string;
+    thumbnail_url: string | null;
+    duration: number | null;
+    status: string;
+    updated_at: string;
+    created_at: string;
+  }>;
+}> {
+  try {
+    const response = await apiClient.get<{
+      total: number;
+      sessions: Array<{
+        id: string;
+        generation_id: string;
+        title: string;
+        thumbnail_url: string | null;
+        duration: number | null;
+        status: string;
+        updated_at: string;
+        created_at: string;
+      }>;
+    }>("/api/editing-sessions");
+    return response.data;
+  } catch (error: any) {
+    console.error("Error loading editing sessions:", error);
+    if (error.response) {
+      const status = error.response.status;
+      const apiError = error.response.data;
+
+      if (status === 401) {
+        throw new AuthError("Not authenticated");
+      }
+
+      const errorMessage = apiError?.detail?.error?.message || apiError?.detail?.message || apiError?.error?.message;
+      throw new Error(errorMessage || "Failed to load editing sessions");
+    }
+
+    // Network error
+    throw new NetworkError("Network error - please check your connection");
+  }
+}
+
+/**
  * Load editor data for a video generation.
  *
  * @param generationId - Generation ID to load editor data for
@@ -389,6 +443,86 @@ export async function mergeClips(
 }
 
 /**
+ * Update clip position and track assignment.
+ *
+ * @param generationId - Generation ID containing the clip
+ * @param clipId - ID of the clip to move
+ * @param startTime - New start time for the clip
+ * @param trackIndex - New track index (0-based, default 0)
+ * @returns Promise resolving to updated clip information
+ * @throws {AuthError} If user is not authenticated (401)
+ * @throws {ForbiddenError} If user doesn't own the generation (403)
+ * @throws {NotFoundError} If generation or clip not found (404)
+ * @throws {NetworkError} If network request fails
+ */
+export async function updateClipPosition(
+  generationId: string,
+  clipId: string,
+  startTime: number,
+  trackIndex: number = 0
+): Promise<{ message: string; clip_id: string; start_time: number; track_index: number; updated_state: any }> {
+  try {
+    const response = await apiClient.post<{
+      message: string;
+      clip_id: string;
+      start_time: number;
+      track_index: number;
+      updated_state: any;
+    }>(`/api/editor/${generationId}/position`, {
+      clip_id: clipId,
+      start_time: startTime,
+      track_index: trackIndex,
+    });
+
+    return response.data;
+  } catch (error: any) {
+    // Handle specific error cases
+    if (error.response) {
+      const status = error.response.status;
+      const apiError = error.response.data;
+
+      if (status === 401) {
+        throw new AuthError("Your session has expired. Please log in again.");
+      }
+
+      if (status === 403) {
+        throw new Error(
+          apiError?.error?.message || "You don't have permission to edit this video"
+        );
+      }
+
+      if (status === 404) {
+        throw new Error(
+          apiError?.error?.message || "Video or clip not found"
+        );
+      }
+
+      if (status === 400) {
+        throw new Error(
+          apiError?.error?.message || "Invalid position"
+        );
+      }
+
+      // Other API errors
+      throw new Error(
+        apiError?.error?.message || "Failed to update clip position"
+      );
+    }
+
+    // Network errors
+    if (error instanceof NetworkError) {
+      throw error;
+    }
+
+    // Unknown errors
+    throw new NetworkError(
+      "Network error - please check your connection",
+      error
+    );
+  }
+}
+
+/**
  * Save current editing session state.
  *
  * @param generationId - Generation ID to save
@@ -405,18 +539,17 @@ export async function saveEditingSession(
 ): Promise<{ message: string; session_id: string; saved_at: string }> {
   try {
     const endpoint = `/api/editor/${generationId}/save`;
-    const hasEditingState = typeof editingState !== "undefined";
-    const response = hasEditingState
-      ? await apiClient.post<{
-          message: string;
-          session_id: string;
-          saved_at: string;
-        }>(endpoint, { editing_state: editingState })
-      : await apiClient.post<{
-          message: string;
-          session_id: string;
-          saved_at: string;
-        }>(endpoint);
+    // Always send a JSON body - FastAPI expects a request body for Pydantic models
+    // If editingState is undefined, send an empty object (editing_state will be None)
+    const requestBody = typeof editingState !== "undefined" 
+      ? { editing_state: editingState }
+      : {};
+    
+    const response = await apiClient.post<{
+      message: string;
+      session_id: string;
+      saved_at: string;
+    }>(endpoint, requestBody);
 
     return response.data;
   } catch (error: any) {
@@ -448,6 +581,14 @@ export async function saveEditingSession(
       if (status === 400) {
         throw new Error(
           apiError?.error?.message || "Invalid editing state"
+        );
+      }
+
+      if (status === 422) {
+        // 422 Unprocessable Entity - validation error
+        const validationError = apiError?.detail || apiError?.error?.message;
+        throw new Error(
+          validationError || "Invalid request format. Please check your editing state."
         );
       }
 
