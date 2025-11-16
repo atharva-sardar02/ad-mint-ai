@@ -256,6 +256,12 @@ jobs:
               sudo chown ubuntu:www-data .env
             fi
             
+            # Create output directories with proper permissions
+            echo "📁 Creating output directories..."
+            sudo mkdir -p output/cache output/videos output/thumbnails
+            sudo chown -R www-data:www-data output
+            sudo chmod -R 755 output
+            
             # Restart FastAPI service
             echo "🔄 Restarting FastAPI service..."
             sudo systemctl restart fastapi
@@ -395,6 +401,20 @@ jobs:
               deactivate
             else
               echo "✅ Virtual environment already exists, skipping recreation"
+            fi
+            
+            # Create output directories with proper permissions
+            echo "📁 Creating output directories..."
+            cd "$DEPLOYMENT_PATH/backend"
+            sudo mkdir -p output/cache output/videos output/thumbnails
+            sudo chown -R www-data:www-data output
+            sudo chmod -R 755 output
+            
+            # Ensure .env file has correct permissions
+            if [ -f ".env" ]; then
+              echo "🔐 Setting .env file permissions..."
+              sudo chmod 640 .env
+              sudo chown ubuntu:www-data .env
             fi
             
             # Restart FastAPI service
