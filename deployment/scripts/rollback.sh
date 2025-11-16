@@ -69,3 +69,23 @@ fi
 echo "✅ Rollback completed successfully"
 echo "📋 Deployment restored to previous version"
 
+# Clean up old backup directories after successful rollback
+echo "🧹 Cleaning up old backup directories..."
+DEPLOYMENT_DIR=$(dirname "$DEPLOYMENT_PATH")
+if [ -d "$DEPLOYMENT_DIR" ]; then
+  # Remove old .old-* directories
+  OLD_BACKUPS=$(sudo find "$DEPLOYMENT_DIR" -maxdepth 1 -type d -name "${DEPLOYMENT_PATH##*/}.old-*" 2>/dev/null || true)
+  if [ -n "$OLD_BACKUPS" ]; then
+    echo "$OLD_BACKUPS" | while read -r dir; do
+      if [ -d "$dir" ]; then
+        echo "  Removing old backup: $dir"
+        sudo rm -rf "$dir"
+      fi
+    done
+  fi
+fi
+
+# Show disk usage after cleanup
+echo "💾 Disk usage after cleanup:"
+df -h / | tail -1
+
