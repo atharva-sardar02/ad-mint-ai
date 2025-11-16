@@ -7,9 +7,42 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+class CoherenceSettings(BaseModel):
+    """Coherence technique settings for video generation."""
+    seed_control: bool = Field(default=True, description="Seed control for visual consistency")
+    ip_adapter_reference: bool = Field(default=False, description="IP-Adapter with reference images (same real images for all clips)")
+    ip_adapter_sequential: bool = Field(default=False, description="IP-Adapter with sequential images (reference + previous clip images)")
+    lora: bool = Field(default=False, description="LoRA training for character/product consistency")
+    enhanced_planning: bool = Field(default=True, description="Enhanced LLM planning")
+    vbench_quality_control: bool = Field(default=True, description="VBench quality control")
+    post_processing_enhancement: bool = Field(default=True, description="Post-processing enhancement")
+    controlnet: bool = Field(default=False, description="ControlNet for compositional consistency")
+    csfd_detection: bool = Field(default=False, description="CSFD character consistency detection")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "seed_control": True,
+                "ip_adapter_reference": False,
+                "ip_adapter_sequential": False,
+                "lora": False,
+                "enhanced_planning": True,
+                "vbench_quality_control": True,
+                "post_processing_enhancement": True,
+                "controlnet": False,
+                "csfd_detection": False,
+            }
+        }
+
+
 class GenerateRequest(BaseModel):
     """Request schema for POST /api/generate endpoint."""
     prompt: str = Field(..., min_length=10, max_length=500, description="User prompt for video generation")
+    title: Optional[str] = Field(default=None, max_length=200, description="Optional title for the video")
+    coherence_settings: Optional[CoherenceSettings] = Field(
+        default=None,
+        description="Optional coherence technique settings. If not provided, defaults will be applied."
+    )
 
 
 class StatusResponse(BaseModel):
@@ -23,6 +56,7 @@ class StatusResponse(BaseModel):
     error: Optional[str] = None
     num_scenes: Optional[int] = None  # Total number of scenes planned
     available_clips: int = 0  # Number of clips currently available for download
+    seed_value: Optional[int] = None  # Seed value used for visual consistency across scenes
 
 
 class GenerateResponse(BaseModel):
@@ -36,6 +70,7 @@ class GenerationListItem(BaseModel):
     """Schema for a single generation item in list responses."""
 
     id: str
+    title: Optional[str] = None  # User-defined title for the video
     prompt: str
     status: str
     video_url: Optional[str] = None
@@ -44,6 +79,9 @@ class GenerationListItem(BaseModel):
     cost: Optional[float] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+    generation_group_id: Optional[str] = None  # Group ID if part of parallel generation
+    variation_label: Optional[str] = None  # Variation label (A, B, C, etc.) if part of parallel generation
+    coherence_settings: Optional[dict] = None  # Coherence technique settings
 
     class Config:
         from_attributes = True
@@ -64,6 +102,47 @@ class DeleteResponse(BaseModel):
     """Response schema for DELETE /api/generations/{id} endpoint."""
     message: str
     generation_id: str
+
+
+# Parallel Generation Schemas
+class ParallelGenerateRequest(BaseModel):
+    """Request schema for POST /api/generate/parallel endpoint."""
+    variations: List[GenerateRequest] = Field(..., min_length=2, max_length=10, description="Array of generation requests (2-10 variations)")
+    comparison_type: str = Field(..., pattern="^(settings|prompt)$", description="Comparison type: 'settings' or 'prompt'")
+
+
+class ParallelGenerateResponse(BaseModel):
+    """Response schema for POST /api/generate/parallel endpoint."""
+    group_id: str
+    generation_ids: List[str]
+    status: str
+    message: str
+
+
+class VariationDetail(BaseModel):
+    """Schema for a single variation in a comparison group."""
+    generation_id: str
+    prompt: str
+    coherence_settings: Optional[dict] = None
+    status: str
+    progress: int = Field(..., ge=0, le=100)
+    video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    cost: Optional[float] = None
+    generation_time_seconds: Optional[int] = None
+    error_message: Optional[str] = None
+
+
+class ComparisonGroupResponse(BaseModel):
+    """Response schema for GET /api/comparison/{group_id} endpoint."""
+    group_id: str
+    comparison_type: str
+    variations: List[VariationDetail]
+    total_cost: float
+    differences: Optional[dict] = Field(
+        default=None,
+        description="Object showing which settings/prompts differ between variations"
+    )
 
 
 # LLM Response Schemas (for validating OpenAI API responses)

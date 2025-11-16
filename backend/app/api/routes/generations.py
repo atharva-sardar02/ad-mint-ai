@@ -1,29 +1,37 @@
 """
 Video generation route handlers.
 """
+import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.api.deps import get_current_user
-from app.db.models.generation import Generation
+from app.db.models.generation import Generation, GenerationGroup
 from app.db.models.user import User
 from app.db.session import SessionLocal, get_db
 from app.schemas.generation import (
+    CoherenceSettings,
+    ComparisonGroupResponse,
     DeleteResponse,
     GenerateRequest,
     GenerateResponse,
     GenerationListResponse,
     GenerationListItem,
+    ParallelGenerateRequest,
+    ParallelGenerateResponse,
     ScenePlan,
     StatusResponse,
+    VariationDetail,
 )
+from app.services.coherence_settings import apply_defaults, get_settings_metadata, validate_settings
 from app.services.cost_tracking import (
     track_video_generation_cost,
     track_complete_generation_cost,
@@ -39,6 +47,7 @@ from app.services.pipeline.audio import add_audio_layer
 from app.services.pipeline.export import export_final_video
 from app.services.pipeline.cache import get_cached_clip, cache_clip, should_cache_prompt
 from app.services.pipeline.video_generation import generate_video_clip, MODEL_COSTS, REPLICATE_MODELS
+from app.services.pipeline.seed_manager import get_seed_for_generation
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +113,30 @@ async def process_generation(generation_id: str, prompt: str):
             generation.num_scenes = len(scene_plan.scenes)
             db.commit()
             logger.info(f"[{generation_id}] Scene plan stored in database")
+            
+            # Seed Control: Generate and store seed if seed_control is enabled
+            seed = None
+            coherence_settings_dict = generation.coherence_settings or {}
+            seed_control_enabled = coherence_settings_dict.get("seed_control", True)  # Default to True
+            
+            if seed_control_enabled:
+                logger.info(f"[{generation_id}] Seed control enabled - generating seed for visual consistency")
+                try:
+                    seed = get_seed_for_generation(db, generation_id)
+                    if seed:
+                        logger.info(f"[{generation_id}] Using seed {seed} for all scenes in this generation")
+                    else:
+                        logger.warning(f"[{generation_id}] Seed control enabled but seed generation returned None - continuing without seed")
+                except Exception as e:
+                    # Seed generation is enhancement, not critical - continue without seed if it fails
+                    logger.error(
+                        f"[{generation_id}] Error generating seed for generation (database error or other issue): {e}. "
+                        f"Continuing generation without seed control.",
+                        exc_info=True
+                    )
+                    seed = None  # Explicitly set to None to ensure no seed is used
+            else:
+                logger.info(f"[{generation_id}] Seed control disabled - each scene will use different random seed")
             
             # Video Generation Stage (30-70% progress)
             logger.info(f"[{generation_id}] Starting video generation stage (30-70% progress)")
@@ -184,7 +217,8 @@ async def process_generation(generation_id: str, prompt: str):
                             output_dir=temp_output_dir,
                             generation_id=generation_id,
                             scene_number=i,
-                            cancellation_check=check_cancellation
+                            cancellation_check=check_cancellation,
+                            seed=seed  # Pass seed for visual consistency (None if seed_control disabled)
                         )
                         logger.info(f"[{generation_id}] Clip {i} generated successfully: {clip_path} (model: {model_used})")
                         
@@ -486,13 +520,34 @@ async def create_generation(
     """
     logger.info(f"Creating generation for user {current_user.id}, prompt length: {len(request.prompt)}")
     
+    # Process coherence settings: apply defaults if not provided, validate if provided
+    coherence_settings_dict = None
+    if request.coherence_settings:
+        # Validate provided settings
+        is_valid, error_message = validate_settings(request.coherence_settings)
+        if not is_valid:
+            logger.warning(f"Invalid coherence settings: {error_message}")
+            # Apply defaults instead of failing - backward compatibility
+            coherence_settings = apply_defaults(None)
+        else:
+            coherence_settings = request.coherence_settings
+        coherence_settings_dict = coherence_settings.model_dump()
+    else:
+        # Apply defaults if not provided
+        coherence_settings = apply_defaults(None)
+        coherence_settings_dict = coherence_settings.model_dump()
+    
+    logger.info(f"Coherence settings: {coherence_settings_dict}")
+    
     # Create Generation record with status=pending
     generation = Generation(
         user_id=current_user.id,
+        title=request.title,
         prompt=request.prompt,
         status="pending",
         progress=0,
-        current_step="Initializing"
+        current_step="Initializing",
+        coherence_settings=coherence_settings_dict
     )
     db.add(generation)
     db.commit()
@@ -510,6 +565,208 @@ async def create_generation(
         status="pending",
         message="Video generation started"
     )
+
+
+@router.post("/generate/parallel", status_code=status.HTTP_202_ACCEPTED)
+async def create_parallel_generation(
+    request: ParallelGenerateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> ParallelGenerateResponse:
+    """
+    Start multiple video generations in parallel for comparison.
+    
+    Args:
+        request: ParallelGenerateRequest with variations array (2-5) and comparison_type
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        ParallelGenerateResponse with group_id, generation_ids, and status
+    
+    Raises:
+        HTTPException: 422 if validation fails (variation count, prompt length, coherence settings)
+        HTTPException: 429 if rate limit exceeded
+        HTTPException: 500 if group creation fails
+    """
+    logger.info(f"Creating parallel generation for user {current_user.id}, {len(request.variations)} variations, type: {request.comparison_type}")
+    
+    # Validate variation count (2-10)
+    if len(request.variations) < 2 or len(request.variations) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": {
+                    "code": "INVALID_VARIATION_COUNT",
+                    "message": "Number of variations must be between 2 and 10"
+                }
+            }
+        )
+    
+    # Validate all prompts
+    for i, variation in enumerate(request.variations):
+        if len(variation.prompt) < 10 or len(variation.prompt) > 500:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": {
+                        "code": "INVALID_PROMPT_LENGTH",
+                        "message": f"Variation {i+1}: Prompt must be between 10 and 500 characters"
+                    }
+                }
+            )
+        
+        # Validate coherence settings if provided
+        if variation.coherence_settings:
+            is_valid, error_message = validate_settings(variation.coherence_settings)
+            if not is_valid:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "error": {
+                            "code": "INVALID_COHERENCE_SETTINGS",
+                            "message": f"Variation {i+1}: {error_message}"
+                        }
+                    }
+                )
+    
+    # Rate limiting: Check user's generation count in the last hour (PRD: 10 videos/hour per user)
+    # For parallel generation, count each variation as a video
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_generation_count = db.query(func.count(Generation.id)).filter(
+        Generation.user_id == current_user.id,
+        Generation.created_at >= one_hour_ago
+    ).scalar() or 0
+    
+    # Check if adding new variations would exceed the limit
+    total_requested = len(request.variations)
+    if recent_generation_count + total_requested > 10:
+        remaining = max(0, 10 - recent_generation_count)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": {
+                    "code": "RATE_LIMIT_EXCEEDED",
+                    "message": f"Rate limit exceeded. You can generate {remaining} more video(s) in the next hour. (Limit: 10 videos/hour)"
+                }
+            }
+        )
+    
+    # Create generation_group record
+    try:
+        generation_group = GenerationGroup(
+            user_id=current_user.id,
+            comparison_type=request.comparison_type
+        )
+        db.add(generation_group)
+        db.commit()
+        db.refresh(generation_group)
+        group_id = generation_group.id
+        logger.info(f"Created generation group {group_id}")
+    except Exception as e:
+        logger.error(f"Failed to create generation group: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "GROUP_CREATION_FAILED",
+                    "message": "Failed to create generation group"
+                }
+            }
+        )
+    
+    # Create generation records for each variation
+    generation_ids = []
+    errors = []
+    
+    for i, variation in enumerate(request.variations):
+        try:
+            # Process coherence settings: apply defaults if not provided, validate if provided
+            coherence_settings_dict = None
+            if variation.coherence_settings:
+                coherence_settings = variation.coherence_settings
+                coherence_settings_dict = coherence_settings.model_dump()
+            else:
+                # Apply defaults if not provided
+                coherence_settings = apply_defaults(None)
+                coherence_settings_dict = coherence_settings.model_dump()
+            
+            # Create Generation record with status=pending
+            # Generate title from variation if not provided: "Variation {letter}" or use prompt preview
+            variation_title = variation.title if hasattr(variation, 'title') and variation.title else None
+            if not variation_title:
+                # Auto-generate title based on variation index
+                variation_letter = chr(65 + i)  # A, B, C, etc.
+                variation_title = f"Variation {variation_letter}"
+            
+            generation = Generation(
+                user_id=current_user.id,
+                title=variation_title,
+                prompt=variation.prompt,
+                status="pending",
+                progress=0,
+                current_step="Initializing",
+                coherence_settings=coherence_settings_dict,
+                generation_group_id=group_id
+            )
+            db.add(generation)
+            db.commit()
+            db.refresh(generation)
+            
+            generation_ids.append(generation.id)
+            logger.info(f"Created generation {generation.id} for variation {i+1}")
+            
+            # Start generation task concurrently using asyncio
+            # This allows true parallel processing instead of sequential BackgroundTasks
+            # The task will run in the background even after the response is sent
+            asyncio.create_task(process_generation(generation.id, variation.prompt))
+            logger.info(f"Started background task for generation {generation.id} (variation {i+1})")
+            
+        except Exception as e:
+            logger.error(f"Failed to create generation for variation {i+1}: {e}")
+            errors.append(f"Variation {i+1}: {str(e)}")
+            # Continue with other variations even if one fails
+    
+    # If all variations failed, return error
+    if len(generation_ids) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "ALL_VARIATIONS_FAILED",
+                    "message": "Failed to create any generation variations",
+                    "errors": errors
+                }
+            }
+        )
+    
+    # Log any partial failures
+    if errors:
+        logger.warning(f"Generation group {group_id} created with {len(errors)} failed variations: {errors}")
+    
+    logger.info(f"Created parallel generation group {group_id} with {len(generation_ids)} variations")
+    
+    # Return immediately - processing happens in background
+    return ParallelGenerateResponse(
+        group_id=group_id,
+        generation_ids=generation_ids,
+        status="pending",
+        message=f"Parallel generation started with {len(generation_ids)} variations"
+    )
+
+
+@router.get("/coherence/settings/defaults", status_code=status.HTTP_200_OK)
+async def get_coherence_settings_defaults():
+    """
+    Get default coherence settings with metadata (recommended, cost impact, time impact, descriptions).
+    
+    Returns:
+        Dict: Default coherence settings with metadata for each technique
+    """
+    metadata = get_settings_metadata()
+    return metadata
 
 
 @router.get("/status/{generation_id}", status_code=status.HTTP_200_OK)
@@ -585,7 +842,8 @@ async def get_generation_status(
         cost=generation.cost,
         error=generation.error_message,
         num_scenes=generation.num_scenes,
-        available_clips=available_clips
+        available_clips=available_clips,
+        seed_value=generation.seed_value
     )
 
 
@@ -681,7 +939,148 @@ async def cancel_generation(
         cost=generation.cost,
         error=generation.error_message,
         num_scenes=generation.num_scenes,
-        available_clips=available_clips
+        available_clips=available_clips,
+        seed_value=generation.seed_value
+    )
+
+
+@router.get("/comparison/{group_id}", response_model=ComparisonGroupResponse, status_code=status.HTTP_200_OK)
+async def get_comparison_group(
+    group_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> ComparisonGroupResponse:
+    """
+    Get comparison group with all variations and metadata.
+    
+    Args:
+        group_id: UUID of the generation group
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        ComparisonGroupResponse with all variations, metadata, and comparison details
+    
+    Raises:
+        HTTPException: 404 if group not found
+        HTTPException: 403 if user doesn't own the group
+    """
+    # Query generation group
+    generation_group = db.query(GenerationGroup).filter(GenerationGroup.id == group_id).first()
+    
+    if not generation_group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GROUP_NOT_FOUND",
+                    "message": "Generation group not found"
+                }
+            }
+        )
+    
+    # Check authorization - user can only access their own comparison groups
+    if generation_group.user_id != current_user.id:
+        logger.warning(f"User {current_user.id} attempted to access generation group {group_id} owned by {generation_group.user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to access this comparison group"
+                }
+            }
+        )
+    
+    # Query all generations in the group
+    generations = db.query(Generation).filter(Generation.generation_group_id == group_id).order_by(Generation.created_at).all()
+    
+    if not generations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "NO_VARIATIONS_FOUND",
+                    "message": "No variations found in this comparison group"
+                }
+            }
+        )
+    
+    # Helper function to convert relative paths to full URLs
+    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
+        """Convert relative path to full URL for frontend consumption."""
+        if not relative_path:
+            return None
+        from app.core.config import settings
+        # If already a full URL, return as-is
+        if relative_path.startswith("http://") or relative_path.startswith("https://"):
+            return relative_path
+        # Convert relative path to full URL
+        base_url = settings.STATIC_BASE_URL.rstrip("/")
+        path = relative_path.lstrip("/")
+        return f"{base_url}/{path}"
+    
+    # Build variations list
+    variations = []
+    total_cost = 0.0
+    
+    for gen in generations:
+        # Calculate cost (default to 0 if not set)
+        cost = gen.cost if gen.cost is not None else 0.0
+        total_cost += cost
+        
+        variation = VariationDetail(
+            generation_id=gen.id,
+            prompt=gen.prompt,
+            coherence_settings=gen.coherence_settings,
+            status=gen.status,
+            progress=gen.progress,
+            video_url=get_full_url(gen.video_url),
+            thumbnail_url=get_full_url(gen.thumbnail_url),
+            cost=cost,
+            generation_time_seconds=gen.generation_time_seconds,
+            error_message=gen.error_message
+        )
+        variations.append(variation)
+    
+    # Calculate differences between variations
+    differences = {}
+    
+    if generation_group.comparison_type == "settings":
+        # For settings comparison: show which settings differ
+        # Compare coherence_settings across all variations
+        if len(variations) > 1:
+            first_settings = variations[0].coherence_settings or {}
+            differing_settings = {}
+            
+            for i, variation in enumerate(variations[1:], start=1):
+                current_settings = variation.coherence_settings or {}
+                for key in set(list(first_settings.keys()) + list(current_settings.keys())):
+                    if first_settings.get(key) != current_settings.get(key):
+                        if key not in differing_settings:
+                            differing_settings[key] = {
+                                "variation_0": first_settings.get(key),
+                                f"variation_{i}": current_settings.get(key)
+                            }
+                        else:
+                            differing_settings[key][f"variation_{i}"] = current_settings.get(key)
+            
+            if differing_settings:
+                differences["settings"] = differing_settings
+    
+    elif generation_group.comparison_type == "prompt":
+        # For prompt comparison: show prompt differences
+        prompts = [v.prompt for v in variations]
+        differences["prompts"] = prompts
+    
+    logger.info(f"User {current_user.id} retrieved comparison group {group_id} with {len(variations)} variations")
+    
+    return ComparisonGroupResponse(
+        group_id=group_id,
+        comparison_type=generation_group.comparison_type,
+        variations=variations,
+        total_cost=total_cost,
+        differences=differences if differences else None
     )
 
 
@@ -770,21 +1169,60 @@ async def get_generations(
         path = relative_path.lstrip("/")
         return f"{base_url}/{path}"
     
+    # Pre-fetch variation labels for all generations in groups (optimize N+1 queries)
+    # Get unique group IDs from the current page of generations
+    group_ids = [gen.generation_group_id for gen in generations if gen.generation_group_id]
+    group_ids = list(set(group_ids))  # Remove duplicates and convert to list
+    
+    # Fetch all generations in these groups, ordered by creation time
+    group_generations_map = {}
+    if group_ids:
+        try:
+            all_group_generations = db.query(Generation).filter(
+                Generation.generation_group_id.in_(group_ids)
+            ).order_by(Generation.created_at).all()
+            
+            # Group by generation_group_id and create index maps
+            for group_id in group_ids:
+                group_gens = [g for g in all_group_generations if g.generation_group_id == group_id]
+                # Sort by created_at to ensure consistent ordering
+                group_gens.sort(key=lambda g: g.created_at)
+                # Create a map of generation_id -> index for quick lookup
+                group_generations_map[group_id] = {
+                    gen.id: idx for idx, gen in enumerate(group_gens)
+                }
+        except Exception as e:
+            logger.error(f"Error fetching group generations: {e}")
+            # Continue without variation labels if there's an error
+    
     # Convert to Pydantic models
-    generation_items = [
-        GenerationListItem(
-            id=gen.id,
-            prompt=gen.prompt,
-            status=gen.status,
-            video_url=get_full_url(gen.video_url),
-            thumbnail_url=get_full_url(gen.thumbnail_url),
-            duration=gen.duration,
-            cost=gen.cost,
-            created_at=gen.created_at,
-            completed_at=gen.completed_at,
+    generation_items = []
+    for gen in generations:
+        # Calculate variation label if part of a parallel generation group
+        variation_label = None
+        if gen.generation_group_id and gen.generation_group_id in group_generations_map:
+            idx = group_generations_map[gen.generation_group_id].get(gen.id)
+            if idx is not None:
+                # Convert index to letter (0 -> A, 1 -> B, etc.)
+                variation_label = chr(65 + idx)  # 65 is ASCII for 'A'
+        
+        generation_items.append(
+            GenerationListItem(
+                id=gen.id,
+                title=gen.title,
+                prompt=gen.prompt,
+                status=gen.status,
+                video_url=get_full_url(gen.video_url),
+                thumbnail_url=get_full_url(gen.thumbnail_url),
+                duration=gen.duration,
+                cost=gen.cost,
+                created_at=gen.created_at,
+                completed_at=gen.completed_at,
+                generation_group_id=gen.generation_group_id,
+                variation_label=variation_label,
+                coherence_settings=gen.coherence_settings,
+            )
         )
-        for gen in generations
-    ]
 
     logger.info(
         f"User {current_user.id} retrieved {len(generation_items)} generations "

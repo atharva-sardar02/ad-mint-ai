@@ -197,4 +197,80 @@ async def test_validate_video_missing_file(tmp_path):
         await _validate_video(video_path, expected_duration=5)
 
 
+@pytest.mark.asyncio
+async def test_generate_video_clip_with_seed(sample_scene, mock_replicate_client, tmp_path):
+    """Test that seed parameter is passed to Replicate API when provided."""
+    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+        mock_settings.REPLICATE_API_TOKEN = "test-token"
+        
+        # Mock prediction
+        prediction = MagicMock()
+        prediction.status = "succeeded"
+        prediction.output = "https://example.com/video.mp4"
+        prediction.id = "pred-123"
+        
+        mock_replicate_client.predictions.create.return_value = prediction
+        mock_replicate_client.predictions.get.return_value = prediction
+        
+        # Mock download and validation
+        with patch('app.services.pipeline.video_generation._download_video') as mock_download:
+            with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
+                output_dir = str(tmp_path)
+                test_seed = 12345
+                
+                clip_path, model_used = await generate_video_clip(
+                    scene=sample_scene,
+                    output_dir=output_dir,
+                    generation_id="test-gen-123",
+                    scene_number=1,
+                    seed=test_seed
+                )
+                
+                # Verify seed was passed to API
+                call_args = mock_replicate_client.predictions.create.call_args
+                assert call_args is not None
+                
+                # Check that seed is in input parameters
+                input_params = call_args.kwargs.get('input', {})
+                assert 'seed' in input_params
+                assert input_params['seed'] == test_seed
+
+
+@pytest.mark.asyncio
+async def test_generate_video_clip_without_seed(sample_scene, mock_replicate_client, tmp_path):
+    """Test that seed parameter is not passed when None."""
+    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+        mock_settings.REPLICATE_API_TOKEN = "test-token"
+        
+        # Mock prediction
+        prediction = MagicMock()
+        prediction.status = "succeeded"
+        prediction.output = "https://example.com/video.mp4"
+        prediction.id = "pred-123"
+        
+        mock_replicate_client.predictions.create.return_value = prediction
+        mock_replicate_client.predictions.get.return_value = prediction
+        
+        # Mock download and validation
+        with patch('app.services.pipeline.video_generation._download_video') as mock_download:
+            with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
+                output_dir = str(tmp_path)
+                
+                clip_path, model_used = await generate_video_clip(
+                    scene=sample_scene,
+                    output_dir=output_dir,
+                    generation_id="test-gen-123",
+                    scene_number=1,
+                    seed=None  # Explicitly no seed
+                )
+                
+                # Verify seed was not passed to API
+                call_args = mock_replicate_client.predictions.create.call_args
+                assert call_args is not None
+                
+                # Check that seed is not in input parameters
+                input_params = call_args.kwargs.get('input', {})
+                assert 'seed' not in input_params
+
+
 

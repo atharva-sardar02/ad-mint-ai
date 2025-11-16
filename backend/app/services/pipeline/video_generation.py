@@ -45,7 +45,8 @@ async def generate_video_clip(
     output_dir: str,
     generation_id: str,
     scene_number: int,
-    cancellation_check: Optional[callable] = None
+    cancellation_check: Optional[callable] = None,
+    seed: Optional[int] = None
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -56,6 +57,7 @@ async def generate_video_clip(
         generation_id: Generation ID for logging and cost tracking
         scene_number: Scene number for logging
         cancellation_check: Optional function to check if generation should be cancelled
+        seed: Optional seed value for visual consistency across scenes
     
     Returns:
         tuple[str, str]: (Path to the generated video clip file, Model name used)
@@ -109,7 +111,8 @@ async def generate_video_clip(
                 model_name=model_name,
                 prompt=scene.visual_prompt,
                 duration=scene.duration,
-                cancellation_check=cancellation_check
+                cancellation_check=cancellation_check,
+                seed=seed
             )
             
             # Download video clip
@@ -161,7 +164,8 @@ async def _generate_with_retry(
     model_name: str,
     prompt: str,
     duration: int,
-    cancellation_check: Optional[callable] = None
+    cancellation_check: Optional[callable] = None,
+    seed: Optional[int] = None
 ) -> str:
     """
     Generate video with retry logic and exponential backoff.
@@ -171,6 +175,7 @@ async def _generate_with_retry(
         prompt: Visual prompt for video generation
         duration: Target duration in seconds (3-7)
         cancellation_check: Optional function to check cancellation
+        seed: Optional seed value for visual consistency
     
     Returns:
         str: URL to the generated video
@@ -181,6 +186,7 @@ async def _generate_with_retry(
     client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
     
     last_error = None
+    use_seed = seed is not None  # Track whether to use seed (may be disabled if model doesn't support it)
     
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -200,7 +206,28 @@ async def _generate_with_retry(
                 "aspect_ratio": "9:16",  # Vertical for MVP
             }
             
+            # Add seed parameter if provided and not disabled (for visual consistency)
+            # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
+            if use_seed and seed is not None:
+                input_params["seed"] = seed
+                logger.debug(f"Using seed {seed} for video generation with model {model_name}")
+                # Log warning for models that may not support seed (based on known model list)
+                # This is informational - API will handle gracefully if seed is not supported
+                models_with_known_seed_support = [
+                    "bytedance/seedance-1-lite",
+                    "minimax-ai/minimax-video-01",
+                    "klingai/kling-video",
+                    "runway/gen3-alpha-turbo"
+                ]
+                if model_name not in models_with_known_seed_support:
+                    logger.warning(
+                        f"Seed parameter provided for model {model_name} - seed support not verified. "
+                        f"API will ignore seed if model doesn't support it."
+                    )
+            
             # Create prediction
+            # Note: If model doesn't support seed parameter, Replicate API will ignore it silently
+            # or return an error. We handle errors in the exception handlers below.
             prediction = client.predictions.create(
                 model=model_name,
                 input=input_params
@@ -256,6 +283,21 @@ async def _generate_with_retry(
         
         except replicate.exceptions.ReplicateError as e:
             last_error = e
+            # Check if error is related to unsupported seed parameter
+            error_str = str(e).lower()
+            if use_seed and "seed" in error_str and ("invalid" in error_str or "not supported" in error_str or "unknown" in error_str):
+                logger.warning(
+                    f"Model {model_name} may not support seed parameter: {e}. "
+                    f"Retrying without seed parameter..."
+                )
+                # Disable seed for remaining attempts if seed parameter caused the error
+                if attempt < MAX_RETRIES:
+                    use_seed = False  # Disable seed for future attempts
+                    logger.info(f"Retrying {model_name} without seed parameter (attempt {attempt + 1}/{MAX_RETRIES})")
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+                    await asyncio.sleep(delay)
+                    continue
+            
             if attempt < MAX_RETRIES:
                 # Exponential backoff for other API errors
                 delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)

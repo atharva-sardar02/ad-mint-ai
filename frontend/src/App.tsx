@@ -13,6 +13,7 @@ import { Gallery } from "./routes/Gallery";
 import { VideoDetail } from "./routes/VideoDetail";
 import { Profile } from "./routes/Profile";
 import { GenerationStatus } from "./routes/GenerationStatus";
+import { ComparisonDetail } from "./routes/ComparisonDetail";
 import "./App.css";
 
 /**
@@ -93,6 +94,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <GenerationStatus />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/comparison/:groupId"
+            element={
+              <ProtectedRoute>
+                <ComparisonDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video/:id"
+            element={
+              <ProtectedRoute>
+                <VideoDetail />
               </ProtectedRoute>
             }
           />

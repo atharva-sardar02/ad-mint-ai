@@ -79,14 +79,15 @@ development_status:
   epic-6-retrospective: optional
 
   epic-7: contexted
-  7-0-coherence-settings-ui-panel: ready-for-dev
-  7-1-seed-control-and-latent-reuse-for-visual-coherence: backlog
-  7-2-llm-guided-multi-scene-planning-videodirectorgpt-style: backlog
-  7-3-ip-adapter-integration-for-characterproduct-identity-preservation: backlog
-  7-4-lora-training-pipeline-for-recurring-characterproduct-identity: backlog
-  7-5-vbench-integration-for-automated-quality-control: backlog
-  7-6-enhanced-post-processing-with-brand-palette-preservation: backlog
-  7-7-cross-scene-entity-consistency-detection-csfd-score: backlog
-  7-8-controlnet-integration-for-compositional-consistency: backlog
-  7-9-quality-feedback-loop-with-research-metrics: backlog
+  7-0-coherence-settings-ui-panel: done
+  7-1-seed-control-and-latent-reuse-for-visual-coherence: done
+  7-2-parallel-generation-and-comparison-tool: done
+  7-3-llm-guided-multi-scene-planning-videodirectorgpt-style: backlog
+  7-4-ip-adapter-integration-for-characterproduct-identity-preservation: backlog
+  7-5-lora-training-pipeline-for-recurring-characterproduct-identity: backlog
+  7-6-vbench-integration-for-automated-quality-control: backlog
+  7-7-enhanced-post-processing-with-brand-palette-preservation: backlog
+  7-8-cross-scene-entity-consistency-detection-csfd-score: backlog
+  7-9-controlnet-integration-for-compositional-consistency: backlog
+  7-10-quality-feedback-loop-with-research-metrics: backlog
   epic-7-retrospective: optional
