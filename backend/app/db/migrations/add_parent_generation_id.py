@@ -63,10 +63,12 @@ def run_migration():
                 print("✅ Added parent_generation_id column (or already exists)")
             
             else:
-                print("⚠️  Unknown database type, skipping migration")
-                return
+                print(f"⚠️  Unknown database type: {db_url}")
+                print("Please run migration manually for your database")
+                return False
             
             print("✅ Migration completed successfully")
+            return True
             
         except Exception as e:
             print(f"❌ Migration failed: {e}")
@@ -75,5 +77,10 @@ def run_migration():
 
 
 if __name__ == "__main__":
-    run_migration()
+    try:
+        success = run_migration()
+        sys.exit(0 if success else 1)
+    except Exception as e:
+        print(f"❌ Migration error: {e}")
+        sys.exit(1)
 
