@@ -89,7 +89,7 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
   });
 
@@ -103,10 +103,10 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
@@ -132,11 +132,11 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
     // Click delete button
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     // Wait for confirmation dialog
@@ -170,21 +170,23 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
     // Click delete and confirm
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      const confirmButton = screen.getByText("Delete");
+      const confirmButton = screen.getByRole("button", { name: "Delete" });
       fireEvent.click(confirmButton);
     });
 
-    // Button should be disabled during deletion
+    // Button should be disabled during deletion and show loading state
     await waitFor(() => {
-      const deleteBtn = screen.getByText("Delete Video");
+      // When loading, button shows "Loading..." instead of "Delete Video"
+      // So we find it by role and check it's disabled
+      const deleteBtn = screen.getByRole("button", { name: /loading/i });
       expect(deleteBtn).toBeDisabled();
     });
   });
@@ -203,11 +205,11 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
     // Click delete and confirm
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
@@ -237,11 +239,11 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
     // Click delete and confirm
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
@@ -250,7 +252,10 @@ describe("VideoDetail", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to delete video")).toBeInTheDocument();
+      // Error message appears in both Toast and ErrorMessage components
+      // Verify at least one error message is displayed
+      const errorMessages = screen.getAllByText("Failed to delete video");
+      expect(errorMessages.length).toBeGreaterThan(0);
     });
   });
 
@@ -267,11 +272,11 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
     // Click delete and confirm
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
@@ -314,11 +319,11 @@ describe("VideoDetail", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Delete Video")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete Video" })).toBeInTheDocument();
     });
 
     // Click delete button
-    const deleteButton = screen.getByText("Delete Video");
+    const deleteButton = screen.getByRole("button", { name: "Delete Video" });
     fireEvent.click(deleteButton);
 
     // Wait for confirmation dialog

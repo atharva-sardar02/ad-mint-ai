@@ -7,9 +7,14 @@ import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Textarea";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { ProgressBar } from "../components/ProgressBar";
-import { Select } from "../components/ui/Select";
+import { CoherenceSettingsPanel, validateCoherenceSettings } from "../components/coherence";
+import type { CoherenceSettings as CoherenceSettingsType } from "../components/coherence";
+import { BasicSettingsPanel } from "../components/basic/BasicSettingsPanel";
+import type { BasicSettings } from "../components/basic/BasicSettingsPanel";
+import { ParallelGenerationPanel } from "../components/generation";
 import { generationService } from "../lib/generationService";
-import type { StatusResponse } from "../lib/generationService";
+import type { StatusResponse, GenerateRequest, ComparisonType } from "../lib/generationService";
+import { useNavigate } from "react-router-dom";
 import { getUserProfile } from "../lib/userService";
 import type { UserProfile } from "../lib/types/api";
 
@@ -17,6 +22,7 @@ const MIN_PROMPT_LENGTH = 10;
 
 interface ValidationErrors {
   prompt?: string;
+  coherence_settings?: { [key: string]: string };
 }
 
 /**
@@ -24,17 +30,33 @@ interface ValidationErrors {
  */
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
 
   const [prompt, setPrompt] = useState("");
+  const [title, setTitle] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [apiError, setApiError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeGeneration, setActiveGeneration] = useState<StatusResponse | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [useSingleClip, setUseSingleClip] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>("");
-  const [numClips, setNumClips] = useState<number>(1);
-  const [useLlm, setUseLlm] = useState<boolean>(true);
+  const [coherenceSettings, setCoherenceSettings] = useState<CoherenceSettingsType>({
+    seed_control: true,
+    ip_adapter_reference: false,
+    ip_adapter_sequential: false,
+    lora: false,
+    enhanced_planning: true,
+    vbench_quality_control: true,
+    post_processing_enhancement: true,
+    controlnet: false,
+    csfd_detection: false,
+  });
+  const [parallelMode, setParallelMode] = useState<boolean>(false);
+  const [basicSettings, setBasicSettings] = useState<BasicSettings>({
+    useSingleClip: false,
+    useLlm: true,
+    model: "",
+    numClips: 1,
+  });
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
@@ -43,17 +65,61 @@ export const Dashboard: React.FC = () => {
    * Fetch latest user profile data on mount and when generation completes.
    */
   useEffect(() => {
+    let isMounted = true;
+
     const fetchProfile = async () => {
       try {
         const profile = await getUserProfile();
+        
+        // Check if component is still mounted before updating state
+        if (!isMounted) return;
+        
         setUserProfile(profile);
       } catch (error) {
         // Silently fail - user data from auth store will be used as fallback
-        console.warn("Failed to fetch user profile:", error);
+        if (isMounted) {
+          console.warn("Failed to fetch user profile:", error);
+        }
       }
     };
 
     fetchProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  /**
+   * Fetch coherence settings defaults from API on mount.
+   * This ensures we have the latest metadata for tooltips and descriptions.
+   */
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDefaults = async () => {
+      try {
+        const defaults = await generationService.getCoherenceSettingsDefaults();
+        
+        // Check if component is still mounted before logging
+        if (!isMounted) return;
+        
+        // Metadata is available for future use (e.g., dynamic tooltip updates)
+        // Currently, component uses hardcoded TECHNIQUE_INFO, but this ensures API is working
+        console.debug("Coherence settings defaults fetched:", defaults);
+      } catch (error) {
+        // Silently fail - component will use hardcoded defaults
+        if (isMounted) {
+          console.warn("Failed to fetch coherence settings defaults:", error);
+        }
+      }
+    };
+
+    fetchDefaults();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   /**
@@ -61,17 +127,29 @@ export const Dashboard: React.FC = () => {
    */
   useEffect(() => {
     if (activeGeneration?.status === "completed") {
+      let isMounted = true;
+
       const fetchProfile = async () => {
         try {
           const profile = await getUserProfile();
+          
+          // Check if component is still mounted before updating state
+          if (!isMounted) return;
+          
           setUserProfile(profile);
         } catch (error) {
           // Silently fail - existing profile data will remain
-          console.warn("Failed to refresh user profile:", error);
+          if (isMounted) {
+            console.warn("Failed to refresh user profile:", error);
+          }
         }
       };
 
       fetchProfile();
+
+      return () => {
+        isMounted = false;
+      };
     }
   }, [activeGeneration?.status]);
 
@@ -118,11 +196,19 @@ export const Dashboard: React.FC = () => {
     consecutiveErrorsRef.current = 0; // Reset error count when starting new polling
     pollCountRef.current = 0; // Reset poll count when starting new polling
     const generationId = activeGeneration.generation_id; // Capture generation ID
+    let isMounted = true; // Track if component is still mounted
 
     // Set up polling interval with error handling
     const poll = async () => {
+      // Check if component is still mounted before making async call
+      if (!isMounted) return;
+
       try {
         const status = await generationService.getGenerationStatus(generationId);
+        
+        // Check again after async operation
+        if (!isMounted) return;
+        
         consecutiveErrorsRef.current = 0; // Reset error count on success
         pollCountRef.current++;
         setApiError(""); // Clear any error messages on successful poll
@@ -138,12 +224,15 @@ export const Dashboard: React.FC = () => {
         }
 
         // After first 5 polls, switch to normal interval if still using fast polling
-        if (pollCountRef.current >= 5 && pollingIntervalRef.current) {
+        if (pollCountRef.current >= 5 && pollingIntervalRef.current && isMounted) {
           const currentInterval = pollingIntervalRef.current;
           clearInterval(currentInterval);
           pollingIntervalRef.current = setInterval(poll, baseInterval);
         }
       } catch (error: any) {
+        // Don't update state if component unmounted
+        if (!isMounted) return;
+        
         consecutiveErrorsRef.current++;
         
         // Only log first few errors to avoid console spam
@@ -171,6 +260,7 @@ export const Dashboard: React.FC = () => {
 
     // Cleanup on unmount or when dependencies change
     return () => {
+      isMounted = false;
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
@@ -195,10 +285,19 @@ export const Dashboard: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate before submission
+    // Validate prompt
     if (!isValid) {
       setErrors({
         prompt: `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`,
+      });
+      return;
+    }
+
+    // Validate coherence settings
+    const coherenceErrors = validateCoherenceSettings(coherenceSettings);
+    if (Object.keys(coherenceErrors).length > 0) {
+      setErrors({
+        coherence_settings: coherenceErrors,
       });
       return;
     }
@@ -209,23 +308,25 @@ export const Dashboard: React.FC = () => {
 
     try {
       let response;
-      if (useSingleClip) {
-        if (!selectedModel) {
+      if (basicSettings.useSingleClip) {
+        if (!basicSettings.model) {
           setApiError("Please select a model for single clip generation");
           setIsLoading(false);
           return;
         }
         response = await generationService.startSingleClipGeneration(
           prompt,
-          selectedModel,
-          numClips
+          basicSettings.model,
+          basicSettings.numClips
         );
       } else {
         response = await generationService.startGeneration(
           prompt,
-          selectedModel || undefined,
-          numClips > 1 ? numClips : undefined,
-          useLlm
+          basicSettings.model || undefined,
+          basicSettings.numClips > 1 ? basicSettings.numClips : undefined,
+          basicSettings.useLlm,
+          coherenceSettings,
+          title || undefined
         );
       }
       
@@ -242,11 +343,34 @@ export const Dashboard: React.FC = () => {
         available_clips: 0,
       });
       
-      // Clear prompt after successful submission
+      // Clear prompt and title after successful submission
       setPrompt("");
+      setTitle("");
     } catch (error: any) {
       setApiError(
         error?.message || "Failed to start video generation. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Handle parallel generation submission.
+   */
+  const handleParallelSubmit = async (variations: GenerateRequest[], comparisonType: ComparisonType) => {
+    setIsLoading(true);
+    setApiError("");
+    setErrors({});
+
+    try {
+      const response = await generationService.generateParallel(variations, comparisonType);
+      
+      // Navigate to comparison view
+      navigate(`/comparison/${response.group_id}`);
+    } catch (error: any) {
+      setApiError(
+        error?.response?.data?.error?.message || error?.message || "Failed to start parallel generation. Please try again."
       );
     } finally {
       setIsLoading(false);
@@ -269,6 +393,7 @@ export const Dashboard: React.FC = () => {
   const handleStartNew = () => {
     setActiveGeneration(null);
     setPrompt("");
+    setTitle("");
     setApiError("");
     setErrors({});
   };
@@ -394,9 +519,61 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Generation Form (hidden when active generation is processing) */}
+          {/* Parallel Generation Toggle */}
           {(!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
+            <div className="mb-6">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={parallelMode}
+                  onChange={(e) => setParallelMode(e.target.checked)}
+                  className="mr-2"
+                  disabled={isLoading}
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Enable Parallel Generation Mode
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1 ml-6">
+                Generate multiple variations in parallel for comparison
+              </p>
+            </div>
+          )}
+
+          {/* Parallel Generation Panel */}
+          {parallelMode && (!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
+            <div className="mb-6">
+              <ParallelGenerationPanel
+                onSubmit={handleParallelSubmit}
+                onCancel={() => setParallelMode(false)}
+                isLoading={isLoading}
+                error={apiError}
+              />
+            </div>
+          )}
+
+          {/* Single Generation Form (hidden when parallel mode is active or active generation is processing) */}
+          {!parallelMode && (!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                  Video Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., Luxury Watch Ad - Instagram"
+                  maxLength={200}
+                  disabled={isLoading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Give your video a name to easily identify it later
+                </p>
+              </div>
+
               <Textarea
                 label="Video Prompt"
                 id="prompt"
@@ -411,92 +588,34 @@ export const Dashboard: React.FC = () => {
                 required
               />
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <BasicSettingsPanel
+                  settings={basicSettings}
+                  onChange={setBasicSettings}
+                  disabled={isLoading}
+                />
+
+                <CoherenceSettingsPanel
+                  settings={coherenceSettings}
+                  onChange={setCoherenceSettings}
+                  errors={errors.coherence_settings}
+                  disabled={isLoading}
+                />
+              </div>
+
               {apiError && (
                 <ErrorMessage message={apiError} />
               )}
 
-              {/* Single Clip Mode Toggle */}
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="useSingleClip"
-                  checked={useSingleClip}
-                  onChange={(e) => setUseSingleClip(e.target.checked)}
-                  disabled={isLoading}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="useSingleClip" className="text-sm font-medium text-gray-700">
-                  Generate single clip (bypass pipeline)
-                </label>
-              </div>
-
-              {/* LLM Enhancement Toggle */}
-              {!useSingleClip && (
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="useLlm"
-                    checked={useLlm}
-                    onChange={(e) => setUseLlm(e.target.checked)}
-                    disabled={isLoading}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="useLlm" className="text-sm font-medium text-gray-700">
-                    Use LLM enhancement (recommended)
-                  </label>
-                </div>
-              )}
-
-              {/* Model Selection */}
-              <Select
-                label="Video Model"
-                id="model"
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                disabled={isLoading}
-                required={useSingleClip}
-                options={[
-                  { value: "", label: useSingleClip ? "Select a model (required)" : "Auto (use default)" },
-                  { value: "bytedance/seedance-1-lite", label: "Seedance-1-Lite (Primary)" },
-                  { value: "minimax-ai/minimax-video-01", label: "Minimax Video-01" },
-                  { value: "klingai/kling-video", label: "Kling 1.5" },
-                  { value: "runway/gen3-alpha-turbo", label: "Runway Gen-3 Alpha Turbo" },
-                  { value: "openai/sora-2", label: "Sora-2" },
-                ]}
-              />
-
-              {/* Number of Clips */}
-              <Select
-                label="Number of Clips"
-                id="numClips"
-                value={numClips.toString()}
-                onChange={(e) => setNumClips(parseInt(e.target.value, 10))}
-                disabled={isLoading}
-                options={Array.from({ length: 10 }, (_, i) => ({
-                  value: (i + 1).toString(),
-                  label: (i + 1).toString(),
-                }))}
-              />
-
-              <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  isLoading={isLoading}
-                  disabled={!isValid || isLoading}
-                  fullWidth
-                >
-                  Generate Video
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleLogout}
-                  disabled={isLoading}
-                >
-                  Logout
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isLoading}
+                disabled={!isValid || isLoading}
+                fullWidth
+              >
+                Generate Video
+              </Button>
             </form>
           )}
         </div>

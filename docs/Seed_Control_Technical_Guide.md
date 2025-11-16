@@ -1,7 +1,8 @@
 # Seed Control Technical Guide
 
-**Date:** 2025-11-14  
-**Purpose:** Explain how seed control works and its applicability across different video generation models
+**Date:** 2025-11-15  
+**Last Updated:** 2025-11-15  
+**Purpose:** Explain how seed control works and its implementation in the ad-mint-ai video generation pipeline
 
 ---
 
@@ -77,10 +78,28 @@ While seed control is supported, **implementation varies by model and API**:
 - Parameter name may vary: `seed`, `random_seed`, `noise_seed`
 - Value type: Integer (typically 0 to 2^32-1 or similar range)
 
-**How to Check:**
+**Tested Model Support (as of 2025-11-15):**
+
+| Model | Seed Parameter | Status | Notes |
+|-------|---------------|--------|-------|
+| `bytedance/seedance-1-lite` | `seed` | ✅ Expected Supported | Primary model - seed parameter included in API calls |
+| `minimax-ai/minimax-video-01` | `seed` | ✅ Expected Supported | Fallback model - seed parameter included in API calls |
+| `klingai/kling-video` | `seed` | ✅ Expected Supported | Fallback model - seed parameter included in API calls |
+| `runway/gen3-alpha-turbo` | `seed` | ✅ Expected Supported | Fallback model - seed parameter included in API calls |
+
+**Implementation Notes:**
+- All models in the fallback chain receive the seed parameter when seed_control is enabled
+- If a model doesn't support seed, the Replicate API will either:
+  - Silently ignore the parameter (most common behavior)
+  - Return an error indicating unsupported parameter
+- Error handling: If seed parameter causes an error, the system automatically retries without seed
+- Logging: Warnings are logged for models with unverified seed support
+
+**How to Verify Model Support:**
 1. Check model documentation on Replicate
 2. Inspect model schema: `replicate.models.get(model_name).latest.version.openapi_schema`
-3. Test with explicit seed parameter
+3. Test with explicit seed parameter and observe behavior
+4. Check logs for seed-related warnings or errors
 
 #### **2. Model-Specific Behavior**
 
@@ -198,106 +217,148 @@ for i, scene in enumerate(scenes):
 
 ---
 
-## Implementation for Current Codebase
+## Implementation in ad-mint-ai Codebase
 
-### **Step 1: Add Seed Generation**
+### **Architecture Overview**
 
-In the video generation pipeline, generate a seed once per video:
+Seed control is implemented across three main components:
+
+1. **Seed Manager Service** (`backend/app/services/pipeline/seed_manager.py`)
+   - Generates and manages seeds for video generations
+   - Stores seed in generation record for reproducibility
+
+2. **Video Generation Service** (`backend/app/services/pipeline/video_generation.py`)
+   - Accepts seed parameter in `generate_video_clip()` function
+   - Passes seed to Replicate API calls for visual consistency
+
+3. **Pipeline Orchestration** (`backend/app/api/routes/generations.py`)
+   - Checks coherence_settings for seed_control flag
+   - Generates seed before scene generation starts
+   - Passes same seed to all scene generations
+
+### **Implementation Details**
+
+#### **1. Seed Manager Service**
+
+Located at: `backend/app/services/pipeline/seed_manager.py`
 
 ```python
-# In video_generation.py or pipeline orchestrator
-import random
-
-def generate_video_seed(generation_id: str) -> int:
-    """Generate a deterministic seed for a video generation."""
-    # Option 1: Random seed (different each time)
+def generate_seed() -> int:
+    """Generate a random integer seed (0 to 2^31-1)."""
     return random.randint(0, 2**31 - 1)
+
+def get_seed_for_generation(db: Session, generation_id: str) -> Optional[int]:
+    """Get or generate seed for a generation.
     
-    # Option 2: Deterministic from generation_id (reproducible)
-    # import hashlib
-    # seed_hash = int(hashlib.md5(generation_id.encode()).hexdigest()[:8], 16)
-    # return seed_hash % (2**31)
+    If generation already has seed_value, returns it.
+    Otherwise generates new seed, stores it, and returns it.
+    """
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    if generation.seed_value:
+        return generation.seed_value
+    
+    seed = generate_seed()
+    generation.seed_value = seed
+    db.commit()
+    return seed
 ```
 
-### **Step 2: Pass Seed to Generation Function**
+#### **2. Database Schema**
 
-Modify `generate_video_clip` to accept and use seed:
+**Generation Model** (`backend/app/db/models/generation.py`):
+```python
+class Generation(Base):
+    # ... existing fields ...
+    seed_value = Column(Integer, nullable=True)  # Seed for visual consistency
+```
 
+**Migration**: `backend/app/db/migrations/add_seed_value.py`
+- Adds `seed_value` column as nullable Integer
+- Backward compatible (existing generations have NULL seed_value)
+
+#### **3. Video Generation Integration**
+
+**Function Signature** (`backend/app/services/pipeline/video_generation.py`):
 ```python
 async def generate_video_clip(
     scene: Scene,
     output_dir: str,
     generation_id: str,
     scene_number: int,
-    seed: Optional[int] = None,  # Add seed parameter
-    cancellation_check: Optional[callable] = None
+    cancellation_check: Optional[callable] = None,
+    seed: Optional[int] = None  # Seed parameter added
 ) -> tuple[str, str]:
-    # ... existing code ...
-    
-    # Prepare input parameters
-    input_params = {
-        "prompt": scene.visual_prompt,
-        "duration": scene.duration,
-        "aspect_ratio": "9:16",
-    }
-    
-    # Add seed if provided and model supports it
-    if seed is not None:
-        input_params["seed"] = seed
-    
-    # ... rest of code ...
 ```
 
-### **Step 3: Use Same Seed for All Scenes**
-
-In the pipeline orchestrator:
-
+**Seed Usage in API Call**:
 ```python
-# Generate seed once per video
-video_seed = generate_video_seed(generation_id)
+input_params = {
+    "prompt": prompt,
+    "duration": duration,
+    "aspect_ratio": "9:16",
+}
 
-# Use same seed for all scenes
-for scene_number, scene in enumerate(scenes, start=1):
-    clip_path, model_name = await generate_video_clip(
+# Add seed if provided
+if seed is not None:
+    input_params["seed"] = seed
+    logger.debug(f"Using seed {seed} for video generation")
+```
+
+#### **4. Pipeline Orchestration**
+
+**Seed Generation** (in `process_generation()` function):
+```python
+# Check coherence_settings for seed_control
+coherence_settings_dict = generation.coherence_settings or {}
+seed_control_enabled = coherence_settings_dict.get("seed_control", True)  # Default: True
+
+if seed_control_enabled:
+    seed = get_seed_for_generation(db, generation_id)
+    logger.info(f"Using seed {seed} for all scenes")
+else:
+    seed = None
+    logger.info("Seed control disabled")
+```
+
+**Seed Application to All Scenes**:
+```python
+for i, scene in enumerate(scene_plan.scenes, start=1):
+    clip_path, model_used = await generate_video_clip(
         scene=scene,
-        output_dir=output_dir,
+        output_dir=temp_output_dir,
         generation_id=generation_id,
-        scene_number=scene_number,
-        seed=video_seed,  # Same seed for all scenes
-        cancellation_check=cancellation_check
+        scene_number=i,
+        cancellation_check=check_cancellation,
+        seed=seed  # Same seed for all scenes
     )
 ```
 
-### **Step 4: Store Seed in Database**
+#### **5. API Response**
 
-Add seed to Generation model:
-
+**StatusResponse Schema** (`backend/app/schemas/generation.py`):
 ```python
-# In generation.py model
-class Generation(Base):
+class StatusResponse(BaseModel):
     # ... existing fields ...
-    seed = Column(Integer, nullable=True)  # Store seed for reproducibility
+    seed_value: Optional[int] = None  # Seed value for reproducibility
 ```
 
-### **Step 5: Handle Model-Specific Seed Parameters**
+The seed value is included in API responses for client access and debugging.
 
-Create a helper function to get model-specific seed parameter:
+### **Coherence Settings Integration**
 
-```python
-def get_model_seed_param(model_name: str, seed: int) -> dict:
-    """Get seed parameter in format expected by model."""
-    # Default: most models use "seed"
-    param_name = "seed"
-    
-    # Model-specific overrides (add as discovered)
-    model_seed_params = {
-        "klingai/kling-video": "random_seed",  # Example if different
-        # Add more as needed
-    }
-    
-    param_name = model_seed_params.get(model_name, "seed")
-    return {param_name: seed}
-```
+Seed control is controlled by the `seed_control` flag in coherence settings:
+
+- **Default**: `True` (enabled)
+- **Location**: `coherence_settings.seed_control` in Generation model
+- **Service**: `backend/app/services/coherence_settings.py`
+  - `get_default_settings()` returns `seed_control=True`
+  - `apply_defaults()` ensures seed_control defaults to True if not specified
+
+### **Error Handling**
+
+- If seed generation fails, generation continues without seed (seed control is enhancement, not critical)
+- If Replicate API doesn't accept seed parameter, generation continues (logged as warning)
+- Existing generations without seed_value are valid (backward compatible)
 
 ---
 

@@ -1,0 +1,208 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>1</storyId>
+    <title>Seed Control and Latent Reuse for Visual Coherence</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15T18:30:00Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/7-1-seed-control-and-latent-reuse-for-visual-coherence.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>implement seed control and latent reuse across all scenes in a video</iWant>
+    <soThat>the generated clips maintain consistent visual "DNA" and seamless transitions</soThat>
+    <tasks>
+      <task id="1">Create Seed Manager Service (AC: 1)</task>
+      <task id="2">Update Generation Model and Schema (AC: 1)</task>
+      <task id="3">Integrate Seed Control into Video Generation Service (AC: 1)</task>
+      <task id="4">Implement Latent Reuse Mechanism (AC: 2)</task>
+      <task id="5">Update Video Generation Pipeline Orchestration (AC: 1, 2)</task>
+      <task id="6">Add Seed Control to Coherence Settings (AC: 1)</task>
+      <task id="7">Add Database Migration for Seed Value (AC: 1)</task>
+      <task id="8">Document Seed Control Strategy (AC: 1, 2)</task>
+      <task id="9">Testing and Validation (AC: 1, 2, 3)</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <title>Seed Control</title>
+      <given>A video generation with multiple scenes is initiated</given>
+      <when>The system generates video clips for each scene</when>
+      <then>
+        - Checks if seed control is enabled in coherence settings (default: enabled)
+        - Uses the same random seed for all scenes in the video (if enabled)
+        - Ensures the underlying latent structure is linked across scenes
+        - Maintains base level of visual similarity through shared seed
+        - Stores seed value with generation record for reproducibility
+        - Skips seed control if disabled by user
+      </then>
+    </criterion>
+    <criterion id="2">
+      <title>Latent Reuse</title>
+      <given>Scenes are being generated sequentially</given>
+      <when>Transitioning between scenes that should be continuous</when>
+      <then>
+        - Initializes the latent noise for a new scene with the final latent state of the previous scene
+        - Creates seamless visual continuity between linked scenes
+        - Applies latent reuse only when scenes are marked as continuous in the scene plan
+        - Maintains temporal coherence for long continuous narratives
+      </then>
+    </criterion>
+    <criterion id="3">
+      <title>Visual Coherence</title>
+      <given>Seed control and latent reuse are implemented</given>
+      <when>A multi-scene video is generated</when>
+      <then>
+        - Maintains consistent visual style across all scenes
+        - Reduces style drift between clips
+        - Creates smoother transitions between scenes
+        - Improves overall multi-scene coherence score
+      </then>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="11.2 Stage 2: Scene Planning">
+        <snippet>Multi-scene video generation with scene planning and coherence requirements. Section 20.2 Phase 3 Features discusses visual coherence challenges.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Services and Modules">
+        <snippet>Seed manager service design: Generates and manages seeds for video generation, implements latent reuse. Service located at services/pipeline/seed_manager.py.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Data Models and Contracts">
+        <snippet>Generation model extension: Add seed_value as Optional[int] field to Generation model. Seed values are integers (typically 0-2^31-1 range).</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Workflows and Sequencing">
+        <snippet>Seed Generation workflow: Generate single random seed for entire video, store seed in generation record, apply seed value to all Replicate API calls. Apply latent reuse for continuous scenes.</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epic 7: Multi-Scene Coherence &amp; Quality Optimization" section="Story 7.1">
+        <snippet>Story acceptance criteria for seed control and latent reuse. Technical notes: Implement seed management in video generation service, use same seed parameter across all Replicate API calls, implement latent reuse mechanism for continuous scenes.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Project Structure">
+        <snippet>Backend structure: services/pipeline/ directory for pipeline services. Follow existing service patterns from video_generation.py and cost_tracking.py.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Implementation Patterns">
+        <snippet>Service layer pattern: Follow existing service structure. Database schema: Use nullable Integer for seed_value to maintain backward compatibility. API integration: Replicate API supports seed parameter.</snippet>
+      </doc>
+      <doc path="docs/Multi_Scene_Video_Ad_Generation_Research_Report.md" title="Multi-Scene Video Ad Generation Research Report">
+        <snippet>Research on seed control and latent reuse techniques for maintaining visual coherence across multiple generated video clips. Prevention techniques (generation-time consistency) prioritized over correction (post-processing).</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/7-0-coherence-settings-ui-panel.md" title="Story 7.0: Coherence Settings UI Panel">
+        <snippet>Coherence settings service created at backend/app/services/coherence_settings.py. Generation model includes coherence_settings JSON field. Seed control flag is in coherence_settings.seed_control with default value true.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_video_clip" lines="43-516">
+        <reason>Main video generation service that calls Replicate API. Need to integrate seed parameter into API calls. Function signature: async def generate_video_clip(scene, output_dir, generation_id, scene_number, cancellation_check).</reason>
+      </artifact>
+      <artifact path="backend/app/services/coherence_settings.py" kind="service" symbol="get_default_settings" lines="12-28">
+        <reason>Coherence settings service provides default settings including seed_control=True. Use get_default_settings() and validate_settings() methods to check if seed control is enabled.</reason>
+      </artifact>
+      <artifact path="backend/app/services/coherence_settings.py" kind="service" symbol="apply_defaults" lines="31-56">
+        <reason>Applies default coherence settings, filling in missing fields. Returns CoherenceSettings object with seed_control defaulting to True.</reason>
+      </artifact>
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-44">
+        <reason>Generation ORM model. Currently has coherence_settings JSON field. Need to add seed_value: Optional[int] field following existing field patterns. Use nullable Integer column for backward compatibility.</reason>
+      </artifact>
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="CoherenceSettings" lines="10-34">
+        <reason>Pydantic schema for coherence settings. seed_control field already defined with default=True. Need to add seed_value to Generation response schema.</reason>
+      </artifact>
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="GenerateRequest" lines="36-42">
+        <reason>Request schema for POST /api/generate endpoint. Already includes optional coherence_settings field. Seed control is controlled via coherence_settings.seed_control.</reason>
+      </artifact>
+      <artifact path="backend/app/api/routes/generations.py" kind="controller" symbol="process_generation" lines="53-464">
+        <reason>Main pipeline orchestration function. Coordinates all stages of video generation. Need to add seed generation step early in pipeline (after coherence settings validation, before first scene generation).</reason>
+      </artifact>
+      <artifact path="backend/app/api/routes/generations.py" kind="controller" symbol="create_generation" lines="468-473">
+        <reason>API endpoint for creating generation. Receives GenerateRequest with coherence_settings. Need to ensure seed is generated and stored before scene generation begins.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0"/>
+        <package name="sqlalchemy" version=">=2.0.0"/>
+        <package name="pydantic" version=">=2.0.0"/>
+        <package name="replicate" version=">=0.22.0"/>
+        <package name="pytest" version=">=7.4.0"/>
+        <package name="pytest-asyncio" version=">=0.21.0"/>
+      </ecosystem>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0"/>
+        <package name="typescript" version="~5.9.3"/>
+        <package name="vite" version="^5.4.11"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Service Layer Pattern: Follow existing service structure from video_generation.py and cost_tracking.py. Seed manager should be a lightweight service that can be called from pipeline orchestration.</constraint>
+    <constraint>Database Schema: Use nullable Integer for seed_value to maintain backward compatibility with existing generations. Seed values are integers (typically 0-2^31-1 range).</constraint>
+    <constraint>API Integration: Replicate API supports seed parameter in video generation calls. Ensure seed is passed as integer parameter to all Replicate API calls for scenes in the same generation.</constraint>
+    <constraint>Coherence Settings Integration: Seed control is controlled by coherence_settings.seed_control boolean flag. Default is true (enabled) as per Story 7.0.</constraint>
+    <constraint>Pipeline Integration: Seed should be generated and stored early in pipeline (after coherence settings validation, before first scene generation).</constraint>
+    <constraint>Error Handling: If seed generation fails, log error but continue with generation (seed control is enhancement, not critical). If Replicate API doesn't accept seed parameter, log warning but continue.</constraint>
+    <constraint>Backward Compatibility: Existing generations have NULL seed_value which is valid. Migration must not break existing functionality.</constraint>
+    <constraint>Testing: Use pytest for all backend service and API endpoint tests. Test seed manager service, model updates, and pipeline integration.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="Seed Manager Service" kind="Python service" signature="backend/app/services/pipeline/seed_manager.py">
+      <description>New service to be created. Functions: generate_seed() - creates random integer seed, get_seed_for_generation(generation_id: UUID) - retrieves or generates seed, stores seed in generation record.</description>
+      <path>backend/app/services/pipeline/seed_manager.py</path>
+    </interface>
+    <interface name="Generation Model" kind="SQLAlchemy ORM model" signature="class Generation(Base): seed_value: Optional[int]">
+      <description>Add seed_value field to Generation model. Column type: Integer, nullable=True. Store seed value for reproducibility and debugging.</description>
+      <path>backend/app/db/models/generation.py</path>
+    </interface>
+    <interface name="Generation Schema" kind="Pydantic schema" signature="class GenerationResponse: seed_value: Optional[int]">
+      <description>Add seed_value to Generation response schema. Include in API responses for client access to seed value.</description>
+      <path>backend/app/schemas/generation.py</path>
+    </interface>
+    <interface name="Replicate API" kind="REST API" signature="replicate.run(model, input={..., 'seed': int})">
+      <description>Replicate API video generation endpoint. Accepts seed parameter as integer. Pass seed to all Replicate API calls for scenes in same generation when seed_control is enabled.</description>
+      <path>backend/app/services/pipeline/video_generation.py</path>
+    </interface>
+    <interface name="Coherence Settings Service" kind="Python service" signature="get_default_settings() -&gt; CoherenceSettings">
+      <description>Existing service for coherence settings. Use get_default_settings() to get seed_control default (True). Use validate_settings() to validate coherence settings.</description>
+      <path>backend/app/services/coherence_settings.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Unit Tests: Test seed generation, storage, and retrieval in isolation. Use pytest with mocking for database calls. Test seed_manager.generate_seed() produces valid integer. Test seed_manager.get_seed_for_generation() returns same seed for same generation ID, different seeds for different generation IDs. Test Generation model accepts and stores seed_value correctly.
+
+      Integration Tests: Test full pipeline with seed control enabled/disabled. Verify seed is passed to Replicate API calls. Verify same seed used for all scenes in one generation. Verify different generations use different seeds. Test seed value stored in database correctly.
+
+      E2E Tests: Generate multi-scene video with seed control enabled, verify visual consistency and seed value storage. Generate video with seed control disabled, verify no seed used. Visual coherence test: Generate two videos with same prompt, compare style consistency.
+
+      Backend Tests: Use pytest for all backend service and API endpoint tests. Test seed manager service, model updates, and pipeline integration. Follow existing test patterns from test_video_generation.py and test_coherence_settings.py.
+    </standards>
+    <locations>
+      Backend unit tests: backend/tests/test_seed_manager.py (new file to create)
+      Backend integration tests: backend/tests/test_integration_video_generation.py (update existing)
+      Backend model tests: backend/tests/test_models.py (update existing)
+      Test setup: backend/tests/conftest.py (existing)
+    </locations>
+    <ideas>
+      <test acId="1">Unit test: Seed generation produces valid integer in expected range (0 to 2^31-1).</test>
+      <test acId="1">Unit test: Same generation ID returns same seed value on multiple calls.</test>
+      <test acId="1">Unit test: Different generation IDs return different seed values.</test>
+      <test acId="1">Unit test: Generation model accepts and stores seed_value correctly (nullable Integer field).</test>
+      <test acId="1">Integration test: Verify seed is passed to Replicate API calls when seed_control is enabled.</test>
+      <test acId="1">Integration test: Verify same seed used for all scenes in one generation.</test>
+      <test acId="1">Integration test: Verify different generations use different seeds.</test>
+      <test acId="1">Integration test: Verify seed value stored in database correctly after generation.</test>
+      <test acId="1">Integration test: Verify no seed parameter passed when seed_control is disabled.</test>
+      <test acId="2">Integration test: Latent reuse applied for continuous scenes marked in scene plan (if API supports).</test>
+      <test acId="2">Unit test: Continuous scene detection works correctly from scene plan.</test>
+      <test acId="3">E2E test: Generate multi-scene video with seed control enabled, verify visual consistency across scenes.</test>
+      <test acId="3">E2E test: Generate two videos with same prompt and seed control, compare style consistency.</test>
+      <test acId="3">Performance test: Verify seed control adds no significant time overhead.</test>
+    </ideas>
+  </tests>
+</story-context>
+

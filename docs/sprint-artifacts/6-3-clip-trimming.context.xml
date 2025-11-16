@@ -1,0 +1,200 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>6</epicId>
+    <storyId>3</storyId>
+    <title>Clip Trimming</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/6-3-clip-trimming.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to trim video clips by adjusting start and end points</iWant>
+    <soThat>I can remove unwanted portions and fine-tune clip durations</soThat>
+    <tasks>
+      <task id="1" ac="1,2,3">Create Trim Controls Component</task>
+      <task id="2" ac="2">Implement Trim Handle Drag Functionality</task>
+      <task id="3" ac="3">Implement Trim Validation</task>
+      <task id="4" ac="2,4">Implement Real-time Preview Updates</task>
+      <task id="5" ac="3">Implement Time Input Fields</task>
+      <task id="6" ac="2,3">Create Backend Trim API Endpoint</task>
+      <task id="7" ac="2,3">Create Trim Service</task>
+      <task id="8" ac="1,2">Integrate Trim Controls with Timeline</task>
+      <task id="9" ac="1,2,3,4">Integrate Trim with Editor Component</task>
+      <task id="10" ac="2">Update Editor API Client</task>
+      <task id="11" ac="2">Implement Trim State Persistence</task>
+      <task id="12" ac="1,2,3,4">Testing</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <ac id="1">
+      <given>I have selected a clip on the timeline</given>
+      <when>I select the clip</when>
+      <then>trim handles appear at the start and end of the clip</then>
+    </ac>
+    <ac id="2">
+      <given>I see trim handles on a selected clip</given>
+      <when>I drag a trim handle</when>
+      <then>
+        - The clip duration updates in real-time
+        - Preview shows the trimmed clip content
+        - Timeline updates immediately to reflect changes
+        - Time values update to show new start/end times
+      </then>
+    </ac>
+    <ac id="3">
+      <given>I am trimming a clip</given>
+      <when>I adjust trim points</when>
+      <then>
+        - Prevents trimming beyond clip boundaries
+        - Maintains minimum clip duration (0.5 seconds)
+        - Shows visual feedback for invalid trim positions
+        - Allows precise time entry via input fields (optional)
+      </then>
+    </ac>
+    <ac id="4">
+      <given>I have trimmed a clip</given>
+      <when>I preview the video</when>
+      <then>the trimmed clip plays with the new start/end points</then>
+    </ac>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-026">
+        Functional requirement for clip trimming: Users can trim video clips by adjusting start and end points to remove unwanted portions and fine-tune clip durations.
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 6.3">
+        Story 6.3 defines clip trimming with acceptance criteria for trim selection, adjustment, validation, and preview functionality.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="AC-EDIT-003">
+        AC-EDIT-003 specifies clip trimming requirements: trim handles appear on selected clips, real-time duration updates, preview shows trimmed content, system validates trim points (within boundaries, minimum 0.5s duration), and trim operation is saved to editing session.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="Services and Modules">
+        Specifies trim service module at `backend/app/services/editor/trim_service.py` for trim validation and editing state updates, and TrimControls component at `frontend/src/components/editor/TrimControls.tsx` for trim handle UI.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="Workflows and Sequencing">
+        Clip Trimming Workflow: User selects clip, trim handles appear, user drags trim handle, frontend validates and calls API, backend updates editing session state, frontend updates timeline and preview.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="NFR-EDIT-003">
+        Performance requirement: Trim operation API response time &lt;300ms (state update only, not video processing). Trim points stored in editing session state, actual MoviePy trimming happens during export.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Frontend structure: `frontend/src/components/editor/` for editor components, `frontend/src/routes/Editor.tsx` for editor page. Backend structure: `backend/app/api/routes/editor.py` for editor routes, `backend/app/services/editor/` for editor services.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary">
+        Frontend: React 18 + TypeScript + Vite. Backend: FastAPI with service layer separation. Video processing: MoviePy for video manipulation operations.
+      </doc>
+      <doc path="docs/sprint-artifacts/6-2-timeline-interface.md" title="Story 6.2: Timeline Interface" section="Dev Agent Record">
+        Timeline component created at `frontend/src/components/editor/Timeline.tsx` with clip visualization and selection. Trim handles should appear on selected clips in the timeline. Timeline uses React state for clip data and selection.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="frontend/src/routes/Editor.tsx" kind="component" symbol="Editor" lines="1-276" reason="Main editor component that integrates Timeline and will integrate TrimControls. Manages editor state, clip selection, and video playback." />
+      <artifact path="frontend/src/components/editor/Timeline.tsx" kind="component" symbol="Timeline" lines="1-428" reason="Timeline component with clip visualization, selection, and interaction. Trim handles should appear on selected clips. Provides onClipSelect callback for trim controls integration." />
+      <artifact path="frontend/src/lib/editorApi.ts" kind="service" symbol="loadEditorData" lines="18-64" reason="Editor API client with loadEditorData function. Needs trimClip() function added for trim API calls." />
+      <artifact path="frontend/src/lib/types/api.ts" kind="types" symbol="ClipInfo, EditorData" lines="121-150" reason="TypeScript types for clip and editor data. ClipInfo structure includes duration, start_time, end_time fields that trim operations will modify." />
+      <artifact path="backend/app/api/routes/editor.py" kind="controller" symbol="get_editor_data" lines="25-108" reason="Editor API route handler. Needs POST /api/editor/{generation_id}/trim endpoint added for trim operations." />
+      <artifact path="backend/app/services/editor/editor_service.py" kind="service" symbol="extract_clips_from_generation, get_or_create_editing_session" lines="43-208" reason="Editor service with clip extraction and editing session management. Editing session state structure includes trim_start and trim_end fields for clips." />
+      <artifact path="backend/app/db/models/editing_session.py" kind="model" symbol="EditingSession" lines="1-46" reason="EditingSession ORM model with editing_state JSON field. Editing state structure includes clips with trim_start and trim_end fields for storing trim points." />
+      <artifact path="backend/app/schemas/editor.py" kind="schema" symbol="ClipInfo, EditorDataResponse" lines="9-32" reason="Pydantic schemas for editor API. ClipInfo schema defines clip structure. Need TrimClipRequest schema for trim endpoint." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="moviepy" version=">=1.0.3" />
+        <package name="pytest" version=">=7.4.0" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      Frontend Framework: React 18 + TypeScript. Components must be in `components/editor/` directory following existing patterns.
+    </constraint>
+    <constraint>
+      Backend Pattern: FastAPI route with service layer separation. Routes in `app/api/routes/editor.py`, services in `app/services/editor/`.
+    </constraint>
+    <constraint>
+      Video Processing: Trim points stored in editing session state (editing_state JSON field), not applied to video files until export. Actual MoviePy trimming happens during export (Story 6.6).
+    </constraint>
+    <constraint>
+      Performance: Trim operation API response time &lt;300ms (state update only, not video processing). Trim handle drag should maintain 60fps performance using requestAnimationFrame if needed.
+    </constraint>
+    <constraint>
+      Validation: Trim points must be within clip boundaries, maintain minimum clip duration (0.5 seconds), and trim start must be before trim end.
+    </constraint>
+    <constraint>
+      Integration: Trim controls must integrate with Timeline component. Trim handles appear on selected clips. Timeline updates when trim points change.
+    </constraint>
+    <constraint>
+      State Management: Use local component state for trim UI, update editor state via API calls. Trim state persists in editing session database record.
+    </constraint>
+    <constraint>
+      Testing: Frontend unit tests with Vitest and React Testing Library. Backend unit tests with pytest. Integration tests for API endpoints. E2E tests for trim workflow.
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/editor/{generation_id}/trim" kind="REST endpoint" signature="POST /api/editor/{generation_id}/trim
+Request Body: { clip_id: string, trim_start: number, trim_end: number }
+Response: { message: string, clip_id: string, new_duration: number, updated_state: object }" path="backend/app/api/routes/editor.py" />
+    <interface name="TrimClipRequest" kind="Pydantic schema" signature="class TrimClipRequest(BaseModel):
+    clip_id: str
+    trim_start: float
+    trim_end: float" path="backend/app/schemas/editor.py" />
+    <interface name="trimClip" kind="function" signature="async function trimClip(generationId: string, clipId: string, trimStart: number, trimEnd: number): Promise&lt;ClipInfo&gt;" path="frontend/src/lib/editorApi.ts" />
+    <interface name="TrimControls" kind="React component" signature="export const TrimControls: React.FC&lt;TrimControlsProps&gt;
+Props: { selectedClip: ClipInfo | null, onTrimStart: (time: number) =&gt; void, onTrimEnd: (time: number) =&gt; void, onTrimChange: (trimStart: number, trimEnd: number) =&gt; void }" path="frontend/src/components/editor/TrimControls.tsx" />
+    <interface name="Timeline onClipSelect" kind="callback" signature="onClipSelect: (clipId: string) =&gt; void" path="frontend/src/components/editor/Timeline.tsx" />
+    <interface name="EditingSession editing_state" kind="data structure" signature="editing_state: {
+  clips: [{
+    id: string,
+    original_path: string,
+    start_time: number,
+    end_time: number,
+    trim_start: number | null,
+    trim_end: number | null,
+    split_points: [],
+    merged_with: []
+  }],
+  version: number
+}" path="backend/app/db/models/editing_session.py" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Frontend testing uses Vitest with React Testing Library for component unit tests. Backend testing uses pytest with pytest-asyncio for async endpoint tests. Test files follow naming convention: `test_*.py` for backend, `*.test.ts` or `*.test.tsx` for frontend. Integration tests verify API endpoints with authentication. E2E tests cover complete user workflows. Test coverage target: &gt;80% for editor-specific code.
+    </standards>
+    <locations>
+      <location>backend/tests/</location>
+      <location>frontend/src/**/*.test.ts</location>
+      <location>frontend/src/**/*.test.tsx</location>
+    </locations>
+    <ideas>
+      <test ac="1">Test TrimControls component renders trim handles when clip is selected. Verify handles appear at clip start and end positions on timeline.</test>
+      <test ac="2">Test trim handle drag functionality. Verify trim state updates in real-time, preview updates, timeline updates, and time values update during drag.</test>
+      <test ac="3">Test trim validation: boundaries (trim start not before clip start, trim end not after clip end), minimum duration (0.5 seconds), trim start before trim end. Verify visual feedback for invalid positions.</test>
+      <test ac="4">Test preview updates with trimmed clip. Verify video player shows trimmed content when playing, syncs with trimmed clip boundaries.</test>
+      <test ac="1,2">Integration test: Select clip, drag trim handle, verify API call with correct trim points, verify response updates editing state.</test>
+      <test ac="2,3">Backend unit test: Trim service validates trim points, updates editing session state correctly, returns updated clip structure.</test>
+      <test ac="1,2,3,4">E2E test: Complete trim workflow - select clip, see trim handles, drag to adjust, verify validation, verify preview, verify state persistence.</test>
+    </ideas>
+  </tests>
+</story-context>
+

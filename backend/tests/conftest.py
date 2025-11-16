@@ -4,15 +4,18 @@ Pytest configuration and fixtures.
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Import all models to ensure they're registered with Base.metadata
 from app.db.base import Base
+from app.db.models.editing_session import EditingSession
 from app.db.models.generation import Generation
 from app.db.models.user import User
 
 # Ensure models are registered (explicit import)
 _ = Generation
 _ = User
+_ = EditingSession
 
 
 @pytest.fixture(scope="function")
@@ -27,6 +30,7 @@ def db_session():
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
     
     # Enable foreign key constraints in SQLite (disabled by default)
@@ -40,7 +44,12 @@ def db_session():
     Base.metadata.create_all(bind=engine)
     
     # Create session
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    TestingSessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+        bind=engine,
+    )
     session = TestingSessionLocal()
     
     try:

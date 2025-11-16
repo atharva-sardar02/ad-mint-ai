@@ -1,0 +1,169 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>6</epicId>
+    <storyId>2</storyId>
+    <title>Timeline Interface</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/6-2-timeline-interface.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to see a timeline with all my video clips</iWant>
+    <soThat>I can visualize and navigate through the video structure</soThat>
+    <tasks>
+      <task id="1" ac="1,2,3">Create Timeline Component Structure</task>
+      <task id="2" ac="1">Implement Clip Visualization</task>
+      <task id="3" ac="1,2">Implement Playhead Indicator</task>
+      <task id="4" ac="2">Implement Timeline Scrubbing</task>
+      <task id="5" ac="1,2">Implement Zoom Controls</task>
+      <task id="6" ac="2">Implement Time Markers</task>
+      <task id="7" ac="2,3">Implement Clip Selection</task>
+      <task id="8" ac="3">Implement Real-time Updates</task>
+      <task id="9" ac="3">Implement Performance Optimizations</task>
+      <task id="10" ac="1,2,3">Integrate Timeline with Editor Component</task>
+      <task id="11" ac="1">Add Thumbnail Generation/Retrieval</task>
+      <task id="12" ac="3">Display Total Duration</task>
+      <task id="13" ac="1,2,3">Testing</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <title>Timeline Display</title>
+      <given>I am in the video editor</given>
+      <when>the editor loads</when>
+      <then>I see a timeline showing: All video clips in sequence from left to right, Visual thumbnails for each clip (first frame or keyframe), Clip durations displayed below each clip, Current playback position indicator (playhead), Zoom controls for precise editing</then>
+    </criterion>
+    <criterion id="2">
+      <title>Timeline Interaction</title>
+      <given>I am viewing the timeline</given>
+      <when>I interact with it</when>
+      <then>I can: Click anywhere on timeline to seek to that position, Drag playhead to scrub through video, Zoom in/out using controls or mouse wheel (Ctrl/Cmd + scroll), See time markers (seconds) along the timeline, Select clips by clicking on them</then>
+    </criterion>
+    <criterion id="3">
+      <title>Timeline Updates</title>
+      <given>I have made edits to clips</given>
+      <when>the timeline updates</when>
+      <then>it: Updates in real-time as I make edits, Maintains smooth scrolling and performance (60fps), Shows selected clip with highlight/border, Displays total video duration</then>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 6.2: Timeline Interface">
+        Story requirements and acceptance criteria for timeline interface. Specifies timeline display with clips, thumbnails, durations, playhead, zoom controls, and interaction capabilities.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="AC-EDIT-002: Timeline Interface">
+        Detailed acceptance criteria for timeline interface: displays clips in sequence with thumbnails and durations, playhead shows current playback position, user can scrub, zoom, and select clips, timeline updates in real-time.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="NFR-EDIT-002: Timeline Performance">
+        Performance requirements: Timeline shall maintain 60fps during scrubbing and zoom operations, Timeline updates shall be responsive (&lt;100ms) when edits are applied, Thumbnail generation: &lt;200ms per clip (can be async/background).
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="Services and Modules">
+        Timeline component specification: `frontend/src/components/editor/Timeline.tsx` - Timeline visualization component with clip data and editing state inputs, produces Timeline UI with interactions.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic 6 Technical Specification" section="Workflows and Sequencing">
+        Timeline rendering workflow: Frontend receives clip data from editor API, Timeline component generates thumbnails, Timeline calculates clip positions based on durations, Timeline renders clips as visual blocks with thumbnails, User can click timeline to seek, drag playhead, zoom in/out, Timeline updates in real-time as edits are made.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-025: Timeline Interface">
+        Functional requirement: System shall display a timeline showing all video clips in sequence, Timeline shall show visual thumbnails for each clip, Timeline shall display clip durations and allow scrubbing/playback, Timeline shall support zoom in/out for precise editing, Timeline shall show current playback position indicator.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Decision Summary">
+        Architecture decisions: React 18 + TypeScript + Vite as the SPA framework, Tailwind CSS for rapid responsive UI implementation, React Router for client-side routing, Zustand for small, predictable global state (auth/session, user profile), otherwise local component state.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Project Structure">
+        Project structure: Frontend components in `frontend/src/components/`, routes in `frontend/src/routes/`, API clients in `frontend/src/lib/`, types in `frontend/src/lib/types/`.
+      </doc>
+      <doc path="docs/sprint-artifacts/6-1-video-editor-access-and-setup.md" title="Story 6.1" section="Dev Agent Record">
+        Learnings from previous story: Editor component structure, Editor API client, Clip data structure (ClipInfo), Editor state management patterns, GalleryPanel component example, Backend editor service.
+      </doc>
+    </docs>
+    <code>
+      <file path="frontend/src/routes/Editor.tsx" kind="component" symbol="Editor" lines="1-235" reason="Main editor component that Timeline will integrate into. Shows current editor layout with video player and placeholder for timeline. Timeline should replace placeholder at lines 201-209.">
+        Editor component with empty state (gallery panel) and loaded state (video player with clips). Timeline placeholder exists at lines 201-209. Component receives EditorData with clips array that Timeline will use.
+      </file>
+      <file path="frontend/src/lib/editorApi.ts" kind="service" symbol="loadEditorData" lines="18-64" reason="Editor API client function that loads editor data including clips array. Timeline will receive clip data from EditorData response.">
+        API service for loading editor data. Returns EditorData with clips array, total_duration, aspect_ratio. Timeline component will use this data structure.
+      </file>
+      <file path="frontend/src/lib/types/api.ts" kind="types" symbol="ClipInfo, EditorData" lines="121-150" reason="TypeScript type definitions for clip and editor data structures. Timeline component should use ClipInfo interface for clip data.">
+        TypeScript interfaces: ClipInfo (clip_id, scene_number, duration, start_time, end_time, thumbnail_url, text_overlay) and EditorData (clips array, total_duration, aspect_ratio). Timeline should use these types.
+      </file>
+      <file path="frontend/src/components/editor/GalleryPanel.tsx" kind="component" symbol="GalleryPanel" lines="1-95" reason="Example editor component pattern to follow. Shows component organization in components/editor/ directory, props interface pattern, state management, and integration with Editor component.">
+        GalleryPanel component example showing editor component patterns: props interface, local state management, integration with Editor, error handling, loading states. Timeline should follow similar patterns.
+      </file>
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="vite" version="^5.4.11" />
+        <package name="tailwindcss" version="^4.1.17" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="axios" version="^1.13.2" />
+      </ecosystem>
+      <ecosystem name="test">
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+        <package name="@testing-library/jest-dom" version="^6.6.3" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Framework: React 18 + TypeScript (from Epic 1)</constraint>
+    <constraint>Component Architecture: Reusable component in `components/editor/` directory (from Epic 6, Story 6.1)</constraint>
+    <constraint>Rendering: Use canvas or SVG for timeline rendering for performance (60fps requirement) (from tech spec)</constraint>
+    <constraint>State Management: Use local component state for timeline UI, pass data via props (from Epic 2)</constraint>
+    <constraint>Performance: Use requestAnimationFrame for smooth updates, optimize re-renders (from tech spec NFR-EDIT-002)</constraint>
+    <constraint>Integration: Timeline integrates with Editor component and VideoPlayer component (from Story 6.1)</constraint>
+    <constraint>Clip Data Structure: Use ClipInfo interface from types/api.ts (clip_id, scene_number, duration, start_time, end_time, thumbnail_url)</constraint>
+    <constraint>Timeline is visualization component only - edit operations (trim/split/merge) are handled in future stories</constraint>
+    <constraint>Timeline should display clips in sequential order based on start_time</constraint>
+    <constraint>Playhead position should sync with video player playback position</constraint>
+    <constraint>Zoom functionality is critical for precise editing operations</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="EditorData" kind="TypeScript interface" signature="interface EditorData { generation_id: string; original_video_url: string; original_video_path: string; clips: ClipInfo[]; total_duration: number; aspect_ratio: string; framework: string | null; }" path="frontend/src/lib/types/api.ts" />
+    <interface name="ClipInfo" kind="TypeScript interface" signature="interface ClipInfo { clip_id: string; scene_number: number; original_path: string; clip_url: string; duration: number; start_time: number; end_time: number; thumbnail_url: string | null; text_overlay: { text: string; position: string; font_size: number; color: string; animation: string; } | null; }" path="frontend/src/lib/types/api.ts" />
+    <interface name="loadEditorData" kind="function" signature="loadEditorData(generationId: string): Promise&lt;EditorData&gt;" path="frontend/src/lib/editorApi.ts" />
+    <interface name="Timeline Props" kind="component props" signature="interface TimelineProps { clips: ClipInfo[]; totalDuration: number; currentTime: number; onSeek: (time: number) =&gt; void; onClipSelect: (clipId: string) =&gt; void; }" path="frontend/src/components/editor/Timeline.tsx (to be created)" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing framework: Vitest with React Testing Library. Tests located in `frontend/src/__tests__/` directory. Follow existing test patterns: unit tests for components, integration tests for API flows, E2E tests for user workflows. Use TypeScript for test files. Mock API calls using vitest mocks. Test user interactions, state changes, and error handling. Performance tests should verify 60fps timeline updates and &lt;100ms response times.
+    </standards>
+    <locations>
+      <location>frontend/src/__tests__/</location>
+      <location>frontend/src/components/editor/__tests__/ (create for Timeline tests)</location>
+    </locations>
+    <ideas>
+      <test ac="1">Test Timeline component renders clips in sequence with correct positions based on durations</test>
+      <test ac="1">Test Timeline displays thumbnails for each clip (or placeholder if thumbnail_url is null)</test>
+      <test ac="1">Test Timeline displays clip durations below each clip block</test>
+      <test ac="1">Test Timeline shows playhead indicator at current playback position</test>
+      <test ac="1">Test Timeline displays zoom controls</test>
+      <test ac="2">Test Timeline click handler seeks to clicked position and calls onSeek callback</test>
+      <test ac="2">Test Timeline playhead is draggable and updates position during drag</test>
+      <test ac="2">Test Timeline zoom in/out controls adjust clip widths and time markers</test>
+      <test ac="2">Test Timeline mouse wheel zoom (Ctrl/Cmd + scroll) works correctly</test>
+      <test ac="2">Test Timeline displays time markers with correct spacing based on zoom level</test>
+      <test ac="2">Test Timeline clip selection calls onClipSelect callback with correct clip ID</test>
+      <test ac="3">Test Timeline updates clip positions when clip durations change</test>
+      <test ac="3">Test Timeline updates when clips are split (shows two clips instead of one)</test>
+      <test ac="3">Test Timeline updates when clips are merged (shows merged clip)</test>
+      <test ac="3">Test Timeline maintains 60fps performance during scrubbing and zoom</test>
+      <test ac="3">Test Timeline shows selected clip with highlight/border</test>
+      <test ac="3">Test Timeline displays total video duration</test>
+      <test integration="true">Test Timeline-video player synchronization: playhead updates during playback, seek syncs video player</test>
+      <test e2e="true">Test complete timeline interaction flow: load video, scrub timeline, zoom in/out, select clip, verify updates after trim operation</test>
+    </ideas>
+  </tests>
+</story-context>
+

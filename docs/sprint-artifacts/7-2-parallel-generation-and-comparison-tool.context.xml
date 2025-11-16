@@ -1,0 +1,169 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>7-2</storyId>
+    <title>Parallel Generation and Comparison Tool</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/7-2-parallel-generation-and-comparison-tool.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a user</asA>
+    <iWant>I want to generate multiple video variations in parallel by tweaking settings or prompts</iWant>
+    <soThat>So that I can compare different outputs and select the best result for my needs</soThat>
+    <tasks>
+      <task id="1">Create Generation Group Database Model and Migration (AC: 4, 7)</task>
+      <task id="2">Create Parallel Generation API Endpoint (AC: 4, 7)</task>
+      <task id="3">Create Comparison API Endpoint (AC: 5, 6, 7)</task>
+      <task id="4">Update Video Generation Service for Parallel Processing (AC: 4)</task>
+      <task id="5">Create Parallel Generation Panel Component (AC: 1, 2, 3)</task>
+      <task id="6">Create Comparison View Component (AC: 5, 6)</task>
+      <task id="7">Create Comparison Detail Page Route (AC: 5, 6)</task>
+      <task id="8">Update Generation Service Integration (AC: 4)</task>
+      <task id="9">Add UI/UX Enhancements (AC: 1, 2, 3, 5)</task>
+      <task id="10">Performance and Monitoring (AC: 4, 7)</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">Parallel Generation Interface: Toggle to enable/disable parallel generation, variation count selector (2-5), two comparison modes (Settings Comparison, Prompt Comparison)</criterion>
+    <criterion id="AC2">Settings Comparison Mode: Single prompt, multiple setting profiles (A, B, C), different coherence settings per profile, preview before submission</criterion>
+    <criterion id="AC3">Prompt Comparison Mode: Multiple prompt variations (2-5), same coherence settings for all, list/table format, independent editing</criterion>
+    <criterion id="AC4">Parallel Generation Execution: Multiple generation records, linked as generation group, concurrent processing, independent progress tracking</criterion>
+    <criterion id="AC5">Comparison View: Side-by-side/grid layout, thumbnails, metadata per variation, independent playback, selection/download, delete options, visual difference indicators</criterion>
+    <criterion id="AC6">Comparison Navigation: Navigate to individual video detail pages, return to comparison, filter/sort by quality metrics, cost breakdown</criterion>
+    <criterion id="AC7">Backend Support: Array of generation requests in single API call, generation_group record, concurrent processing, group_id tracking, query API for group</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 7: Multi-Scene Coherence & Quality Optimization - Story 7.2" snippet="Story 7.2 defines parallel generation interface allowing users to generate multiple video variations in parallel by tweaking settings or prompts for comparison purposes." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Services and Modules, Data Models and Contracts" snippet="Tech spec defines service architecture for coherence features, database models, and API contracts. Parallel generation extends existing generation pipeline with group management." />
+      <doc path="docs/architecture.md" title="System Architecture" section="Project Structure, Implementation Patterns" snippet="Architecture defines backend service layer patterns, database schema conventions, API design patterns, and frontend component organization. Parallel generation follows existing patterns." />
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Phase 3 Features" snippet="PRD mentions A/B testing capabilities which parallel generation supports by enabling users to compare different variations." />
+      <doc path="docs/sprint-artifacts/7-1-seed-control-and-latent-reuse-for-visual-coherence.md" title="Story 7.1 Context" section="Dev Agent Record" snippet="Story 7.1 created seed_manager service and coherence_settings service. Parallel generation should reuse these services for each variation's settings." />
+      <doc path="docs/sprint-artifacts/7-0-coherence-settings-ui-panel.md" title="Story 7.0 Context" section="Dev Agent Record" snippet="Story 7.0 created CoherenceSettingsPanel component. Parallel generation should reuse this component for each settings profile in settings comparison mode." />
+      <doc path="docs/Seed_Control_Technical_Guide.md" title="Seed Control Technical Guide" section="Implementation Details" snippet="Technical guide explains seed control implementation, seed_manager service usage, and integration with video generation pipeline. Parallel generations should each get their own seed or share seed if same settings." />
+    </docs>
+    <code>
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-44" reason="Existing Generation model needs extension with generation_group_id field. Model already has coherence_settings and seed_value fields from previous stories." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="GenerateRequest, CoherenceSettings" lines="10-39" reason="Existing request schemas need extension for parallel generation. CoherenceSettings schema already defined and can be reused for multiple profiles." />
+      <artifact path="backend/app/api/routes/generations.py" kind="route" symbol="create_generation, process_generation" lines="493-545" reason="Existing generation endpoint and processing logic. Need to add /api/generate/parallel endpoint and /api/comparison/{group_id} endpoint. Reuse existing process_generation logic for parallel execution." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_video_clip, process_generation" lines="43-169" reason="Existing video generation service. Need to ensure it supports concurrent execution without conflicts. Already supports seed parameter from Story 7.1." />
+      <artifact path="backend/app/services/coherence_settings.py" kind="service" symbol="get_default_settings, validate_settings, apply_defaults" reason="Coherence settings service for validation and defaults. Reuse for validating each profile's settings in parallel generation." />
+      <artifact path="backend/app/services/pipeline/seed_manager.py" kind="service" symbol="get_seed_for_generation, generate_seed" reason="Seed manager service from Story 7.1. Each parallel generation should get its own seed (or share seed if same settings in settings comparison mode)." />
+      <artifact path="frontend/src/components/coherence/CoherenceSettingsPanel.tsx" kind="component" symbol="CoherenceSettingsPanel" reason="Coherence settings panel component from Story 7.0. Reuse this component for each settings profile in settings comparison mode." />
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="route" symbol="Dashboard" reason="Main dashboard component where parallel generation toggle and panel should be integrated. Already has coherence settings integration from Story 7.0." />
+      <artifact path="frontend/src/lib/generationService.ts" kind="service" symbol="generateVideo, getGenerationStatus" reason="Frontend generation service. Need to add generateParallel() and getComparisonGroup() functions. Existing API client patterns should be followed." />
+      <artifact path="backend/tests/test_generation_routes.py" kind="test" reason="Existing generation route tests. Add tests for parallel generation endpoint and comparison endpoint. Follow existing test patterns." />
+      <artifact path="backend/tests/test_video_generation.py" kind="test" reason="Existing video generation service tests. Add tests for parallel processing support. Verify concurrent execution doesn't cause conflicts." />
+      <artifact path="frontend/src/__tests__/CoherenceSettingsPanel.test.tsx" kind="test" reason="Existing coherence settings panel tests. Reference for testing parallel generation panel component patterns." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="pytest-asyncio" version=">=0.21.0" />
+        <package name="replicate" version=">=0.22.0" />
+      </ecosystem>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="axios" version="^1.13.2" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Service Layer Pattern: Follow existing service structure from video_generation.py and cost_tracking.py. Parallel generation should extend existing generation pipeline, not replace it.</constraint>
+    <constraint>Database Schema: Use nullable FK for generation_group_id to maintain backward compatibility with existing single generations. Generation groups are optional - single generations continue to work without groups.</constraint>
+    <constraint>API Design: New /api/generate/parallel endpoint extends existing /api/generate endpoint. Both endpoints should use same underlying generation service to avoid code duplication.</constraint>
+    <constraint>Concurrent Processing: Use Python's asyncio or background task queue (if available) for parallel processing. Ensure thread-safety for shared resources (database, file system).</constraint>
+    <constraint>Error Handling: If one variation fails in parallel generation, others should continue. Error should be logged and included in response, but not fail entire group.</constraint>
+    <constraint>Frontend State Management: Use existing Zustand store patterns or local component state for parallel generation UI. Consider adding comparison state to generation store if needed.</constraint>
+    <constraint>Naming Conventions: React components use PascalCase, API routes use /api/* prefix, database tables use snake_case, database columns use snake_case.</constraint>
+    <constraint>Testing Standards: Unit tests for models/API/components, integration tests for full flow, E2E tests for user workflows. Use pytest for backend, Vitest/Jest for frontend.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/generate/parallel" kind="REST endpoint" signature="POST /api/generate/parallel
+Request Body: {
+  variations: Array&lt;GenerateRequest&gt;,
+  comparison_type: 'settings' | 'prompt'
+}
+Response: {
+  group_id: string,
+  generation_ids: Array&lt;string&gt;,
+  status: 'pending'
+}" path="backend/app/api/routes/generations.py" />
+    <interface name="GET /api/comparison/{group_id}" kind="REST endpoint" signature="GET /api/comparison/{group_id}
+Response: {
+  group_id: string,
+  comparison_type: 'settings' | 'prompt',
+  variations: Array&lt;{
+    generation_id: string,
+    prompt: string,
+    coherence_settings: object,
+    status: string,
+    progress: number,
+    video_url?: string,
+    thumbnail_url?: string,
+    cost?: number,
+    generation_time_seconds?: number
+  }&gt;,
+  total_cost: number,
+  differences: object
+}" path="backend/app/api/routes/generations.py" />
+    <interface name="GenerationGroup Model" kind="database model" signature="class GenerationGroup(Base):
+    id: UUID (primary key)
+    user_id: UUID (FK to users)
+    created_at: DateTime
+    comparison_type: Enum('settings', 'prompt')" path="backend/app/db/models/generation.py" />
+    <interface name="generateParallel()" kind="function" signature="async function generateParallel(
+  variations: Array&lt;GenerateRequest&gt;,
+  comparisonType: 'settings' | 'prompt'
+): Promise&lt;{ groupId: string, generationIds: string[] }&gt;" path="frontend/src/lib/generationService.ts" />
+    <interface name="getComparisonGroup()" kind="function" signature="async function getComparisonGroup(
+  groupId: string
+): Promise&lt;ComparisonGroupResponse&gt;" path="frontend/src/lib/generationService.ts" />
+    <interface name="ParallelGenerationPanel Component" kind="React component" signature="interface ParallelGenerationPanelProps {
+  onSubmit: (variations: GenerateRequest[], comparisonType: 'settings' | 'prompt') =&gt; void
+}
+export function ParallelGenerationPanel(props: ParallelGenerationPanelProps)" path="frontend/src/components/generation/ParallelGenerationPanel.tsx" />
+    <interface name="ComparisonView Component" kind="React component" signature="interface ComparisonViewProps {
+  groupId: string,
+  variations: Variation[]
+}
+export function ComparisonView(props: ComparisonViewProps)" path="frontend/src/components/generation/ComparisonView.tsx" />
+  </interfaces>
+
+  <tests>
+    <standards>Testing follows established patterns: pytest for backend unit/integration tests, Vitest and React Testing Library for frontend component tests, Playwright/Cypress for E2E tests. All tests should be isolated, use fixtures/mocks appropriately, and follow AAA pattern (Arrange, Act, Assert). Integration tests should test full flow from API request to database storage. E2E tests should cover user workflows from UI interaction to result verification.</standards>
+    <locations>
+      <location>backend/tests/ - All backend tests (unit, integration)</location>
+      <location>frontend/src/__tests__/ - All frontend tests (unit, integration, E2E)</location>
+      <location>backend/tests/test_generation_routes.py - Generation API endpoint tests</location>
+      <location>backend/tests/test_video_generation.py - Video generation service tests</location>
+      <location>frontend/src/__tests__/generationService.test.ts - Frontend generation service tests</location>
+    </locations>
+    <ideas>
+      <idea criterion="AC1">Test parallel generation toggle enables/disables parallel mode UI. Test variation count selector limits to 2-5. Test mode switching between settings and prompt comparison.</idea>
+      <idea criterion="AC2">Test settings comparison mode allows creating multiple profiles. Test each profile can have different coherence settings. Test settings preview displays correctly. Test validation prevents invalid settings.</idea>
+      <idea criterion="AC3">Test prompt comparison mode allows entering 2-5 prompts. Test all prompts use same coherence settings. Test prompt list/table displays correctly. Test individual prompt editing works.</idea>
+      <idea criterion="AC4">Test parallel generation endpoint creates multiple generation records. Test all records linked to same generation_group. Test generations process concurrently. Test progress tracking works independently for each variation.</idea>
+      <idea criterion="AC5">Test comparison view displays all variations in grid layout. Test thumbnails load correctly. Test metadata displays for each variation. Test independent video playback. Test selection and download functionality. Test delete individual/group functionality. Test visual difference indicators show correctly.</idea>
+      <idea criterion="AC6">Test navigation from comparison view to individual video detail pages. Test return navigation from video detail to comparison. Test filter/sort by quality metrics (if available). Test cost breakdown displays correctly.</idea>
+      <idea criterion="AC7">Test parallel generation endpoint accepts array of requests. Test generation_group record created correctly. Test concurrent processing doesn't cause conflicts. Test group_id stored in generation records. Test comparison endpoint queries all generations in group correctly.</idea>
+      <idea criterion="Error Handling">Test error handling when one variation fails - others continue. Test error included in response but doesn't fail entire group. Test rate limiting prevents system overload.</idea>
+      <idea criterion="Performance">Test system handles 5 parallel generations without degradation. Test concurrent processing doesn't overwhelm system. Test rate limiting works correctly.</idea>
+    </ideas>
+  </tests>
+</story-context>
+

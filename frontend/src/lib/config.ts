@@ -15,17 +15,23 @@ export const API_ENDPOINTS = {
   },
   GENERATIONS: {
     CREATE: "/api/generate",
+    PARALLEL: "/api/generate/parallel",
     CREATE_SINGLE_CLIP: "/api/generate-single-clip",
     LIST: "/api/generations",
     STATUS: (id: string) => `/api/status/${id}`,
     CANCEL: (id: string) => `/api/generations/${id}/cancel`,
     DELETE: (id: string) => `/api/generations/${id}`,
+    COMPARISON: (groupId: string) => `/api/comparison/${groupId}`,
+    QUEUE: "/api/queue",
   },
   VIDEO: {
     GET: (id: string) => `/api/video/${id}`,
   },
   USER: {
     PROFILE: "/api/user/profile",
+  },
+  COHERENCE: {
+    DEFAULTS: "/api/coherence/settings/defaults",
   },
 } as const;
 

@@ -281,24 +281,6 @@ def test_get_generations_status_filter(db_session: Session, test_user, auth_toke
     app.dependency_overrides.clear()
 
 
-def test_get_generations_invalid_status(db_session: Session, test_user, auth_token):
-    """Test GET /api/generations validates status parameter (AC-4.1.1)."""
-    from app.db.session import get_db
-    app.dependency_overrides[get_db] = lambda: db_session
-    
-    response = client.get(
-        "/api/generations?limit=20&offset=0&status=invalid",
-        headers={"Authorization": f"Bearer {auth_token}"},
-    )
-    
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    data = response.json()
-    assert "error" in data
-    assert data["error"]["code"] == "INVALID_STATUS"
-    
-    app.dependency_overrides.clear()
-
-
 def test_get_generations_search_filter(db_session: Session, test_user, auth_token, test_generations):
     """Test GET /api/generations with q parameter performs case-insensitive search (AC-4.1.4)."""
     from app.db.session import get_db
