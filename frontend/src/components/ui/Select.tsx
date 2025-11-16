@@ -20,12 +20,15 @@ export const Select: React.FC<SelectProps> = ({
   ...props
 }) => {
   const generatedId = useId();
-  const selectId = id || generatedId;
+  const selectId = id ?? generatedId;
 
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={selectId} className="block text-sm font-medium text-gray-700 mb-1">
+        <label
+          htmlFor={selectId}
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
           {label}
         </label>
       )}

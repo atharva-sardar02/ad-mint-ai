@@ -15,6 +15,7 @@ import { Profile } from "./routes/Profile";
 import { GenerationStatus } from "./routes/GenerationStatus";
 import { ComparisonDetail } from "./routes/ComparisonDetail";
 import { Queue } from "./routes/Queue";
+import { Editor } from "./routes/Editor";
 import "./App.css";
 
 /**
@@ -87,6 +88,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Queue />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/editor"
+            element={
+              <ProtectedRoute>
+                <Editor />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/editor/:generationId"
+            element={
+              <ProtectedRoute>
+                <Editor />
               </ProtectedRoute>
             }
           />

@@ -18,6 +18,7 @@ from app.db.models.generation import Generation, GenerationGroup
 from app.db.models.user import User
 from app.db.session import SessionLocal, get_db
 from app.schemas.generation import (
+    AdSpecification,
     CoherenceSettings,
     ComparisonGroupResponse,
     DeleteResponse,
@@ -656,11 +657,10 @@ async def create_generation(
         request.use_llm if request.use_llm is not None else True
     )
     
-    # Return immediately - processing happens in background
     return GenerateResponse(
         generation_id=generation_id,
         status="pending",
-        message="Video generation started"
+        message="Video generation started",
     )
 
 
@@ -1010,8 +1010,8 @@ async def get_generation_status(
     available_clips = len(generation.temp_clip_paths) if generation.temp_clip_paths else 0
     
     # Helper function to convert relative paths to full URLs
-    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
-        """Convert relative path to full URL for frontend consumption."""
+    def get_public_path(relative_path: Optional[str]) -> Optional[str]:
+        """Convert stored path to a public relative path."""
         if not relative_path:
             return None
         from app.core.config import settings
@@ -1045,7 +1045,7 @@ async def get_generation_status(
         status=generation.status,
         progress=generation.progress,
         current_step=generation.current_step,
-        video_url=get_full_url(generation.video_url),
+        video_url=get_public_path(generation.video_url),
         cost=generation.cost,
         error=generation.error_message,
         num_scenes=generation.num_scenes,
@@ -1457,6 +1457,7 @@ async def get_generations(
                 generation_group_id=gen.generation_group_id,
                 variation_label=variation_label,
                 coherence_settings=gen.coherence_settings,
+                parent_generation_id=gen.parent_generation_id,
             )
         )
 

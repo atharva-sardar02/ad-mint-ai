@@ -18,6 +18,12 @@ engine = create_engine(
 # Create declarative base class for all ORM models
 Base = declarative_base()
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Create session factory with expire_on_commit disabled to keep objects usable
+# after the session is closed (important for FastAPI dependencies)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,
+    bind=engine,
+)
 

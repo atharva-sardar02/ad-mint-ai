@@ -1,0 +1,157 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>6</epicId>
+    <storyId>6.6</storyId>
+    <title>Editor Save and Export</title>
+    <status>drafted</status>
+    <generatedAt>2025-01-27</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/6-6-editor-save-and-export.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to save my editing changes and export the edited video</iWant>
+    <soThat>I can preserve my work and download the final result</soThat>
+    <tasks>
+      - Task 1: Create Save API Endpoint (AC: 1)
+      - Task 2: Create Save Service (AC: 1)
+      - Task 3: Implement Auto-Save Functionality (AC: 1)
+      - Task 4: Create Save UI Controls (AC: 1)
+      - Task 5: Create Export API Endpoint (AC: 2, 3)
+      - Task 6: Create Export Service (AC: 2)
+      - Task 7: Implement Export Progress Tracking (AC: 3)
+      - Task 8: Create Export UI Controls (AC: 2, 3)
+      - Task 9: Update Editor API Client (AC: 1, 2, 3)
+      - Task 10: Integrate Save with Editor Component (AC: 1)
+      - Task 11: Integrate Export with Editor Component (AC: 2, 3)
+      - Task 12: Implement Version Management (AC: 4)
+      - Task 13: Update Export Schemas (AC: 2)
+      - Task 14: Handle Edge Cases (AC: 1, 2, 3)
+      - Task 15: Testing (AC: 1, 2, 3, 4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Save Editing Session: Given I have made edits to a video, When I click "Save" or the system auto-saves, Then the system saves editing state (trim points, splits, merges) to database, preserves original video unchanged, allows me to return and continue editing later, and shows "Saved" confirmation message.
+
+    2. Export Edited Video: Given I have edited a video and want to export, When I click "Export Video", Then the system creates a new video version with all edits applied, processes the video with all trim, split, and merge operations, maintains original video for comparison, exports edited video in same format and quality as original (1080p MP4), and updates database with new video version.
+
+    3. Export Progress: Given I have initiated video export, When the export is processing, Then I see progress indicator showing export status, estimated time remaining, and ability to cancel export (if not too late).
+
+    4. Version Management: Given I have exported an edited video, When I view the video, Then I can see both original and edited versions, compare original vs edited, and restore original if needed.
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 6.6: Editor Save and Export">
+        Story requirements: Save editing session to persist trim, split, and merge operations. Export edited video with all edits applied. Progress tracking for export operations. Version management to show both original and edited versions.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="AC-EDIT-006, AC-EDIT-007">
+        Editor save acceptance criteria: Save current editing state, preserve original video unchanged, allow resume editing. Editor export acceptance criteria: Create new video version with all edits applied, maintain original video, export in 1080p MP4 format, track export progress.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="Workflows and Sequencing">
+        Export workflow: User clicks Export Video, backend creates export job, processes export asynchronously (apply trim/split/merge, concatenate clips, apply audio, export final video), frontend polls export status endpoint.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="APIs and Interfaces">
+        POST /api/editor/{generation_id}/save endpoint specification: Save current editing state, return session_id and saved_at timestamp. POST /api/editor/{generation_id}/export endpoint specification: Export edited video, return export_id and status endpoint for polling.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Epic Technical Specification: Video Editing" section="NFR-EDIT-003, NFR-EDIT-007, NFR-EDIT-008">
+        Performance requirements: Export operation &lt;2 minutes for 15-second video. Editing session persistence: sessions persist across browser refreshes, auto-save every 30 seconds (optional). Export reliability: &gt;95% success rate, accurate progress updates every 5 seconds.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-029">
+        Functional requirement: Editor Save and Export - System shall allow users to save editing changes and export edited videos.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Project Structure">
+        Backend structure: app/api/routes/editor.py for editor endpoints, app/services/editor/ for editor services, app/db/models/editing_session.py for editing session model. Frontend structure: frontend/src/routes/Editor.tsx for editor page, frontend/src/lib/editorApi.ts for editor API client.
+      </doc>
+      <doc path="docs/sprint-artifacts/6-5-clip-merging.md" title="Story 6.5: Clip Merging" section="Dev Agent Record">
+        Learnings: Merge service created at backend/app/services/editor/merge_service.py. Editing session state structure established. Merge operations update editing_state JSON, actual video processing happens during export. API pattern with ownership verification established.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/api/routes/editor.py" kind="controller" symbol="get_editor_data, trim_clip, split_clip, merge_clips" lines="37-540" reason="Existing editor API endpoints showing pattern for save and export endpoints. Ownership verification, editing session management, error handling patterns." />
+      <artifact path="backend/app/services/editor/editor_service.py" kind="service" symbol="get_or_create_editing_session, extract_clips_from_generation" lines="143-208" reason="Editing session management service. Pattern for creating/loading editing sessions. Editing state initialization." />
+      <artifact path="backend/app/services/editor/trim_service.py" kind="service" symbol="apply_trim_to_editing_session" reason="Trim service showing pattern for updating editing_state JSON. Validation and state update patterns." />
+      <artifact path="backend/app/services/editor/split_service.py" kind="service" symbol="apply_split_to_editing_session" reason="Split service showing pattern for updating editing_state JSON with split operations." />
+      <artifact path="backend/app/services/editor/merge_service.py" kind="service" symbol="apply_merge_to_editing_session" reason="Merge service showing pattern for updating editing_state JSON with merge operations. Adjacency validation patterns." />
+      <artifact path="backend/app/services/pipeline/stitching.py" kind="service" symbol="stitch_video_clips" lines="15-164" reason="Video stitching service to reuse for concatenating processed clips during export. Handles transitions, fade effects, frame rate normalization." />
+      <artifact path="backend/app/services/pipeline/audio.py" kind="service" symbol="add_audio_layer" lines="37-237" reason="Audio layer service to reuse during export. Adds background music and sound effects to video." />
+      <artifact path="backend/app/services/pipeline/export.py" kind="service" symbol="export_final_video" lines="19-124" reason="Export service to reuse for final video export. Applies color grading, exports 1080p MP4, generates thumbnail." />
+      <artifact path="backend/app/services/pipeline/progress_tracking.py" kind="service" symbol="update_generation_progress, update_generation_status" lines="14-61" reason="Progress tracking service pattern to reuse for export progress tracking. Updates progress percentage and current step." />
+      <artifact path="backend/app/db/models/editing_session.py" kind="model" symbol="EditingSession" lines="13-46" reason="EditingSession model with editing_state JSON field. Status field (active, saved, exported). Original video path preservation." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-43" reason="Generation model. May need parent_generation_id field for version management. Progress and status tracking fields." />
+      <artifact path="backend/app/schemas/editor.py" kind="schema" symbol="TrimClipRequest, SplitClipRequest, MergeClipsRequest" lines="36-81" reason="Existing editor request/response schemas. Pattern for creating SaveSessionRequest, ExportVideoRequest, ExportVideoResponse schemas." />
+      <artifact path="frontend/src/lib/editorApi.ts" kind="api-client" symbol="loadEditorData, trimClip, splitClip, mergeClips" lines="18-389" reason="Editor API client showing pattern for saveEditingSession, exportVideo, getExportStatus functions. Error handling patterns." />
+      <artifact path="frontend/src/routes/Editor.tsx" kind="component" symbol="Editor" lines="20-632" reason="Editor component showing pattern for integrating save and export functionality. State management, API calls, UI updates." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="moviepy" version=">=1.0.3" />
+        <package name="opencv-python" version=">=4.8.0" />
+        <package name="pillow" version=">=10.1.0" />
+      </ecosystem>
+      <ecosystem name="node">
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Framework: React 18 + TypeScript. Component architecture in components/editor/ directory. State management via local component state and API calls.</constraint>
+    <constraint>Backend Pattern: FastAPI route with service layer separation. Ownership verification required on all editor endpoints. JWT authentication required.</constraint>
+    <constraint>Video Processing: Export uses MoviePy for applying edits. Reuse pipeline services (stitching, audio, export) for consistency. Actual video processing happens during export, not during individual edit operations.</constraint>
+    <constraint>Performance: Export operations are asynchronous with progress tracking (similar to video generation). Export should complete in &lt;2 minutes for 15-second video.</constraint>
+    <constraint>Database: EditingSession model stores editing state in JSON field. New Generation record created for exported video. Original video always preserved.</constraint>
+    <constraint>Version Management: Use parent_generation_id to link edited videos to originals. Show both original and edited versions in video detail page.</constraint>
+    <constraint>Testing: Comprehensive testing required (unit, integration, E2E). Follow existing test patterns from trim/split/merge services.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/editor/{generation_id}/save" kind="REST endpoint" signature="POST /api/editor/{generation_id}/save
+Headers: Authorization: Bearer {jwt_token}
+Response (200 OK): { message: string, session_id: string, saved_at: string }" path="backend/app/api/routes/editor.py" />
+    <interface name="POST /api/editor/{generation_id}/export" kind="REST endpoint" signature="POST /api/editor/{generation_id}/export
+Headers: Authorization: Bearer {jwt_token}
+Response (202 Accepted): { message: string, export_id: string, status: string, estimated_time_seconds: number }" path="backend/app/api/routes/editor.py" />
+    <interface name="GET /api/editor/export/{export_id}/status" kind="REST endpoint" signature="GET /api/editor/export/{export_id}/status
+Headers: Authorization: Bearer {jwt_token}
+Response (200 OK): { export_id: string, status: string, progress: number, current_step: string, estimated_time_remaining: number }" path="backend/app/api/routes/editor.py" />
+    <interface name="save_editing_session" kind="function" signature="save_editing_session(editing_session: EditingSession, editing_state: dict, db: Session) -> EditingSession" path="backend/app/services/editor/save_service.py" />
+    <interface name="export_edited_video" kind="function" signature="export_edited_video(editing_session: EditingSession, output_dir: str, cancellation_check: Optional[callable]) -> Tuple[str, str]" path="backend/app/services/editor/export_service.py" />
+    <interface name="saveEditingSession" kind="function" signature="saveEditingSession(generationId: string): Promise&lt;{ message: string, session_id: string, saved_at: string }&gt;" path="frontend/src/lib/editorApi.ts" />
+    <interface name="exportVideo" kind="function" signature="exportVideo(generationId: string): Promise&lt;{ message: string, export_id: string, status: string }&gt;" path="frontend/src/lib/editorApi.ts" />
+    <interface name="getExportStatus" kind="function" signature="getExportStatus(exportId: string): Promise&lt;{ export_id: string, status: string, progress: number, current_step: string }&gt;" path="frontend/src/lib/editorApi.ts" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing follows existing patterns from editor services (trim, split, merge). Backend uses pytest with async support. Frontend uses Vitest with React Testing Library. Integration tests verify API endpoints with authentication. E2E tests verify complete user workflows. Test coverage target: &gt;80% for editor-specific code.
+    </standards>
+    <locations>
+      <location>backend/tests/test_editor_*.py</location>
+      <location>backend/tests/test_*_service.py</location>
+      <location>frontend/src/__tests__/**/*.test.tsx</location>
+      <location>frontend/src/__tests__/**/*.test.ts</location>
+    </locations>
+    <ideas>
+      <test ac="1">Test save endpoint with valid/invalid requests, ownership verification, editing state persistence, session status update to "saved".</test>
+      <test ac="1">Test save service: save_editing_session() function, editing_state validation, status update, original video path preservation.</test>
+      <test ac="1">Test save UI: save button rendering, API call and response handling, save confirmation message, error handling.</test>
+      <test ac="2">Test export endpoint with valid/invalid requests, ownership verification, export job creation, export status endpoint.</test>
+      <test ac="2">Test export service: export_edited_video() with trim operations, split clips, merged clips, all operations combined, audio layer application, color grading, new generation record creation, parent_generation_id assignment.</test>
+      <test ac="2">Test export UI: export button rendering, API call and response handling, export progress tracking, export completion handling, error handling.</test>
+      <test ac="3">Test export progress tracking: progress updates at each stage (10%, 20%, 30%, etc.), status endpoint polling, estimated time remaining, cancellation handling.</test>
+      <test ac="4">Test version management: parent_generation_id field on Generation model, original and edited versions display, "View Original" and "View Edited" buttons, version indicator in gallery.</test>
+      <test ac="1,2,3">E2E test: Make edits, save editing session, return to editor and resume editing, export edited video, verify export progress, verify exported video availability, verify version management.</test>
+    </ideas>
+  </tests>
+</story-context>
+

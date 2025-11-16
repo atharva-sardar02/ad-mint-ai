@@ -3,7 +3,6 @@
  * Displays an expandable panel with basic generation options.
  */
 import React, { useState } from "react";
-import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 
 export interface BasicSettings {
@@ -54,7 +53,7 @@ export const BasicSettingsPanel: React.FC<BasicSettingsPanelProps> = ({
   onChange,
   disabled = false,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true); // Default to expanded
+  const [isExpanded, setIsExpanded] = useState(false); // Default to collapsed
 
   const handleSingleClipChange = (value: boolean) => {
     if (disabled) return;
@@ -91,13 +90,13 @@ export const BasicSettingsPanel: React.FC<BasicSettingsPanelProps> = ({
   };
 
   return (
-    <div className="mb-6 border border-gray-200 rounded-lg bg-white">
-      <div className="p-4">
-        <div className="flex items-center justify-between">
+    <div className="border border-gray-200 rounded-md bg-gray-50">
+      <div className="p-3">
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
           <div className="flex items-center">
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h4 className="text-sm font-medium text-gray-700">
               Basic Settings
-            </h3>
+            </h4>
             <Tooltip content="Configure basic video generation options: generation mode, model selection, and number of clips.">
               <svg
                 className="w-5 h-5 ml-2 text-gray-400 cursor-help"
@@ -115,21 +114,31 @@ export const BasicSettingsPanel: React.FC<BasicSettingsPanelProps> = ({
               </svg>
             </Tooltip>
           </div>
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-sm"
+            className="text-gray-500 hover:text-gray-700 focus:outline-none"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
           >
-            {isExpanded ? "Collapse" : "Expand"}
-          </Button>
+            {isExpanded ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-gray-200 space-y-4">
+        <div className="px-3 pb-3 space-y-3 border-t border-gray-200">
           {/* Single Clip Mode Toggle */}
-          <div className="flex items-center space-x-2 pt-4">
+          <div className="flex items-center space-x-2 pt-3">
             <input
               type="checkbox"
               id="basic-useSingleClip"

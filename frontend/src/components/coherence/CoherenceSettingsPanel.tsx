@@ -3,7 +3,6 @@
  * Displays an expandable panel with checkboxes for various coherence techniques.
  */
 import React, { useState } from "react";
-import { Button } from "../ui/Button";
 
 export interface CoherenceSettings {
   seed_control: boolean;
@@ -366,13 +365,13 @@ export const CoherenceSettingsPanel: React.FC<CoherenceSettingsPanelProps> = ({
   };
 
   return (
-    <div className="mb-6 border border-gray-200 rounded-lg bg-white">
-      <div className="p-4">
-        <div className="flex items-center justify-between">
+    <div className="border border-gray-200 rounded-md bg-gray-50">
+      <div className="p-3">
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
           <div className="flex items-center">
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h4 className="text-sm font-medium text-gray-700">
               Coherence Settings
-            </h3>
+            </h4>
             <Tooltip content="Configure which coherence techniques are applied to your video generation. Some techniques have dependencies or may increase generation time and cost.">
               <svg
                 className="w-5 h-5 ml-2 text-gray-400 cursor-help"
@@ -390,19 +389,29 @@ export const CoherenceSettingsPanel: React.FC<CoherenceSettingsPanelProps> = ({
               </svg>
             </Tooltip>
           </div>
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-sm"
+            className="text-gray-500 hover:text-gray-700 focus:outline-none"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
           >
-            {isExpanded ? "Collapse" : "Expand"}
-          </Button>
+            {isExpanded ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-gray-200">
+        <div className="px-3 pb-3 border-t border-gray-200">
           {warnings.length > 0 && (
             <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
               <div className="flex items-start">

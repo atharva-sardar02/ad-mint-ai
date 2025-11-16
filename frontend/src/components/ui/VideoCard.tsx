@@ -84,7 +84,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({ generation }) => {
           </div>
         )}
         {/* Status badge overlay */}
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 flex gap-1">
+          {/* Version indicator */}
+          {generation.parent_generation_id && (
+            <span className="px-2 py-1 text-xs font-semibold rounded bg-purple-100 text-purple-800">
+              Edited
+            </span>
+          )}
           <span
             className={`px-2 py-1 text-xs font-semibold rounded ${getStatusColor(
               generation.status

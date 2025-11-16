@@ -7,7 +7,7 @@ import sys
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.base import Base, engine
-from app.db.models import Generation, GenerationGroup, User  # Import models to register them with Base
+from app.db.models import EditingSession, Generation, GenerationGroup, User  # Import models to register them with Base
 
 
 def init_db() -> None:
@@ -20,7 +20,7 @@ def init_db() -> None:
     try:
         # Import all models to ensure they're registered with Base
         # This is already done above, but explicit for clarity
-        _ = User, Generation, GenerationGroup
+        _ = User, Generation, GenerationGroup, EditingSession
         
         # Create all tables
         Base.metadata.create_all(bind=engine)

@@ -83,6 +83,7 @@ export interface GenerationListItem {
   generation_group_id?: string | null; // Group ID if part of parallel generation
   variation_label?: string | null; // Variation label (A, B, C, etc.) if part of parallel generation
   coherence_settings?: Record<string, boolean> | null; // Coherence technique settings
+  parent_generation_id?: string | null; // ID of original generation if this is an edited version
 }
 
 /**
@@ -117,5 +118,40 @@ export interface UserProfile {
   total_cost: number;
   created_at: string;  // ISO datetime string
   last_login: string | null;  // ISO datetime string or null
+}
+
+/**
+ * Clip information for editor.
+ */
+export interface ClipInfo {
+  clip_id: string;
+  scene_number: number;
+  original_path: string;
+  clip_url: string;
+  duration: number;
+  start_time: number;
+  end_time: number;
+  thumbnail_url: string | null;
+  text_overlay: {
+    text: string;
+    position: string;
+    font_size: number;
+    color: string;
+    animation: string;
+  } | null;
+}
+
+/**
+ * Editor data response from the API.
+ */
+export interface EditorData {
+  generation_id: string;
+  original_video_url: string;
+  original_video_path: string;
+  clips: ClipInfo[];
+  total_duration: number;
+  aspect_ratio: string;
+  framework: string | null;
+  trim_state?: Record<string, { trimStart: number; trimEnd: number }> | null;
 }
 

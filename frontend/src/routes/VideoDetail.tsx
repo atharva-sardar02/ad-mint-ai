@@ -48,6 +48,11 @@ export const VideoDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [relatedVersions, setRelatedVersions] = useState<{
+    original?: GenerationListItem;
+    edited?: GenerationListItem[];
+  }>({});
+  const [loadingVersions, setLoadingVersions] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -122,6 +127,46 @@ export const VideoDetail: React.FC = () => {
       isMounted = false;
     };
   }, [id]);
+
+  // Fetch related versions (original or edited versions)
+  useEffect(() => {
+    const fetchRelatedVersions = async () => {
+      if (!generation) return;
+
+      try {
+        setLoadingVersions(true);
+
+        // If this is an edited video, fetch the original
+        if (generation.parent_generation_id) {
+          const response = await getGenerations({ limit: 100, offset: 0 });
+          const original = response.generations.find(
+            (g) => g.id === generation.parent_generation_id
+          );
+          if (original) {
+            setRelatedVersions({ original });
+          }
+        } else {
+          // If this is an original video, find edited versions
+          const response = await getGenerations({ limit: 100, offset: 0 });
+          const edited = response.generations.filter(
+            (g) => g.parent_generation_id === generation.id
+          );
+          if (edited.length > 0) {
+            setRelatedVersions({ edited });
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching related versions:", err);
+        // Don't show error to user - version management is optional
+      } finally {
+        setLoadingVersions(false);
+      }
+    };
+
+    if (generation) {
+      fetchRelatedVersions();
+    }
+  }, [generation]);
 
   // Handle delete button click
   const handleDeleteClick = () => {
@@ -348,20 +393,75 @@ export const VideoDetail: React.FC = () => {
 
           {/* Content */}
           <div className="p-6">
-            {/* Header with delete button */}
+            {/* Header with action buttons */}
             <div className="flex items-start justify-between mb-4">
-              <h1 className="text-2xl font-bold text-gray-900 flex-1">
-                Video Details
-              </h1>
-              <Button
-                onClick={handleDeleteClick}
-                variant="danger"
-                isLoading={deleting}
-                disabled={deleting}
-              >
-                Delete Video
-              </Button>
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Video Details
+                </h1>
+                {/* Version indicator */}
+                {generation.parent_generation_id && (
+                  <p className="text-sm text-purple-600 mt-1">
+                    ✏️ Edited Version
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {generation.status === "completed" && (
+                  <Button
+                    onClick={() => navigate(`/editor/${generation.id}`)}
+                    variant="primary"
+                    disabled={deleting}
+                  >
+                    Edit Video
+                  </Button>
+                )}
+                <Button
+                  onClick={handleDeleteClick}
+                  variant="danger"
+                  isLoading={deleting}
+                  disabled={deleting}
+                >
+                  Delete Video
+                </Button>
+              </div>
             </div>
+
+            {/* Version management section */}
+            {(relatedVersions.original || (relatedVersions.edited && relatedVersions.edited.length > 0)) && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                  Related Versions
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {/* View Original button (if viewing edited version) */}
+                  {relatedVersions.original && (
+                    <Button
+                      onClick={() => navigate(`/gallery/${relatedVersions.original.id}`)}
+                      variant="secondary"
+                      className="text-sm"
+                    >
+                      ← View Original
+                    </Button>
+                  )}
+                  {/* View Edited buttons (if viewing original version) */}
+                  {relatedVersions.edited && relatedVersions.edited.length > 0 && (
+                    <>
+                      {relatedVersions.edited.map((editedVersion) => (
+                        <Button
+                          key={editedVersion.id}
+                          onClick={() => navigate(`/gallery/${editedVersion.id}`)}
+                          variant="secondary"
+                          className="text-sm"
+                        >
+                          View Edited Version
+                        </Button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Prompt */}
             <div className="mb-6">
