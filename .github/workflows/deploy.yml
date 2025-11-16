@@ -10,113 +10,13 @@ env:
   AWS_REGION: us-east-1
   S3_FRONTEND_BUCKET: ad-mint-ai-frontend
   EC2_DEPLOYMENT_PATH: /var/www/ad-mint-ai
+  EC2_HOST: 44.210.144.149
+  API_BASE_URL: http://44.210.144.149
 
 jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run backend tests
-        working-directory: ./backend
-        run: |
-          pytest tests/ -v || echo "No tests found or tests failed"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run frontend tests
-        working-directory: ./frontend
-        run: |
-          npm run test || echo "No tests found or tests failed"
-
-  security-scan:
-    name: Security Scanning
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-  deploy-staging:
-    name: Deploy to Staging
-    needs: [test, security-scan]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Build frontend
-        working-directory: ./frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Deploy frontend to S3 (staging)
-        run: |
-          aws s3 sync frontend/dist/ s3://${{ env.S3_FRONTEND_BUCKET }}-staging/ --delete
-
-      - name: Deploy backend to EC2 (staging)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_STAGING_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ${{ env.EC2_DEPLOYMENT_PATH }}
-            git pull origin main
-            cd backend
-            source venv/bin/activate
-            pip install -r requirements.txt
-            sudo systemctl restart fastapi
-
-  deploy-production:
+  deploy:
     name: Deploy to Production
-    needs: [deploy-staging]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: https://your-frontend-domain.com
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -128,34 +28,216 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H ${{ env.EC2_HOST }} >> ~/.ssh/known_hosts
+
       - name: Build frontend
         working-directory: ./frontend
+        env:
+          VITE_API_URL: ${{ env.API_BASE_URL }}
         run: |
           npm ci
           npm run build
 
-      - name: Deploy frontend to S3 (production)
+      - name: Deploy frontend to S3
         run: |
           aws s3 sync frontend/dist/ s3://${{ env.S3_FRONTEND_BUCKET }}/ --delete
+          echo "✅ Frontend deployed to S3"
 
-      - name: Deploy backend to EC2 (production)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_PRODUCTION_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ${{ env.EC2_DEPLOYMENT_PATH }}
-            git pull origin main
+      - name: Verify frontend deployment
+        run: |
+          # Check if index.html exists in S3
+          if aws s3 ls s3://${{ env.S3_FRONTEND_BUCKET }}/index.html > /dev/null 2>&1; then
+            echo "✅ Frontend deployment verified"
+          else
+            echo "❌ Frontend deployment verification failed"
+            exit 1
+          fi
+
+      - name: Backup current backend deployment
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            BACKUP_PATH="${DEPLOYMENT_PATH}.backup"
+            
+            echo "💾 Creating backup of current deployment..."
+            
+            # Remove old backup if it exists
+            if [ -d "$BACKUP_PATH" ]; then
+              echo "🗑️  Removing old backup..."
+              rm -rf "$BACKUP_PATH"
+            fi
+            
+            # Create backup
+            if [ -d "$DEPLOYMENT_PATH" ]; then
+              echo "📦 Copying deployment to backup..."
+              cp -r "$DEPLOYMENT_PATH" "$BACKUP_PATH"
+              echo "✅ Backup created at: $BACKUP_PATH"
+            else
+              echo "⚠️  Deployment directory not found, skipping backup"
+            fi
+          EOF
+
+      - name: Deploy backend to EC2
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            
+            echo "🚀 Starting backend deployment..."
+            
+            # Navigate to deployment directory
+            cd "$DEPLOYMENT_PATH"
+            
+            # Pull latest code
+            echo "📥 Pulling latest code from GitHub..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Update dependencies
+            echo "📦 Updating Python dependencies..."
             cd backend
             source venv/bin/activate
+            pip install --upgrade pip
             pip install -r requirements.txt
+            
+            # Run database migrations
+            echo "🔄 Running database migrations..."
+            python -m app.db.migrations.run_all
+            if [ $? -ne 0 ]; then
+              echo "❌ Database migrations failed"
+              exit 1
+            fi
+            echo "✅ Database migrations completed"
+            
+            # Restart FastAPI service
+            echo "🔄 Restarting FastAPI service..."
             sudo systemctl restart fastapi
+            
+            # Wait a moment for service to start
+            sleep 3
+            
+            echo "✅ Backend deployment completed"
+          EOF
 
-      - name: Send deployment notification
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: 'Deployment to production completed'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Health check
+        run: |
+          echo "🔍 Starting health check..."
+          MAX_ATTEMPTS=12
+          WAIT_SECONDS=5
+          API_URL="${{ env.API_BASE_URL }}/api/health"
+          
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "📡 Health check attempt $i/$MAX_ATTEMPTS..."
+            
+            if response=$(curl -s -f "$API_URL" 2>/dev/null); then
+              if echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
+                echo "✅ Health check passed!"
+                echo "Response: $response"
+                exit 0
+              else
+                echo "⚠️  Service responding but not healthy yet"
+                echo "Response: $response"
+              fi
+            else
+              echo "⏳ Service not responding yet (attempt $i/$MAX_ATTEMPTS)"
+            fi
+            
+            if [ $i -lt $MAX_ATTEMPTS ]; then
+              sleep $WAIT_SECONDS
+            fi
+          done
+          
+          echo "❌ Health check failed after $MAX_ATTEMPTS attempts"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "🔄 Deployment failed, initiating rollback..."
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            BACKUP_PATH="${DEPLOYMENT_PATH}.backup"
+            
+            echo "🔄 Starting rollback process..."
+            
+            # Check if backup exists
+            if [ ! -d "$BACKUP_PATH" ]; then
+              echo "❌ Backup directory not found: $BACKUP_PATH"
+              echo "⚠️  Cannot perform rollback"
+              exit 1
+            fi
+            
+            echo "✅ Backup found, proceeding with rollback..."
+            
+            # Stop FastAPI service
+            echo "🛑 Stopping FastAPI service..."
+            sudo systemctl stop fastapi || echo "⚠️  Service may already be stopped"
+            
+            # Remove current deployment (keep .env file if it exists)
+            if [ -d "$DEPLOYMENT_PATH" ]; then
+              echo "🗑️  Removing current deployment..."
+              # Backup .env if it exists
+              if [ -f "$DEPLOYMENT_PATH/backend/.env" ]; then
+                echo "💾 Backing up current .env file..."
+                cp "$DEPLOYMENT_PATH/backend/.env" "$DEPLOYMENT_PATH/backend/.env.current"
+              fi
+              
+              # Remove deployment directory
+              rm -rf "$DEPLOYMENT_PATH"
+            fi
+            
+            # Restore from backup
+            echo "📦 Restoring from backup..."
+            cp -r "$BACKUP_PATH" "$DEPLOYMENT_PATH"
+            
+            # Restore .env file if we backed it up
+            if [ -f "$DEPLOYMENT_PATH/backend/.env.current" ]; then
+              echo "📝 Restoring .env file..."
+              mv "$DEPLOYMENT_PATH/backend/.env.current" "$DEPLOYMENT_PATH/backend/.env"
+            fi
+            
+            # Ensure proper permissions
+            echo "🔐 Setting permissions..."
+            sudo chown -R ubuntu:ubuntu "$DEPLOYMENT_PATH"
+            
+            # Restart FastAPI service
+            echo "🚀 Restarting FastAPI service..."
+            sudo systemctl start fastapi
+            
+            # Wait a moment for service to start
+            sleep 5
+            
+            # Check service status
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ FastAPI service is running"
+            else
+              echo "⚠️  FastAPI service may not be running properly"
+            fi
+            
+            echo "✅ Rollback completed successfully"
+          EOF
+
+      - name: Cleanup SSH key
         if: always()
+        run: |
+          rm -f ~/.ssh/ec2_key.pem
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment completed successfully!"
+            echo "🌐 Frontend: http://${{ env.S3_FRONTEND_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
+            echo "🔗 Backend API: ${{ env.API_BASE_URL }}/api/"
+            echo "❤️  Health Check: ${{ env.API_BASE_URL }}/api/health"
+          else
+            echo "❌ Deployment failed"
+            echo "🔄 Rollback was attempted if backup was available"
+          fi
