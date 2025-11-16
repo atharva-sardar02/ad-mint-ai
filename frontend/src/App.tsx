@@ -13,6 +13,7 @@ import { Gallery } from "./routes/Gallery";
 import { VideoDetail } from "./routes/VideoDetail";
 import { Profile } from "./routes/Profile";
 import { GenerationStatus } from "./routes/GenerationStatus";
+import { Editor } from "./routes/Editor";
 import "./App.css";
 
 /**
@@ -77,6 +78,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <VideoDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/editor"
+            element={
+              <ProtectedRoute>
+                <Editor />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/editor/:generationId"
+            element={
+              <ProtectedRoute>
+                <Editor />
               </ProtectedRoute>
             }
           />

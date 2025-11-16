@@ -1,0 +1,137 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>6</epicId>
+    <storyId>5</storyId>
+    <title>Clip Merging</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-01-27</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/6-5-clip-merging.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>merge multiple adjacent clips</iWant>
+    <soThat>I can combine related segments into a single continuous clip</soThat>
+    <tasks>
+      <task id="1" ac="1">Implement Multi-Clip Selection UI - Update Timeline component to support multi-clip selection, add Ctrl/Cmd + click handler, add drag selection box, highlight selected clips, track selected clip IDs in editor state</task>
+      <task id="2" ac="1,2">Create Merge Controls Component - Create MergeControls.tsx component, add Merge button to editor toolbar, show merge button only when multiple clips selected, disable if clips not adjacent</task>
+      <task id="3" ac="3">Implement Adjacency Validation - Create validation function to check if selected clips are adjacent, verify clips in sequence, check clip order matches timeline sequence, show error message if non-adjacent</task>
+      <task id="4" ac="2,3">Create Backend Merge API Endpoint - Create POST /api/editor/{generation_id}/merge endpoint, implement request validation using Pydantic schema, verify user ownership, validate clip adjacency, update editing session state</task>
+      <task id="5" ac="2,3">Create Merge Service - Create merge_service.py module, implement adjacency validation logic, update editing_state JSON with merge operation, create merged clip object from selected clips, preserve metadata</task>
+      <task id="6" ac="2">Implement Merge State Management - Update editor state when merge completes, update timeline clip data structure, maintain clip sequence order, clear multi-clip selection after merge</task>
+      <task id="7" ac="1,2">Integrate Merge with Timeline Component - Update Timeline to support multi-clip selection, show visual highlight for selected clips, update timeline to display merged clip after merge</task>
+      <task id="8" ac="1,2,3,4">Integrate Merge with Editor Component - Update Editor.tsx to include MergeControls, add multi-clip selection state management, connect merge operations to editor state, call merge API endpoint</task>
+      <task id="9" ac="2">Update Editor API Client - Add mergeClips() function to editorApi.ts, implement API call to POST /api/editor/{generation_id}/merge, handle API response and errors</task>
+      <task id="10" ac="2">Implement Metadata Preservation - Preserve text overlay metadata from all merged clips, preserve scene_number and other clip metadata, handle metadata that may need adjustment</task>
+      <task id="11" ac="3">Handle Edge Cases - Prevent merging non-adjacent clips, prevent merging clips in wrong order, handle merging trimmed clips, handle merging split clips, validate minimum clip count</task>
+      <task id="12" ac="2">Update Merge State Persistence - Store merge operation in editing session state, load merged clips when editor loads, apply merged clips to timeline visualization, ensure merge state persists</task>
+      <task id="13" ac="1,2,3,4">Testing - Create frontend unit tests for MergeControls, create backend unit tests for merge service, create integration tests for merge API, create E2E test for merge workflow</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <ac id="1" title="Clip Selection">Given I have multiple clips on the timeline, When I select multiple adjacent clips (Ctrl/Cmd + click or drag selection), Then the selected clips are highlighted</ac>
+    <ac id="2" title="Merge Execution">Given I have selected multiple adjacent clips, When I click the Merge button, Then the system combines selected clips into a single continuous clip, preserves video content from all merged clips, maintains frame rate consistency, applies appropriate transitions, and updates timeline to show merged clip as single entity</ac>
+    <ac id="3" title="Merge Validation">Given I attempt to merge clips, When the system processes the merge, Then it only allows merging of adjacent clips, validates that clips are in sequence, shows error message if non-adjacent clips are selected, and maintains total video duration correctly</ac>
+    <ac id="4" title="Merged Clip Editing">Given I have merged clips, When I select the merged clip, Then I can edit the merged clip as a single entity (trim, etc.), the merged clip maintains its position in timeline sequence, and all original clip content is preserved in the merged clip</ac>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epics" section="Story 6.5: Clip Merging" snippet="As a user, I want to merge multiple adjacent clips, So that I can combine related segments into a single continuous clip. Acceptance criteria include clip selection, merge execution, merge validation, and merged clip editing." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Tech Spec Epic 6" section="AC-EDIT-005: Clip Merging" snippet="Given user has selected multiple adjacent clips, When user clicks Merge button, Then selected clips are combined into single continuous clip, merged clip appears as single entity on timeline, video content from all merged clips is preserved, and transitions are applied between merged segments." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-6.md" title="Tech Spec Epic 6" section="Clip Merging Workflow" snippet="User selects multiple adjacent clips (Ctrl/Cmd + click), user clicks Merge button, frontend validates clips are adjacent, frontend calls POST /api/editor/{generation_id}/merge with clip_ids, backend validates adjacency and updates editing session, backend returns merged clip structure, frontend updates timeline to show single merged clip." />
+      <doc path="docs/PRD.md" title="PRD" section="FR-028: Clip Merging" snippet="System shall allow users to select multiple adjacent clips, merge selected clips into a single continuous clip, preserve video content and maintain frame rate consistency, apply appropriate transitions between merged segments, and update timeline to show merged clip as single entity." />
+      <doc path="docs/architecture.md" title="Architecture" section="Project Structure" snippet="Frontend uses React 18 + TypeScript + Vite, components in components/editor/ directory. Backend uses FastAPI with service layer separation. Editing operations stored in editing session state, actual video processing happens during export." />
+      <doc path="docs/sprint-artifacts/6-3-clip-trimming.md" title="Story 6.3 Learnings" section="Dev Agent Record" snippet="TrimControls component pattern, trim service pattern, API endpoint pattern with ownership verification, editing session state updates, timeline integration, metadata preservation, debouncing (300ms), error display in editor UI." />
+    </docs>
+    <code>
+      <artifact path="frontend/src/components/editor/Timeline.tsx" kind="component" symbol="Timeline" lines="1-537" reason="Timeline component handles clip selection via onClipSelect callback. Currently supports single clip selection. Needs to be extended for multi-clip selection (Ctrl/Cmd + click, drag selection). Clip visualization uses ClipInfo interface." />
+      <artifact path="frontend/src/components/editor/TrimControls.tsx" kind="component" symbol="TrimControls" lines="1-236" reason="Reference pattern for MergeControls component. Shows how to create editor control component with props interface, drag handlers, validation logic, and integration with Timeline component." />
+      <artifact path="frontend/src/components/editor/SplitControls.tsx" kind="component" symbol="SplitControls" reason="Reference pattern for editor controls. Shows integration with Timeline component and editor state management." />
+      <artifact path="frontend/src/routes/Editor.tsx" kind="component" symbol="Editor" reason="Main editor component that integrates Timeline, TrimControls, and SplitControls. Manages editor state, API calls, and state updates. Needs to be extended with MergeControls and multi-clip selection state." />
+      <artifact path="frontend/src/lib/editorApi.ts" kind="api-client" symbol="trimClip" lines="79-177" reason="Reference pattern for mergeClips() function. Shows API call structure, error handling, and response extraction from updated_state." />
+      <artifact path="frontend/src/lib/types/api.ts" kind="type-definition" symbol="ClipInfo" lines="121-137" reason="ClipInfo interface defines clip data structure with clip_id, scene_number, original_path, clip_url, duration, start_time, end_time, thumbnail_url, and text_overlay. Used throughout editor components." />
+      <artifact path="frontend/src/lib/types/api.ts" kind="type-definition" symbol="EditorData" lines="142-151" reason="EditorData interface includes generation_id, original_video_url, clips array, total_duration, aspect_ratio, framework, and trim_state. Used for editor initialization and state management." />
+      <artifact path="backend/app/api/routes/editor.py" kind="route" symbol="trim_clip" lines="217-325" reason="Reference pattern for merge endpoint. Shows ownership verification, request validation with Pydantic schema, service layer call, error handling, and response structure. Merge endpoint should follow same pattern." />
+      <artifact path="backend/app/api/routes/editor.py" kind="route" symbol="split_clip" lines="327" reason="Reference pattern for editor API endpoints. Shows FastAPI route structure, dependency injection for authentication, and service layer separation." />
+      <artifact path="backend/app/services/editor/trim_service.py" kind="service" symbol="apply_trim_to_editing_session" lines="56-120" reason="Reference pattern for merge service. Shows validation logic, editing_state JSON updates, clip metadata preservation, and database commit pattern." />
+      <artifact path="backend/app/services/editor/split_service.py" kind="service" symbol="apply_split_to_editing_session" lines="56-203" reason="Reference pattern for merge service. Shows how to replace multiple clips with one (opposite of split). Demonstrates clip array manipulation, metadata preservation, editing_state version tracking, and clip ID generation." />
+      <artifact path="backend/app/services/editor/editor_service.py" kind="service" symbol="get_or_create_editing_session" lines="143-211" reason="Shows editing session initialization with editing_state structure. Editing_state contains clips array with id, original_path, start_time, end_time, trim_start, trim_end, split_points, merged_with, scene_number, and text_overlay fields." />
+      <artifact path="backend/app/schemas/editor.py" kind="schema" symbol="TrimClipRequest" reason="Reference pattern for MergeClipsRequest schema. Should include generation_id, clip_ids array, and validation rules." />
+      <artifact path="backend/app/schemas/editor.py" kind="schema" symbol="ClipInfo" lines="9-20" reason="Backend ClipInfo schema matches frontend interface. Used for API responses and data validation." />
+      <artifact path="backend/app/db/models/editing_session.py" kind="model" reason="EditingSession model stores editing_state as JSON field. Contains clips array and version number. Merge operation should update this state." />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="moviepy" version=">=1.0.3" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Framework: React 18 + TypeScript (from Epic 1)</constraint>
+    <constraint>Component Architecture: Reusable component in components/editor/ directory (from Epic 6, Story 6.1)</constraint>
+    <constraint>State Management: Use local component state for merge UI, update editor state via API calls (from Epic 2)</constraint>
+    <constraint>Backend Pattern: FastAPI route with service layer separation (from Epic 1)</constraint>
+    <constraint>Video Processing: Merge operation stored in editing session state, actual MoviePy merging happens during export (from tech spec)</constraint>
+    <constraint>Performance: Merge operations update state only, not video files until export (from tech spec NFR-EDIT-003, API response &lt;300ms)</constraint>
+    <constraint>Multi-Selection: Use standard browser multi-select patterns (Ctrl/Cmd + click, drag selection box)</constraint>
+    <constraint>Merge validation prevents invalid operations before API call</constraint>
+    <constraint>Merge creates one new clip object in editing_state, replacing multiple original clips</constraint>
+    <constraint>Metadata preservation is critical for merged clip (combine metadata from all source clips)</constraint>
+    <constraint>Timeline should update immediately to show merged clip after merge</constraint>
+    <constraint>Merged clip should be independently editable (trim, etc.)</constraint>
+    <constraint>Consider debouncing merge API calls (300ms) similar to trim operations</constraint>
+    <constraint>Error display should be visible in editor UI similar to trim errors</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/editor/{generation_id}/merge" kind="REST endpoint" signature="POST /api/editor/{generation_id}/merge - Request body: { clip_ids: string[] } - Response: { message: string, merged_clip_id: string, updated_state: EditingState }" path="backend/app/api/routes/editor.py" />
+    <interface name="mergeClips" kind="function" signature="mergeClips(generationId: string, clipIds: string[]): Promise&lt;ClipInfo&gt;" path="frontend/src/lib/editorApi.ts" />
+    <interface name="MergeControls Props" kind="component props" signature="interface MergeControlsProps { selectedClips: ClipInfo[]; onMerge: (clipIds: string[]) =&gt; void; onCancel: () =&gt; void; }" path="frontend/src/components/editor/MergeControls.tsx (to be created)" />
+    <interface name="Timeline onClipSelect" kind="callback" signature="onClipSelect: (clipId: string) =&gt; void - Needs extension for multi-select: onClipSelect: (clipId: string, isMultiSelect: boolean) =&gt; void" path="frontend/src/components/editor/Timeline.tsx" />
+    <interface name="ClipInfo" kind="TypeScript interface" signature="interface ClipInfo { clip_id: string; scene_number: number; original_path: string; clip_url: string; duration: number; start_time: number; end_time: number; thumbnail_url: string | null; text_overlay: { text: string; position: string; font_size: number; color: string; animation: string; } | null; }" path="frontend/src/lib/types/api.ts" />
+    <interface name="EditorData" kind="TypeScript interface" signature="interface EditorData { generation_id: string; original_video_url: string; original_video_path: string; clips: ClipInfo[]; total_duration: number; aspect_ratio: string; framework: string | null; trim_state?: Record&lt;string, { trimStart: number; trimEnd: number }&gt;; }" path="frontend/src/lib/types/api.ts" />
+    <interface name="MergeClipsRequest" kind="Pydantic schema" signature="class MergeClipsRequest(BaseModel): clip_ids: List[str] = Field(..., min_items=2, description=&quot;Array of clip IDs to merge&quot;)" path="backend/app/schemas/editor.py (to be created)" />
+    <interface name="MergeClipsResponse" kind="Pydantic schema" signature="class MergeClipsResponse(BaseModel): message: str; merged_clip_id: str; updated_state: dict" path="backend/app/schemas/editor.py (to be created)" />
+    <interface name="apply_merge_to_editing_session" kind="function" signature="apply_merge_to_editing_session(editing_session: EditingSession, clip_ids: List[str], db: Session) -&gt; Dict[str, Any]" path="backend/app/services/editor/merge_service.py (to be created)" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Frontend testing uses Vitest with @testing-library/react. Backend testing uses pytest. Tests should cover unit tests for components/services, integration tests for API endpoints, and E2E tests for complete workflows. Follow existing test patterns from trim and split functionality.
+    </standards>
+    <locations>
+      <location>frontend/src/components/editor/__tests__/</location>
+      <location>backend/tests/</location>
+      <location>frontend/src/routes/__tests__/</location>
+    </locations>
+    <ideas>
+      <test ac="1" idea="Test multi-clip selection: Ctrl/Cmd + click selects multiple clips, drag selection box selects clips, selected clips are visually highlighted, clicking empty area clears selection" />
+      <test ac="1" idea="Test merge button visibility: Merge button appears when multiple clips selected, merge button disabled when clips not adjacent, merge button enabled when clips are adjacent" />
+      <test ac="2" idea="Test merge execution: Merge button click calls API with correct clip_ids, timeline updates to show single merged clip, merged clip preserves content from all source clips, total duration remains correct" />
+      <test ac="3" idea="Test adjacency validation: Frontend validates clips are adjacent before API call, backend validates adjacency and sequence, error message shown if non-adjacent clips selected, error message shown if clips in wrong order" />
+      <test ac="4" idea="Test merged clip editing: Merged clip can be selected, merged clip can be trimmed, merged clip maintains position in timeline, merged clip preserves all original content" />
+      <test idea="Test edge cases: Merging trimmed clips preserves trim points, merging split clips works correctly, minimum 2 clips required for merge, empty selection disables merge button" />
+      <test idea="Test state persistence: Merge state persists in editing session, merged clips load correctly when editor opens, timeline shows merged clips correctly after page refresh" />
+      <test idea="Test API integration: Merge API endpoint verifies user ownership, merge API validates clip adjacency, merge API returns updated state, merge API handles errors correctly" />
+    </ideas>
+  </tests>
+</story-context>
+

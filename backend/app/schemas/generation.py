@@ -44,6 +44,7 @@ class GenerationListItem(BaseModel):
     cost: Optional[float] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+    parent_generation_id: Optional[str] = Field(None, description="ID of original generation if this is an edited version")
 
     class Config:
         from_attributes = True
@@ -89,7 +90,7 @@ class Scene(BaseModel):
     scene_number: int = Field(..., ge=1)
     scene_type: str = Field(..., description="Framework-specific type (e.g., 'Problem', 'Solution' for PAS)")
     visual_prompt: str
-    text_overlay: TextOverlay
+    text_overlay: Optional[TextOverlay] = None
     duration: int = Field(..., ge=3, le=7, description="Duration in seconds")
 
 

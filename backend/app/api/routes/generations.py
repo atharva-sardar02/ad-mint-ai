@@ -16,6 +16,7 @@ from app.db.models.generation import Generation
 from app.db.models.user import User
 from app.db.session import SessionLocal, get_db
 from app.schemas.generation import (
+    AdSpecification,
     DeleteResponse,
     GenerateRequest,
     GenerateResponse,
@@ -48,7 +49,31 @@ router = APIRouter(prefix="/api", tags=["generations"])
 TEXT_OVERLAYS_ENABLED = True
 
 
-async def process_generation(generation_id: str, prompt: str):
+def _generation_failure_response(message: str) -> dict:
+    """Standard error payload for generation failures."""
+    return {
+        "error": {
+            "code": "GENERATION_FAILED",
+            "message": message,
+        }
+    }
+
+
+def _mark_generation_failed(db: Session, generation: Generation, message: str) -> None:
+    """Persist failure state."""
+    generation.status = "failed"
+    generation.error_message = message
+    generation.current_step = "Failed"
+    generation.progress = 0
+    db.commit()
+
+
+async def process_generation(
+    generation_id: str,
+    prompt: str,
+    ad_spec_data: Optional[dict] = None,
+    scene_plan_data: Optional[dict] = None,
+):
     """
     Background task to process video generation.
     This runs asynchronously after the API returns a response.
@@ -67,43 +92,54 @@ async def process_generation(generation_id: str, prompt: str):
         logger.info(f"[{generation_id}] Generation record found, starting processing")
         
         try:
-            # Update status to processing
-            update_generation_progress(
-                db=db,
-                generation_id=generation_id,
-                progress=10,
-                current_step="LLM Enhancement",
-                status="processing"
-            )
-            logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
+            if ad_spec_data:
+                ad_spec = AdSpecification(**ad_spec_data)
+                logger.info(f"[{generation_id}] Using precomputed LLM specification")
+            else:
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=10,
+                    current_step="LLM Enhancement",
+                    status="processing",
+                )
+                logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
+                
+                logger.info(f"[{generation_id}] Calling LLM enhancement service...")
+                ad_spec = await enhance_prompt_with_llm(prompt)
+                logger.info(
+                    f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}"
+                )
+                
+                generation.llm_specification = ad_spec.model_dump()
+                generation.framework = ad_spec.framework
+                db.commit()
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=20,
+                    current_step="Scene Planning",
+                )
+                logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
             
-            # Call LLM enhancement service
-            logger.info(f"[{generation_id}] Calling LLM enhancement service...")
-            ad_spec = await enhance_prompt_with_llm(prompt)
-            logger.info(f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}")
-            
-            # Store LLM specification
-            generation.llm_specification = ad_spec.model_dump()
-            generation.framework = ad_spec.framework
-            db.commit()
-            update_generation_progress(
-                db=db,
-                generation_id=generation_id,
-                progress=20,
-                current_step="Scene Planning"
-            )
-            logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
-            
-            # Call scene planning module
-            logger.info(f"[{generation_id}] Calling scene planning module...")
-            scene_plan = plan_scenes(ad_spec, target_duration=15)
-            logger.info(f"[{generation_id}] Scene planning completed - {len(scene_plan.scenes)} scenes planned, total duration: {scene_plan.total_duration}s")
-            
-            # Store scene plan
-            generation.scene_plan = scene_plan.model_dump()
-            generation.num_scenes = len(scene_plan.scenes)
-            db.commit()
-            logger.info(f"[{generation_id}] Scene plan stored in database")
+            if scene_plan_data:
+                scene_plan = ScenePlan(**scene_plan_data)
+                logger.info(f"[{generation_id}] Using precomputed scene plan ({len(scene_plan.scenes)} scenes)")
+                if not generation.scene_plan:
+                    generation.scene_plan = scene_plan.model_dump()
+                    generation.num_scenes = len(scene_plan.scenes)
+                    db.commit()
+            else:
+                logger.info(f"[{generation_id}] Calling scene planning module...")
+                scene_plan = plan_scenes(ad_spec, target_duration=15)
+                logger.info(
+                    f"[{generation_id}] Scene planning completed - {len(scene_plan.scenes)} scenes planned, total duration: {scene_plan.total_duration}s"
+                )
+                
+                generation.scene_plan = scene_plan.model_dump()
+                generation.num_scenes = len(scene_plan.scenes)
+                db.commit()
+                logger.info(f"[{generation_id}] Scene plan stored in database")
             
             # Video Generation Stage (30-70% progress)
             logger.info(f"[{generation_id}] Starting video generation stage (30-70% progress)")
@@ -496,14 +532,52 @@ async def create_generation(
     generation_id = generation.id
     logger.info(f"Created generation {generation_id}")
     
-    # Add background task to process the generation
-    background_tasks.add_task(process_generation, generation_id, request.prompt)
+    try:
+        logger.info(f"Calling LLM enhancement for generation {generation_id}")
+        ad_spec = await enhance_prompt_with_llm(request.prompt)
+        
+        if len(ad_spec.scenes) < 3:
+            message = "LLM response must include at least 3 scenes."
+            _mark_generation_failed(db, generation, message)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=_generation_failure_response(message),
+            )
+        
+        logger.info(f"Planning scenes for generation {generation_id}")
+        scene_plan = plan_scenes(ad_spec, target_duration=15)
+    except Exception as e:
+        logger.error(f"Generation {generation_id} failed during initialization: {e}")
+        _mark_generation_failed(db, generation, str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_generation_failure_response(str(e)),
+        )
     
-    # Return immediately - processing happens in background
+    # Persist specification and initial progress
+    generation.llm_specification = ad_spec.model_dump()
+    generation.framework = ad_spec.framework
+    generation.scene_plan = scene_plan.model_dump()
+    generation.num_scenes = len(scene_plan.scenes)
+    generation.status = "processing"
+    generation.current_step = "Scene Planning"
+    generation.progress = 20
+    generation.temp_clip_paths = []
+    db.commit()
+    
+    # Continue heavy processing in the background
+    background_tasks.add_task(
+        process_generation,
+        generation_id,
+        request.prompt,
+        ad_spec.model_dump(),
+        scene_plan.model_dump(),
+    )
+    
     return GenerateResponse(
         generation_id=generation_id,
         status="pending",
-        message="Video generation started"
+        message="Video generation started",
     )
 
 
@@ -558,25 +632,21 @@ async def get_generation_status(
     available_clips = len(generation.temp_clip_paths) if generation.temp_clip_paths else 0
     
     # Helper function to convert relative paths to full URLs
-    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
-        """Convert relative path to full URL for frontend consumption."""
+    def get_public_path(relative_path: Optional[str]) -> Optional[str]:
+        """Convert stored path to a public relative path."""
         if not relative_path:
             return None
-        from app.core.config import settings
-        # If already a full URL, return as-is
         if relative_path.startswith("http://") or relative_path.startswith("https://"):
             return relative_path
-        # Convert relative path to full URL
-        base_url = settings.STATIC_BASE_URL.rstrip("/")
-        path = relative_path.lstrip("/")
-        return f"{base_url}/{path}"
+        normalized = relative_path.replace("\\", "/").lstrip("/")
+        return f"/{normalized}" if not normalized.startswith("/") else normalized
     
     return StatusResponse(
         generation_id=generation.id,
         status=generation.status,
         progress=generation.progress,
         current_step=generation.current_step,
-        video_url=get_full_url(generation.video_url),
+        video_url=get_public_path(generation.video_url),
         cost=generation.cost,
         error=generation.error_message,
         num_scenes=generation.num_scenes,
@@ -752,18 +822,13 @@ async def get_generations(
     generations = query.offset(offset).limit(limit).all()
 
     # Helper function to convert relative paths to full URLs
-    def get_full_url(relative_path: Optional[str]) -> Optional[str]:
-        """Convert relative path to full URL for frontend consumption."""
+    def get_public_path(relative_path: Optional[str]) -> Optional[str]:
         if not relative_path:
             return None
-        from app.core.config import settings
-        # If already a full URL, return as-is
         if relative_path.startswith("http://") or relative_path.startswith("https://"):
             return relative_path
-        # Convert relative path to full URL
-        base_url = settings.STATIC_BASE_URL.rstrip("/")
-        path = relative_path.lstrip("/")
-        return f"{base_url}/{path}"
+        normalized = relative_path.replace("\\", "/").lstrip("/")
+        return f"/{normalized}" if not normalized.startswith("/") else normalized
     
     # Convert to Pydantic models
     generation_items = [
@@ -771,12 +836,13 @@ async def get_generations(
             id=gen.id,
             prompt=gen.prompt,
             status=gen.status,
-            video_url=get_full_url(gen.video_url),
-            thumbnail_url=get_full_url(gen.thumbnail_url),
+            video_url=get_public_path(gen.video_url),
+            thumbnail_url=get_public_path(gen.thumbnail_url),
             duration=gen.duration,
             cost=gen.cost,
             created_at=gen.created_at,
             completed_at=gen.completed_at,
+            parent_generation_id=gen.parent_generation_id,
         )
         for gen in generations
     ]

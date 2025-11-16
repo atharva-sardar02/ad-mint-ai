@@ -70,7 +70,9 @@ describe("ProgressBar Component", () => {
         />
       );
 
-      expect(screen.getByText("Processing")).toBeInTheDocument();
+      // "Processing" appears in both status and current step
+      // so we use getAllByText and check that at least one exists
+      expect(screen.getAllByText("Processing").length).toBeGreaterThan(0);
     });
 
     it("should display completed status", () => {
