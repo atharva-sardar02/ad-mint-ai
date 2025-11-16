@@ -1,0 +1,1 @@
+{"Rules":[{"ID":"TransitionToIA","Status":"Enabled","Prefix":"","Transitions":[{"Days":30,"StorageClass":"STANDARD_IA"}]}]}

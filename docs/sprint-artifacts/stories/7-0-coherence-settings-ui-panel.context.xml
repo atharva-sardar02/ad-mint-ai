@@ -1,0 +1,248 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>0</storyId>
+    <title>Coherence Settings UI Panel</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/7-0-coherence-settings-ui-panel.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a user</asA>
+    <iWant>I want to see and control which coherence techniques are applied to my video generation</iWant>
+    <soThat>So that I can customize the quality and consistency settings based on my needs</soThat>
+    <tasks>
+- Task 1: Create CoherenceSettingsPanel React Component (AC: 1, 2)
+  - Create `frontend/src/components/coherence/CoherenceSettingsPanel.tsx`
+  - Implement expandable/collapsible section UI
+  - Create checkbox/toggle controls for each coherence technique
+  - Add brief descriptions for each technique
+  - Display default state (enabled/disabled) for each option
+  - Show estimated time/cost impact indicators
+  - Implement tooltips with detailed explanations
+  - Style component using Tailwind CSS to match Dashboard design
+  - Make component responsive (mobile, tablet, desktop)
+  - Unit test: Component renders with default settings
+  - Unit test: Component toggles expand/collapse correctly
+  - Unit test: Checkboxes update state correctly
+
+- Task 2: Integrate CoherenceSettingsPanel into Dashboard (AC: 1, 3)
+  - Import CoherenceSettingsPanel into `frontend/src/routes/Dashboard.tsx`
+  - Add panel below prompt input form (before generate button)
+  - Manage coherence settings state in Dashboard component
+  - Pass settings to generation API call
+  - Ensure settings are included in generation request payload
+  - Test: Settings persist through form submission
+  - Integration test: Full generation flow with coherence settings
+
+- Task 3: Implement Settings Validation Logic (AC: 4)
+  - Create validation function for coherence settings dependencies
+  - Implement dependency checking (e.g., IP-Adapter requires Enhanced Planning)
+  - Add logic to disable incompatible options
+  - Show warning messages for recommended combinations
+  - Validate settings before form submission
+  - Display validation errors to user
+  - Unit test: Dependency validation works correctly
+  - Unit test: Incompatible options are disabled
+  - Unit test: Warnings display for recommended combinations
+
+- Task 4: Update Backend Generation Schema (AC: 3)
+  - Add `coherence_settings` JSON field to `Generation` model in `backend/app/db/models/generation.py`
+  - Update Pydantic schema in `backend/app/schemas/generation.py` to accept `coherence_settings`
+  - Create `CoherenceSettings` Pydantic model with all technique fields
+  - Add validation for coherence settings in schema
+  - Update `POST /api/generate` endpoint to accept and store coherence_settings
+  - Ensure backward compatibility (coherence_settings optional, defaults applied if missing)
+  - Unit test: Schema accepts valid coherence settings
+  - Unit test: Schema rejects invalid coherence settings
+  - Integration test: Generation endpoint stores coherence_settings correctly
+
+- Task 5: Create Coherence Settings Service (AC: 3, 4)
+  - Create `backend/app/services/coherence_settings.py`
+  - Implement `get_default_settings()` function returning recommended defaults
+  - Implement `validate_settings(settings: dict)` function checking dependencies
+  - Implement `apply_defaults(settings: dict)` function filling missing values
+  - Add dependency checking logic (IP-Adapter requires Enhanced Planning, etc.)
+  - Log coherence settings usage for analytics
+  - Unit test: Default settings are correct
+  - Unit test: Validation catches dependency violations
+  - Unit test: Defaults are applied correctly
+
+- Task 6: Create Database Migration (AC: 3)
+  - Create Alembic migration to add `coherence_settings` JSON column to `generations` table
+  - Ensure column is nullable (backward compatibility)
+  - Add database index if needed for querying
+  - Test migration up and down
+  - Verify existing generations remain unaffected
+
+- Task 7: Add API Endpoint for Default Settings (AC: 2)
+  - Create `GET /api/coherence/settings/defaults` endpoint
+  - Return default coherence settings with metadata (recommended, cost impact, time impact)
+  - Include descriptions for each technique
+  - Frontend calls this endpoint to populate tooltips and descriptions
+  - Unit test: Endpoint returns correct default settings
+  - Integration test: Frontend can fetch and display default settings
+
+- Task 8: Implement Settings Persistence (Optional) (AC: 3)
+  - Add user preference storage for coherence settings (optional feature)
+  - Store user's last used settings in localStorage or user profile
+  - Load saved preferences when user returns to Dashboard
+  - Allow user to reset to defaults
+  - Unit test: Settings are saved to localStorage
+  - Unit test: Settings are loaded on component mount
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Coherence Settings Panel Display:**
+   **Given** I am on the video generation page
+   **When** I view the generation form
+   **Then** I see an expandable "Advanced Coherence Settings" section with checkboxes for:
+   - ☑ Seed Control (enabled by default, recommended)
+   - ☑ IP-Adapter for Character/Product Consistency (enabled by default if entities detected)
+   - ☐ LoRA Training (disabled by default, requires trained LoRA)
+   - ☑ Enhanced LLM Planning (enabled by default, recommended)
+   - ☑ VBench Quality Control (enabled by default, recommended)
+   - ☑ Post-Processing Enhancement (enabled by default, recommended)
+   - ☐ ControlNet for Compositional Consistency (disabled by default, advanced)
+   - ☐ CSFD Character Consistency Detection (disabled by default, character-driven ads only)
+
+2. **Settings Display Details:**
+   **Given** I view the coherence settings panel
+   **When** I examine each option
+   **Then** I see:
+   - Checkbox/toggle for each technique
+   - Brief description of what each technique does
+   - Default state (enabled/disabled)
+   - Estimated impact on generation time (if applicable)
+   - Estimated impact on cost (if applicable)
+   - Tooltip with more details on hover/click
+
+3. **Settings Persistence:**
+   **Given** I configure coherence settings
+   **When** I submit the video generation
+   **Then** the system:
+   - Sends selected settings to backend API
+   - Stores settings with generation record
+   - Applies only selected techniques during generation
+   - Remembers my preferences for next generation (optional)
+
+4. **Settings Validation:**
+   **Given** I configure coherence settings
+   **When** I select/deselect options
+   **Then** the system:
+   - Shows dependencies (e.g., "IP-Adapter requires Enhanced Planning")
+   - Disables incompatible options
+   - Shows warnings for recommended combinations
+   - Validates settings before submission
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="20.2 Phase 3 Features" snippet="Character consistency and quality optimization requirements for multi-scene video coherence. Defines FR-030 through FR-033 covering video coherence analysis, enhancement, prompt optimization, and quality feedback loop." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Services and Modules" snippet="Defines coherence_settings.py service for managing user coherence preferences, validating settings, and applying defaults. Specifies CoherenceSettingsPanel component location and integration points with Dashboard." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Data Models and Contracts" snippet="Enhanced Generation model includes coherence_settings JSON field. CoherenceSettings Pydantic model structure with all technique fields (seed_control, ip_adapter, lora, enhanced_planning, vbench_quality_control, post_processing_enhancement, controlnet, csfd_detection)." />
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="APIs and Interfaces" snippet="Enhanced Generation Endpoint accepts coherence_settings in request body. GET /api/coherence/settings/defaults endpoint returns default settings with metadata (recommended, cost impact, time impact) and descriptions." />
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 7: Multi-Scene Coherence & Quality Optimization" snippet="Story 7.0 acceptance criteria defining coherence settings panel UI requirements, settings display details, persistence, and validation. Technical notes specify component creation, Dashboard integration, and backend schema updates." />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure" snippet="Frontend component structure: reusable components in frontend/src/components/, feature-oriented routing. Backend structure: api/routes for endpoints, schemas for Pydantic models, db/models for ORM models, services for business logic." />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Implementation Patterns" snippet="React components use PascalCase filenames. State management: Zustand for global state (auth/session), local component state for per-generation settings. API routes follow /api/* pattern. Error handling uses structured JSON format." />
+      <doc path="docs/Epic7_Research_Analysis.md" title="Epic 7 Research Analysis" section="Final Recommendations" snippet="Prioritizes seed control and enhanced LLM planning as quick wins. Recommends restructuring Epic 7 with bleeding-edge research techniques. Coherence settings UI enables user control over which techniques are applied." />
+    </docs>
+    <code>
+      <artifact path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="Dashboard" lines="1-425" reason="Main Dashboard component where CoherenceSettingsPanel will be integrated. Shows existing form structure with prompt input, validation, and generation submission. Component manages form state using React hooks (useState)." />
+      <artifact path="frontend/src/lib/generationService.ts" kind="service" symbol="generationService.startGeneration" lines="32-40" reason="Generation service that needs to be extended to include coherence_settings in request payload. Currently accepts only prompt string, needs to accept optional coherence_settings object." />
+      <artifact path="frontend/src/components/ui/Button.tsx" kind="component" symbol="Button" reason="Reusable Button component to use for expand/collapse button in CoherenceSettingsPanel. Follows existing UI component patterns." />
+      <artifact path="frontend/src/components/ui/ErrorMessage.tsx" kind="component" symbol="ErrorMessage" reason="Reusable ErrorMessage component for displaying validation errors in coherence settings panel. Follows existing error handling patterns." />
+      <artifact path="frontend/src/components/ui/Textarea.tsx" kind="component" symbol="Textarea" reason="Reference for form input component patterns. CoherenceSettingsPanel will use checkboxes/toggles instead, but follows similar styling and validation patterns." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="13-42" reason="Generation ORM model that needs coherence_settings JSON field added. Currently has JSON fields for llm_specification, scene_plan, temp_clip_paths. Follows same pattern for coherence_settings." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="GenerateRequest" lines="10-13" reason="Pydantic schema for generation request that needs to be extended with optional coherence_settings field. Currently validates prompt (10-500 characters)." />
+      <artifact path="backend/app/api/routes/generations.py" kind="endpoint" symbol="create_generation" lines="466-512" reason="POST /api/generate endpoint that needs to accept coherence_settings from request, store in Generation model, and pass to background processing. Currently creates Generation with prompt only." />
+      <artifact path="backend/app/services/cost_tracking.py" kind="service" reason="Reference service structure for creating coherence_settings.py service. Shows service pattern with functions for business logic, validation, and default application." />
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="18+" />
+        <package name="typescript" version="5+" />
+        <package name="vite" version="5+" />
+        <package name="tailwindcss" version="3.3+" />
+        <package name="react-router-dom" />
+      </ecosystem>
+      <ecosystem name="python">
+        <package name="fastapi" version="0.104+" />
+        <package name="pydantic" />
+        <package name="sqlalchemy" version="2.0+" />
+        <package name="alembic" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Frontend Component Structure: Follow existing Dashboard component patterns. Use React hooks for state management (useState, useEffect). Component should be self-contained and reusable.</constraint>
+    <constraint>State Management: Coherence settings should be managed in Dashboard component state, not in global Zustand store (settings are per-generation, not global user state).</constraint>
+    <constraint>API Integration: Extend existing generationService in frontend/src/lib/generationService.ts to include coherence_settings in request payload.</constraint>
+    <constraint>Backend Schema: Use Pydantic models for request/response validation. Follow existing pattern in backend/app/schemas/generation.py.</constraint>
+    <constraint>Database: Use JSON column type for coherence_settings (PostgreSQL JSONB or SQLite JSON). Ensure backward compatibility with existing generations (nullable field).</constraint>
+    <constraint>Error Handling: Follow existing error handling patterns in Dashboard (display errors using ErrorMessage component).</constraint>
+    <constraint>Naming Conventions: React components use PascalCase (CoherenceSettingsPanel.tsx). API routes follow /api/* pattern. Database columns use snake_case (coherence_settings).</constraint>
+    <constraint>Testing: Unit tests using React Testing Library for components. Integration tests for full generation flow. Backend tests using pytest for services and API endpoints.</constraint>
+    <constraint>Backward Compatibility: coherence_settings field must be optional. Default settings applied if missing. Existing generations without coherence_settings should continue to work.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/generate" kind="REST endpoint" signature="POST /api/generate
+Request Body: { prompt: string, coherence_settings?: CoherenceSettings }
+Response: { generation_id: string, status: string, message: string }" path="backend/app/api/routes/generations.py" />
+    <interface name="GET /api/coherence/settings/defaults" kind="REST endpoint" signature="GET /api/coherence/settings/defaults
+Response: { seed_control: { enabled: bool, recommended: bool, cost_impact: string, time_impact: string, description: string }, ... }" path="backend/app/api/routes/generations.py (new endpoint)" />
+    <interface name="CoherenceSettings" kind="Pydantic model" signature="class CoherenceSettings(BaseModel):
+    seed_control: bool = True
+    ip_adapter: bool = False
+    lora: bool = False
+    enhanced_planning: bool = True
+    vbench_quality_control: bool = True
+    post_processing_enhancement: bool = True
+    controlnet: bool = False
+    csfd_detection: bool = False" path="backend/app/schemas/generation.py" />
+    <interface name="CoherenceSettingsPanel" kind="React component" signature="export const CoherenceSettingsPanel: React.FC&lt;CoherenceSettingsPanelProps&gt;
+Props: { settings: CoherenceSettings, onChange: (settings: CoherenceSettings) =&gt; void, errors?: ValidationErrors }" path="frontend/src/components/coherence/CoherenceSettingsPanel.tsx" />
+    <interface name="generationService.startGeneration" kind="TypeScript function" signature="startGeneration(prompt: string, coherence_settings?: CoherenceSettings): Promise&lt;GenerateResponse&gt;" path="frontend/src/lib/generationService.ts" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Unit Tests: Test components in isolation using React Testing Library. Test state management, validation logic, and UI interactions. Backend services and API endpoints tested using pytest. Test coverage goal: &gt;80% for all new services.
+
+      Integration Tests: Test full flow from Dashboard form submission through API call to database storage. Test coherence settings persistence through entire generation pipeline.
+
+      E2E Tests: Test user can expand settings panel, toggle options, see validation messages, and submit generation with settings. Use existing E2E test patterns from Dashboard.e2e.test.tsx.
+
+      Backend Tests: Use pytest for backend service and API endpoint tests. Test schema validation, default application, dependency checking. Follow existing test patterns from test_generations.py.
+    </standards>
+    <locations>
+      Frontend unit tests: frontend/src/__tests__/
+      Frontend E2E tests: frontend/src/__tests__/
+      Backend unit tests: backend/tests/
+      Backend integration tests: backend/tests/
+    </locations>
+    <ideas>
+      <test acId="1">Unit test: CoherenceSettingsPanel renders with default settings from props. Verify all checkboxes display correct default states (enabled/disabled).</test>
+      <test acId="1">Unit test: CoherenceSettingsPanel expand/collapse functionality. Verify panel toggles visibility when expand button clicked.</test>
+      <test acId="2">Unit test: CoherenceSettingsPanel displays descriptions, time/cost impact, and tooltips for each technique. Verify tooltip content matches expected descriptions.</test>
+      <test acId="3">Integration test: Dashboard form submission includes coherence_settings in API request. Verify generationService.startGeneration called with coherence_settings object.</test>
+      <test acId="3">Integration test: Backend stores coherence_settings in Generation model. Verify database record contains correct coherence_settings JSON after generation creation.</test>
+      <test acId="4">Unit test: Settings validation detects dependencies (IP-Adapter requires Enhanced Planning). Verify validation function returns appropriate error when dependency violated.</test>
+      <test acId="4">Unit test: Incompatible options are disabled when dependencies not met. Verify checkbox disabled state updates correctly based on other selections.</test>
+      <test acId="4">Unit test: Warning messages display for recommended combinations. Verify warning UI appears when user selects non-recommended combination.</test>
+      <test acId="3">Backend unit test: CoherenceSettings Pydantic model accepts valid settings. Verify model validation passes for all valid combinations.</test>
+      <test acId="3">Backend unit test: CoherenceSettings Pydantic model rejects invalid settings. Verify model validation fails for invalid field types or values.</test>
+      <test acId="3">Backend unit test: coherence_settings service applies defaults correctly. Verify get_default_settings() returns recommended defaults, apply_defaults() fills missing values.</test>
+      <test acId="3">Backend unit test: coherence_settings service validates dependencies. Verify validate_settings() catches dependency violations (e.g., IP-Adapter without Enhanced Planning).</test>
+      <test acId="2">Integration test: GET /api/coherence/settings/defaults returns correct structure. Verify endpoint returns all techniques with metadata (enabled, recommended, cost_impact, time_impact, description).</test>
+      <test acId="3">E2E test: User expands coherence settings panel, toggles options, sees validation messages, submits generation. Verify full user flow from UI interaction to API submission.</test>
+      <test acId="3">Backend integration test: Generation endpoint accepts optional coherence_settings, applies defaults if missing. Verify backward compatibility with existing clients that don't send coherence_settings.</test>
+    </ideas>
+  </tests>
+</story-context>
+

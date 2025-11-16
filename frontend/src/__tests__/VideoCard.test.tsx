@@ -101,7 +101,7 @@ describe("VideoCard", () => {
     ];
 
     statuses.forEach((status) => {
-      const { container } = render(
+      render(
         <BrowserRouter>
           <VideoCard generation={{ ...mockGeneration, status }} />
         </BrowserRouter>

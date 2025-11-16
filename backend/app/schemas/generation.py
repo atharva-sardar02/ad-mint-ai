@@ -9,7 +9,10 @@ from pydantic import BaseModel, Field
 
 class GenerateRequest(BaseModel):
     """Request schema for POST /api/generate endpoint."""
-    prompt: str = Field(..., min_length=10, max_length=500, description="User prompt for video generation")
+    prompt: str = Field(..., min_length=10, description="User prompt for video generation")
+    model: Optional[str] = Field(None, description="Specific model to use (optional, uses default fallback chain if not specified)")
+    num_clips: Optional[int] = Field(None, ge=1, le=10, description="Number of clips to generate (optional, uses scene plan if not specified)")
+    use_llm: Optional[bool] = Field(True, description="Whether to use LLM enhancement (default: True)")
 
 
 class StatusResponse(BaseModel):

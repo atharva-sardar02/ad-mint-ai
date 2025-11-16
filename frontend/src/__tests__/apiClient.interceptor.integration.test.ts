@@ -3,7 +3,7 @@
  * Tests token clearing, auth store clearing, and redirect behavior on 401 errors.
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "../store/authStore";
 
 // Mock window.location

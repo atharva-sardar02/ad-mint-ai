@@ -162,7 +162,8 @@ async def test_error_handling_api_failures_and_fallback(sample_scene_plan, tmp_p
                     scene = sample_scene_plan.scenes[0]
                     
                     # Should succeed with fallback model
-                    clip_path = await generate_video_clip(
+                    from app.services.pipeline import video_generation
+                    clip_path, model_used = await video_generation.generate_video_clip(
                         scene=scene,
                         output_dir=output_dir,
                         generation_id="test-gen-123",
