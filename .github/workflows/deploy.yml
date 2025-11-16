@@ -74,16 +74,18 @@ jobs:
             
             echo "💾 Creating backup of current deployment..."
             
-            # Remove old backup if it exists
+            # Remove old backup if it exists (with sudo)
             if [ -d "$BACKUP_PATH" ]; then
               echo "🗑️  Removing old backup..."
-              rm -rf "$BACKUP_PATH"
+              sudo rm -rf "$BACKUP_PATH"
             fi
             
-            # Create backup
+            # Create backup (with sudo for directory creation, then fix ownership)
+            # Use rsync to exclude unnecessary files for faster backup
             if [ -d "$DEPLOYMENT_PATH" ]; then
-              echo "📦 Copying deployment to backup..."
-              cp -r "$DEPLOYMENT_PATH" "$BACKUP_PATH"
+              echo "📦 Copying deployment to backup (excluding large directories)..."
+              sudo rsync -a --exclude='node_modules' --exclude='venv' --exclude='__pycache__' --exclude='.git' --exclude='*.pyc' --exclude='.pytest_cache' --exclude='dist' --exclude='build' "$DEPLOYMENT_PATH/" "$BACKUP_PATH/"
+              sudo chown -R ubuntu:ubuntu "$BACKUP_PATH"
               echo "✅ Backup created at: $BACKUP_PATH"
             else
               echo "⚠️  Deployment directory not found, skipping backup"
@@ -109,6 +111,13 @@ jobs:
             # Update dependencies
             echo "📦 Updating Python dependencies..."
             cd backend
+            
+            # Create venv if it doesn't exist
+            if [ ! -d "venv" ]; then
+              echo "🐍 Creating Python virtual environment..."
+              python3 -m venv venv
+            fi
+            
             source venv/bin/activate
             pip install --upgrade pip
             pip install -r requirements.txt
@@ -187,32 +196,46 @@ jobs:
             echo "🛑 Stopping FastAPI service..."
             sudo systemctl stop fastapi || echo "⚠️  Service may already be stopped"
             
-            # Remove current deployment (keep .env file if it exists)
+            # Remove current deployment (preserve .env file)
+            ENV_BACKUP="/tmp/ad-mint-ai-env-backup"
             if [ -d "$DEPLOYMENT_PATH" ]; then
               echo "🗑️  Removing current deployment..."
-              # Backup .env if it exists
+              # Backup .env if it exists (to temp location before removing directory)
               if [ -f "$DEPLOYMENT_PATH/backend/.env" ]; then
                 echo "💾 Backing up current .env file..."
-                cp "$DEPLOYMENT_PATH/backend/.env" "$DEPLOYMENT_PATH/backend/.env.current"
+                sudo cp "$DEPLOYMENT_PATH/backend/.env" "$ENV_BACKUP"
               fi
               
               # Remove deployment directory
-              rm -rf "$DEPLOYMENT_PATH"
+              sudo rm -rf "$DEPLOYMENT_PATH"
             fi
             
             # Restore from backup
             echo "📦 Restoring from backup..."
-            cp -r "$BACKUP_PATH" "$DEPLOYMENT_PATH"
+            sudo rsync -a "$BACKUP_PATH/" "$DEPLOYMENT_PATH/"
             
-            # Restore .env file if we backed it up
-            if [ -f "$DEPLOYMENT_PATH/backend/.env.current" ]; then
+            # Restore .env file if we backed it up (from temp location)
+            if [ -f "$ENV_BACKUP" ]; then
               echo "📝 Restoring .env file..."
-              mv "$DEPLOYMENT_PATH/backend/.env.current" "$DEPLOYMENT_PATH/backend/.env"
+              sudo cp "$ENV_BACKUP" "$DEPLOYMENT_PATH/backend/.env"
+              sudo rm "$ENV_BACKUP"
+              sudo chmod 600 "$DEPLOYMENT_PATH/backend/.env"
             fi
             
             # Ensure proper permissions
             echo "🔐 Setting permissions..."
             sudo chown -R ubuntu:ubuntu "$DEPLOYMENT_PATH"
+            
+            # Recreate virtual environment if it doesn't exist (since we excluded it from backup)
+            if [ ! -d "$DEPLOYMENT_PATH/backend/venv" ]; then
+              echo "🐍 Recreating Python virtual environment..."
+              cd "$DEPLOYMENT_PATH/backend"
+              python3 -m venv venv
+              source venv/bin/activate
+              pip install --upgrade pip
+              pip install -r requirements.txt
+              deactivate
+            fi
             
             # Restart FastAPI service
             echo "🚀 Restarting FastAPI service..."
