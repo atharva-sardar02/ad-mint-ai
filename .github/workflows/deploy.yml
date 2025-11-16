@@ -260,8 +260,17 @@ jobs:
             echo "🔄 Restarting FastAPI service..."
             sudo systemctl restart fastapi
             
-            # Wait a moment for service to start
-            sleep 3
+            # Wait for service to start and check status
+            echo "⏳ Waiting for service to start..."
+            sleep 5
+            
+            # Check service status
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ FastAPI service is running"
+            else
+              echo "⚠️  FastAPI service may not be running, checking logs..."
+              sudo journalctl -u fastapi -n 20 --no-pager || true
+            fi
             
             echo "✅ Backend deployment completed"
             
@@ -273,9 +282,22 @@ jobs:
       - name: Health check
         run: |
           echo "🔍 Starting health check..."
-          MAX_ATTEMPTS=12
+          MAX_ATTEMPTS=20
           WAIT_SECONDS=5
           API_URL="${{ env.API_BASE_URL }}/api/health"
+          
+          # First check if service is running on the server
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'SERVICE_CHECK'
+            echo "🔍 Checking FastAPI service status..."
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ FastAPI service is active"
+              sudo systemctl status fastapi --no-pager -l | head -10
+            else
+              echo "❌ FastAPI service is not active"
+              echo "📋 Recent service logs:"
+              sudo journalctl -u fastapi -n 30 --no-pager || true
+            fi
+          SERVICE_CHECK
           
           for i in $(seq 1 $MAX_ATTEMPTS); do
             echo "📡 Health check attempt $i/$MAX_ATTEMPTS..."
@@ -359,11 +381,20 @@ jobs:
             if [ ! -d "$DEPLOYMENT_PATH/backend/venv" ]; then
               echo "🐍 Recreating Python virtual environment..."
               cd "$DEPLOYMENT_PATH/backend"
+              
+              # Ensure backend directory exists and has correct permissions
+              if [ ! -d "$DEPLOYMENT_PATH/backend" ]; then
+                echo "❌ Backend directory not found: $DEPLOYMENT_PATH/backend"
+                exit 1
+              fi
+              
               python3 -m venv venv
               source venv/bin/activate
-              pip install --upgrade pip
-              pip install -r requirements.txt
+              pip install --upgrade pip --no-cache-dir
+              pip install -r requirements.txt --no-cache-dir
               deactivate
+            else
+              echo "✅ Virtual environment already exists, skipping recreation"
             fi
             
             # Restart FastAPI service
