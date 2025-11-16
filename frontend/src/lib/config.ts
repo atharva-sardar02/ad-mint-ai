@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
   },
   GENERATIONS: {
     CREATE: "/api/generate",
+    CREATE_SINGLE_CLIP: "/api/generate-single-clip",
     LIST: "/api/generations",
     STATUS: (id: string) => `/api/status/${id}`,
     CANCEL: (id: string) => `/api/generations/${id}/cancel`,

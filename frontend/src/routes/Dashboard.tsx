@@ -7,13 +7,13 @@ import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Textarea";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { ProgressBar } from "../components/ProgressBar";
+import { Select } from "../components/ui/Select";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse } from "../lib/generationService";
 import { getUserProfile } from "../lib/userService";
 import type { UserProfile } from "../lib/types/api";
 
 const MIN_PROMPT_LENGTH = 10;
-const MAX_PROMPT_LENGTH = 500;
 
 interface ValidationErrors {
   prompt?: string;
@@ -31,6 +31,10 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeGeneration, setActiveGeneration] = useState<StatusResponse | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [useSingleClip, setUseSingleClip] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [numClips, setNumClips] = useState<number>(1);
+  const [useLlm, setUseLlm] = useState<boolean>(true);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
@@ -80,8 +84,6 @@ export const Dashboard: React.FC = () => {
     if (prompt.trim() !== "") {
       if (prompt.length < MIN_PROMPT_LENGTH) {
         newErrors.prompt = `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`;
-      } else if (prompt.length > MAX_PROMPT_LENGTH) {
-        newErrors.prompt = `Prompt must be no more than ${MAX_PROMPT_LENGTH} characters`;
       }
     }
 
@@ -179,7 +181,7 @@ export const Dashboard: React.FC = () => {
   /**
    * Check if form is valid.
    */
-  const isValid = prompt.length >= MIN_PROMPT_LENGTH && prompt.length <= MAX_PROMPT_LENGTH;
+  const isValid = prompt.length >= MIN_PROMPT_LENGTH;
 
   const handleLogout = () => {
     // Clear polling before logout
@@ -196,9 +198,7 @@ export const Dashboard: React.FC = () => {
     // Validate before submission
     if (!isValid) {
       setErrors({
-        prompt: prompt.length < MIN_PROMPT_LENGTH
-          ? `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`
-          : `Prompt must be no more than ${MAX_PROMPT_LENGTH} characters`,
+        prompt: `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`,
       });
       return;
     }
@@ -208,7 +208,26 @@ export const Dashboard: React.FC = () => {
     setErrors({});
 
     try {
-      const response = await generationService.startGeneration(prompt);
+      let response;
+      if (useSingleClip) {
+        if (!selectedModel) {
+          setApiError("Please select a model for single clip generation");
+          setIsLoading(false);
+          return;
+        }
+        response = await generationService.startSingleClipGeneration(
+          prompt,
+          selectedModel,
+          numClips
+        );
+      } else {
+        response = await generationService.startGeneration(
+          prompt,
+          selectedModel || undefined,
+          numClips > 1 ? numClips : undefined,
+          useLlm
+        );
+      }
       
       // Set initial status for polling
       setActiveGeneration({
@@ -385,10 +404,9 @@ export const Dashboard: React.FC = () => {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="e.g., Create a luxury watch ad for Instagram showcasing elegance and precision..."
                 minLength={MIN_PROMPT_LENGTH}
-                maxLength={MAX_PROMPT_LENGTH}
                 rows={6}
                 error={errors.prompt}
-                helperText={`${prompt.length}/${MAX_PROMPT_LENGTH} characters (minimum ${MIN_PROMPT_LENGTH})`}
+                helperText={`${prompt.length} characters (minimum ${MIN_PROMPT_LENGTH})`}
                 disabled={isLoading}
                 required
               />
@@ -396,6 +414,69 @@ export const Dashboard: React.FC = () => {
               {apiError && (
                 <ErrorMessage message={apiError} />
               )}
+
+              {/* Single Clip Mode Toggle */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="useSingleClip"
+                  checked={useSingleClip}
+                  onChange={(e) => setUseSingleClip(e.target.checked)}
+                  disabled={isLoading}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="useSingleClip" className="text-sm font-medium text-gray-700">
+                  Generate single clip (bypass pipeline)
+                </label>
+              </div>
+
+              {/* LLM Enhancement Toggle */}
+              {!useSingleClip && (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="useLlm"
+                    checked={useLlm}
+                    onChange={(e) => setUseLlm(e.target.checked)}
+                    disabled={isLoading}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="useLlm" className="text-sm font-medium text-gray-700">
+                    Use LLM enhancement (recommended)
+                  </label>
+                </div>
+              )}
+
+              {/* Model Selection */}
+              <Select
+                label="Video Model"
+                id="model"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={isLoading}
+                required={useSingleClip}
+                options={[
+                  { value: "", label: useSingleClip ? "Select a model (required)" : "Auto (use default)" },
+                  { value: "bytedance/seedance-1-lite", label: "Seedance-1-Lite (Primary)" },
+                  { value: "minimax-ai/minimax-video-01", label: "Minimax Video-01" },
+                  { value: "klingai/kling-video", label: "Kling 1.5" },
+                  { value: "runway/gen3-alpha-turbo", label: "Runway Gen-3 Alpha Turbo" },
+                  { value: "openai/sora-2", label: "Sora-2" },
+                ]}
+              />
+
+              {/* Number of Clips */}
+              <Select
+                label="Number of Clips"
+                id="numClips"
+                value={numClips.toString()}
+                onChange={(e) => setNumClips(parseInt(e.target.value, 10))}
+                disabled={isLoading}
+                options={Array.from({ length: 10 }, (_, i) => ({
+                  value: (i + 1).toString(),
+                  label: (i + 1).toString(),
+                }))}
+              />
 
               <div className="flex gap-4">
                 <Button

@@ -1,0 +1,350 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>5</storyId>
+    <title>Production Deployment</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-5-production-deployment.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>As a developer</asA>
+    <iWant>I want a complete production deployment setup with CI/CD, monitoring, and security</iWant>
+    <soThat>so that the application can be deployed reliably to production with proper safeguards</soThat>
+    <tasks>
+- Task 1: Frontend S3 Setup (AC: 1)
+  - Create S3 bucket `ad-mint-ai-frontend` for frontend static files
+  - Configure S3 bucket for static website hosting (enable static website hosting)
+  - Set index document to `index.html` and error document to `index.html` (for SPA routing)
+  - Set up S3 bucket policy for public read access
+  - Configure S3 bucket CORS settings to allow API domain (EC2 API endpoint)
+  - Update CI/CD to build frontend (`npm run build`) and upload to S3 (`aws s3 sync frontend/dist/ s3://ad-mint-ai-frontend/`)
+  - Document S3 website endpoint URL (format: `ad-mint-ai-frontend.s3-website-<region>.amazonaws.com`)
+  - Testing: Verify frontend is accessible via S3 website endpoint, verify CORS allows API requests
+
+- Task 2: Domain and DNS Configuration (AC: 1)
+  - Configure domain name DNS records:
+    - CNAME record pointing to S3 website endpoint (frontend) - e.g., `www.yourdomain.com` → `ad-mint-ai-frontend.s3-website-<region>.amazonaws.com`
+    - A record for EC2 public IP or API subdomain (backend API) - e.g., `api.yourdomain.com` → EC2 public IP
+  - Update S3 bucket CORS configuration to allow frontend domain
+  - Update FastAPI CORS configuration to allow frontend domain (in production `.env` file)
+  - Update Nginx `server_name` in production configuration to match API domain
+  - Verify domain resolves correctly for both frontend (S3) and API (EC2)
+  - Testing: Verify frontend domain loads from S3, verify API domain proxies correctly via Nginx
+
+- Task 3: Production Database Setup (AC: 1)
+  - Configure AWS RDS PostgreSQL instance in private subnet (10.0.2.0/24) of same VPC (10.0.0.0/16) as EC2
+  - Configure RDS security group to allow inbound port 5432 (PostgreSQL) from EC2 security group only
+  - Set up automated daily backups with retention policy (7-30 days) via RDS automated backups
+  - Configure database connection (no SSL/TLS - RDS in private subnet, VPC-only access provides security)
+  - Update backend DATABASE_URL in production `.env` file to use RDS endpoint (format: `postgresql://user:pass@xxx.rds.amazonaws.com:5432/dbname`)
+  - Verify database connectivity from EC2 instance (test connection from EC2)
+  - Verify RDS is in private subnet (no public IP, only accessible from VPC)
+  - Testing: Test database connection from EC2, verify backups are created automatically
+
+- Task 4: S3 Video Storage Configuration (AC: 1)
+  - Create S3 bucket `ad-mint-ai-videos` for video file storage
+  - Configure S3 bucket policies for EC2 instance access (IAM role or access keys)
+  - Configure S3 bucket CORS settings if needed for direct browser access
+  - Set up S3 lifecycle policies for cost optimization (e.g., transition to cheaper storage classes after 30 days)
+  - Update backend video storage service to use S3 (boto3) instead of local disk (`/output` directory)
+  - Configure IAM role for EC2 instance with S3 access permissions (or use access keys in `.env`)
+  - Update video upload/download endpoints to use S3 (presigned URLs for downloads)
+  - Testing: Verify video files are uploaded to S3 during generation, verify video downloads work via presigned URLs
+
+- Task 5: Environment Variables Configuration (AC: 1, 3)
+  - Create production `.env` file on EC2 instance at `/var/www/ad-mint-ai/backend/.env` with all required variables
+  - Configure environment variables:
+    - `DATABASE_URL` (RDS endpoint: `postgresql://user:pass@xxx.rds.amazonaws.com:5432/dbname`)
+    - `SECRET_KEY` (JWT secret, strong random string)
+    - `OPENAI_API_KEY` (for LLM enhancement)
+    - `REPLICATE_API_TOKEN` (for video generation)
+    - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (for S3 access, or use IAM role)
+    - `AWS_S3_VIDEO_BUCKET` (`ad-mint-ai-videos`)
+    - `CORS_ALLOWED_ORIGINS` (frontend S3 website endpoint or domain)
+  - Ensure `.env` file has proper permissions (readable only by application user: `chmod 600 .env`, owned by `www-data` or app user)
+  - Remove hardcoded secrets from configuration files
+  - Update systemd service file to load `.env` from correct location (`/var/www/ad-mint-ai/backend/.env`)
+  - Document all required environment variables in `backend/.env.example`
+  - Testing: Verify environment variables are loaded correctly, verify application starts, verify S3 and database connections work
+
+- Task 6: Enhanced Health Check Endpoints (AC: 1, 4)
+  - Extend `/api/health` endpoint to include database connectivity check
+  - Add S3 connectivity check to health endpoint
+  - Add detailed health status (database, storage, external APIs)
+  - Configure monitoring tools to poll health endpoint
+  - Testing: Verify health endpoint returns accurate status for all components
+
+- Task 7: CI/CD Pipeline Setup (AC: 2)
+  - Configure GitHub Actions, GitLab CI, or AWS CodePipeline workflow
+  - Add automated test execution (unit, integration, e2e)
+  - Add Docker image build step (if containerizing)
+  - Add security scanning (dependency checks, vulnerability scans)
+  - Configure staging environment deployment
+  - Add production deployment approval gate
+  - Configure deployment notifications (email, Slack, etc.)
+  - Testing: Test CI/CD pipeline with sample commits
+
+- Task 8: Security Hardening (AC: 3)
+  - Configure AWS Security Groups:
+    - EC2 Security Group: Inbound port 80 (HTTP) from 0.0.0.0/0, port 22 (SSH) from your IP only, outbound all
+    - RDS Security Group: Inbound port 5432 (PostgreSQL) from EC2 Security Group only, outbound none
+  - Implement rate limiting middleware in FastAPI (e.g., `slowapi` or custom middleware)
+  - Update CORS configuration in FastAPI to allow only production frontend domain (S3 website endpoint or custom domain)
+  - Add security headers to Nginx (CSP, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
+  - Database connection (no SSL/TLS - RDS in private subnet provides security via VPC isolation)
+  - Configure Nginx to only proxy API requests (no frontend serving) - verify `server_name` matches API domain
+  - Set up automated security updates and patching schedule (e.g., `unattended-upgrades` on Ubuntu)
+  - Verify `.env` file permissions (600, owned by app user)
+  - Testing: Verify firewall rules (test port access), test rate limiting (make excessive requests), verify security headers (check response headers), verify RDS is not publicly accessible
+
+- Task 9: Logging and Basic Monitoring Setup (AC: 4)
+  - Configure structured logging in FastAPI application
+  - Set up log file rotation for application logs
+  - Configure Nginx access and error logs
+  - Set up basic server resource monitoring (manual checks via system commands)
+  - Document log file locations and access procedures
+  - Testing: Verify logs are being written correctly and are accessible
+
+- Task 10: Backup and Recovery Procedures (AC: 5)
+  - Configure automated daily database backups (AWS RDS automated backups)
+  - Set up S3 backup for video files (cross-region replication or lifecycle policies)
+  - Document backup retention policy (7-30 days for database, longer for videos)
+  - Create restore procedure documentation
+  - Test restore procedures (database restore, file restore)
+  - Document disaster recovery plan
+  - Testing: Perform test restore and verify data integrity
+
+- Task 11: Rollback and Version Management (AC: 6)
+  - Configure deployment artifact versioning
+  - Set up rollback procedure (revert to previous deployment)
+  - Ensure database migrations are forward/backward compatible
+  - Set up deployment event logging
+  - Document rollback procedures
+  - Testing: Test rollback procedure on staging environment
+
+- Task 12: Production Deployment Documentation (AC: 7)
+  - Create deployment runbook with step-by-step procedures
+  - Document environment configuration requirements
+  - Create troubleshooting guide for common production issues
+  - Document incident response procedures
+  - Include contact information for on-call support
+  - Document monitoring and alerting procedures
+  - Testing: Review documentation for completeness and accuracy
+</tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Deployment Infrastructure:**
+   **Given** I have a production environment ready
+   **When** I deploy the application
+   **Then** the system:
+   - Sets up frontend hosting on S3 (static website hosting)
+   - Sets up domain name and DNS configuration (S3 for frontend, EC2 for API)
+   - Configures production database (PostgreSQL) with backups
+   - Sets up file storage (S3) for video files
+   - Configures environment variables for production secrets
+   - Implements health check endpoints for monitoring
+
+2. **CI/CD Pipeline:**
+   **Given** code is pushed to the repository
+   **When** CI/CD pipeline runs
+   **Then** it:
+   - Runs automated tests (unit, integration, e2e)
+   - Builds Docker images (if containerized) or prepares deployment artifacts
+   - Runs security scans and dependency checks
+   - Deploys to staging environment for validation
+   - Promotes to production after staging approval
+   - Sends deployment notifications
+
+3. **Security & Hardening:**
+   **Given** the application is deployed
+   **When** security measures are in place
+   **Then** the system includes:
+   - Firewall rules (only necessary ports open)
+   - Rate limiting on API endpoints
+   - CORS properly configured for production domain
+   - Secure headers (CSP, X-Frame-Options, X-Content-Type-Options)
+   - Database connection (no SSL/TLS required - RDS in private subnet)
+   - Environment variables configured securely on EC2 instance
+   - Regular security updates and patching
+
+4. **Logging & Basic Monitoring:**
+   **Given** the application is running in production
+   **When** logging is configured
+   **Then** the system:
+   - Writes structured application logs to files
+   - Maintains Nginx access and error logs
+   - Provides log file rotation to prevent disk space issues
+   - Documents log file locations for troubleshooting
+   - Enables manual server resource checks (CPU, memory, disk)
+
+5. **Backup & Recovery:**
+   **Given** production data exists
+   **When** backup procedures are in place
+   **Then** the system:
+   - Automatically backs up database daily (with retention policy)
+   - Backs up video files to secondary storage
+   - Tests restore procedures regularly
+   - Documents disaster recovery plan
+   - Maintains point-in-time recovery capability
+
+6. **Rollback & Version Management:**
+   **Given** a deployment fails or issues are detected
+   **When** rollback is needed
+   **Then** the system:
+   - Maintains previous deployment artifacts
+   - Can quickly revert to previous version
+   - Preserves database migrations (forward/backward compatible)
+   - Logs all deployment events for audit trail
+
+7. **Documentation:**
+   **Given** deployment is complete
+   **When** documentation is reviewed
+   **Then** it includes:
+   - Deployment runbook with step-by-step procedures
+   - Environment configuration guide
+   - Troubleshooting guide for common issues
+   - Incident response procedures
+   - Contact information for on-call support
+</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/aws-architecture-diagram.md" title="AWS Deployment Architecture" section="High-Level Architecture">
+        Final architecture specification: Frontend on S3 bucket `ad-mint-ai-frontend` with static website hosting. Backend on EC2 instance (Ubuntu 22.04, t3.large/t3.xlarge) in public subnet (10.0.1.0/24). RDS PostgreSQL in private subnet (10.0.2.0/24) of same VPC (10.0.0.0/16). Nginx on EC2 port 80 reverse-proxies `/api/*` requests only (no frontend serving). S3 bucket `ad-mint-ai-videos` for video storage. EC2 security group: ports 80, 22 open. RDS security group: port 5432 from EC2 only.
+      </doc>
+      <doc path="docs/aws-architecture-diagram.md" title="AWS Deployment Architecture" section="EC2 Instance Internal Structure">
+        Backend location: `/var/www/ad-mint-ai/backend/` with FastAPI on port 8000 (localhost), managed by systemd service. Environment file: `/var/www/ad-mint-ai/backend/.env` with proper permissions. Log files: `/var/log/fastapi/app.log`, `/var/log/nginx/ad-mint-ai-access.log`, `/var/log/nginx/ad-mint-ai-error.log`.
+      </doc>
+      <doc path="docs/aws-architecture-diagram.md" title="AWS Deployment Architecture" section="VPC Layout">
+        VPC CIDR: 10.0.0.0/16. Public subnet: 10.0.1.0/24 (EC2 instance with public IP). Private subnet: 10.0.2.0/24 (RDS PostgreSQL, no public IP). Internet Gateway attached to public subnet.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Deployment Strategy">
+        Frontend on S3 static website hosting, Backend on EC2 + RDS deployment pattern. Nginx on EC2 reverse-proxies `/api/*` to FastAPI (no frontend serving). Systemd service for FastAPI with auto-restart. AWS RDS PostgreSQL for production database. S3 for video file storage and frontend static files.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Security & Privacy">
+        Environment variables stored in .env file on EC2 instance with proper permissions. Rate limiting: 10 generations per user per hour. CORS configured for production domain only.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Deployment">
+        Frontend on S3 static website hosting, Backend on single EC2 instance (Ubuntu 22.04 LTS). Managed AWS RDS PostgreSQL instance in same VPC/subnet as EC2. Nginx on EC2 reverse-proxying `/api/*` to FastAPI only (no frontend serving). S3 for video file storage and frontend static files.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-1.md" title="Epic 1 Technical Specification" section="Deployment Workflow">
+        Frontend deployment: Build React app, upload to S3 bucket, configure S3 static website hosting. Backend deployment: SSH into EC2 instance, install system dependencies (Python 3.11, FFmpeg, Nginx), clone repository, set up Python virtual environment, configure Nginx for API only, create systemd service, start services.
+      </doc>
+      <doc path="docs/epics.md" title="Epics Document" section="Story 1.5">
+        Production deployment story with 7 acceptance criteria covering: deployment infrastructure (DNS, database, S3, secrets, health checks), CI/CD pipeline, security hardening, monitoring & observability, backup & recovery, rollback & version management, documentation.
+      </doc>
+      <doc path="docs/sprint-artifacts/1-4-deployment-pipeline-basics.md" title="Story 1.4" section="Dev Notes">
+        Deployment script `deployment/deploy.sh` provides foundation for deployment automation - extend for production-specific steps. Nginx configuration `deployment/nginx.conf` exists with basic configuration - CRITICAL UPDATE: Modify to only proxy API requests, remove all frontend serving blocks (frontend now on S3). Systemd service `deployment/fastapi.service` configured with auto-restart - update EnvironmentFile path to `/var/www/ad-mint-ai/backend/.env`.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="deployment/deploy.sh" kind="script" symbol="deployment script" lines="1-263" reason="Main deployment script that automates EC2 backend deployment: installs system dependencies (Python 3.11, Node.js 18+, FFmpeg, Nginx), sets up virtual environment, installs Python dependencies, configures Nginx for API only (no frontend serving), configures systemd service, initializes database, verifies deployment. Needs extension for production: S3 frontend upload (build and sync to `ad-mint-ai-frontend` bucket), S3 video storage configuration (create `ad-mint-ai-videos` bucket, configure IAM), environment variable setup (create `.env` at `/var/www/ad-mint-ai/backend/.env`), logging configuration (create log directories, configure rotation)." />
+      <artifact path="deployment/nginx.conf" kind="configuration" symbol="Nginx configuration" lines="1-65" reason="Nginx configuration reverse-proxying `/api/*` to FastAPI on port 8000 only. Currently includes frontend serving blocks (lines 20-27) which MUST be removed for production (frontend on S3). Currently HTTP only (port 80). Security headers partially configured (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection), needs CSP for production. Update `server_name` from `_` to actual API domain. Log files: `/var/log/nginx/ad-mint-ai-access.log`, `/var/log/nginx/ad-mint-ai-error.log`." />
+      <artifact path="deployment/fastapi.service" kind="configuration" symbol="systemd service" lines="1-51" reason="Systemd service file for FastAPI backend with auto-restart (`Restart=always`), boot startup (`WantedBy=multi-user.target`), security settings (NoNewPrivileges, PrivateTmp), and logging to journald. Runs as www-data user. Currently loads environment variables from placeholder path - update `EnvironmentFile` to `/var/www/ad-mint-ai/backend/.env` for production. WorkingDirectory should be `/var/www/ad-mint-ai/backend`." />
+      <artifact path="backend/app/main.py" kind="application" symbol="FastAPI app" lines="60-63" reason="Health check endpoint `/api/health` returns `{\"status\": \"healthy\"}`. Needs extension for production: database connectivity check (test RDS connection), S3 connectivity check (test `ad-mint-ai-videos` bucket access), external API health checks (Replicate, OpenAI), detailed health status with component-level checks (database, storage, external APIs)." />
+      <artifact path="backend/app/core/config.py" kind="configuration" symbol="Settings" reason="Configuration management loading environment variables from `.env` file. Needs extension for production: production-specific settings (database URL from RDS: `postgresql://user:pass@xxx.rds.amazonaws.com:5432/dbname`, S3 bucket configuration for `ad-mint-ai-videos`, CORS allowed origins for frontend S3 website endpoint or domain)." />
+      <artifact path=".github/workflows/deploy.yml" kind="workflow" symbol="CI/CD pipeline" reason="GitHub Actions workflow for automated deployment. Currently includes: test execution, frontend build, backend deployment to EC2 via SSH, frontend deployment to S3. Needs verification: S3 bucket name `ad-mint-ai-frontend`, EC2 deployment path `/var/www/ad-mint-ai`, staging environment deployment, production approval gate, deployment notifications." />
+    </code>
+    <dependencies>
+      <ecosystem name="Python">
+        <package name="fastapi" version=">=0.104.0" reason="Web framework for API endpoints" />
+        <package name="uvicorn" version=">=0.24.0" reason="ASGI server for FastAPI" />
+        <package name="sqlalchemy" version=">=2.0.0" reason="ORM for database operations" />
+        <package name="pydantic" version=">=2.0.0" reason="Data validation and settings management" />
+        <package name="python-dotenv" version=">=1.0.0" reason="Environment variable loading from .env files" />
+        <package name="bcrypt" version=">=4.0.0" reason="Password hashing for authentication" />
+        <package name="PyJWT" version=">=2.8.0" reason="JWT token generation and verification" />
+        <package name="openai" version=">=1.0.0" reason="OpenAI API client for LLM enhancement" />
+        <package name="replicate" version=">=0.22.0" reason="Replicate API client for video generation" />
+        <package name="moviepy" version=">=1.0.3" reason="Video processing and editing" />
+        <package name="opencv-python" version=">=4.8.0" reason="Image and video processing" />
+        <package name="pillow" version=">=10.1.0" reason="Image manipulation" />
+        <package name="pytest" version=">=7.4.0" reason="Testing framework" />
+        <package name="httpx" version=">=0.24.0" reason="HTTP client for testing" />
+        <package name="boto3" version=">=1.34.0" reason="AWS SDK for S3 access (needed for video storage)" />
+      </ecosystem>
+      <ecosystem name="Node.js">
+        <package name="react" version="^19.2.0" reason="UI library" />
+        <package name="react-dom" version="^19.2.0" reason="React DOM rendering" />
+        <package name="react-router-dom" version="^7.9.6" reason="Client-side routing" />
+        <package name="axios" version="^1.13.2" reason="HTTP client for API requests" />
+        <package name="zustand" version="^5.0.8" reason="State management" />
+        <package name="typescript" version="~5.9.3" reason="Type safety" />
+        <package name="vite" version="^5.4.11" reason="Build tool and dev server" />
+        <package name="tailwindcss" version="^4.1.17" reason="Utility-first CSS framework" />
+        <package name="vitest" version="^1.6.0" reason="Testing framework" />
+      </ecosystem>
+      <ecosystem name="System">
+        <package name="python3.11" reason="Python runtime" />
+        <package name="nginx" reason="Reverse proxy for API requests only (frontend on S3)" />
+        <package name="aws-cli" reason="AWS CLI for S3 uploads and bucket management" />
+        <package name="ffmpeg" reason="Video encoding and processing" />
+        <package name="systemd" reason="Service management" />
+      </ecosystem>
+      <ecosystem name="AWS">
+        <package name="AWS EC2" reason="Compute instance for application hosting (Ubuntu 22.04, t3.large/t3.xlarge)" />
+        <package name="AWS RDS PostgreSQL" reason="Managed database service in private subnet" />
+        <package name="AWS S3" reason="Object storage: `ad-mint-ai-frontend` for frontend, `ad-mint-ai-videos` for video files" />
+        <package name="AWS VPC" reason="Virtual Private Cloud: 10.0.0.0/16 with public subnet (10.0.1.0/24) and private subnet (10.0.2.0/24)" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Deployment Target: Frontend on S3 static website hosting (bucket: `ad-mint-ai-frontend`), Backend on single EC2 instance (Ubuntu 22.04 LTS, t3.large/t3.xlarge) in public subnet (10.0.1.0/24)</constraint>
+    <constraint>VPC Layout: EC2 in public subnet (10.0.1.0/24), RDS PostgreSQL in private subnet (10.0.2.0/24) of same VPC (10.0.0.0/16)</constraint>
+    <constraint>Database: AWS RDS PostgreSQL instance in private subnet, same VPC as EC2, port 5432 (no SSL/TLS - VPC isolation provides security)</constraint>
+    <constraint>Frontend Hosting: AWS S3 bucket `ad-mint-ai-frontend` with static website hosting enabled, public read access, CORS configured for API domain</constraint>
+    <constraint>Backend Location: EC2 instance at `/var/www/ad-mint-ai/backend/` with FastAPI on port 8000 (localhost), managed by systemd service</constraint>
+    <constraint>Nginx Configuration: Nginx on EC2 port 80, reverse proxies `/api/*` requests only (no frontend serving - frontend on S3)</constraint>
+    <constraint>Storage: AWS S3 bucket `ad-mint-ai-videos` for video file storage (replacing local disk storage from Story 1.4)</constraint>
+    <constraint>Security Groups: EC2 allows inbound port 80 (HTTP) and 22 (SSH), RDS allows inbound port 5432 from EC2 security group only</constraint>
+    <constraint>Environment Variables: `.env` file on EC2 at `/var/www/ad-mint-ai/backend/.env` with proper file permissions (readable by app only: `chmod 600`, owned by `www-data` or app user)</constraint>
+    <constraint>Logging: Structured logging to files on EC2 instance (`/var/log/fastapi/app.log`, `/var/log/nginx/ad-mint-ai-access.log`, `/var/log/nginx/ad-mint-ai-error.log`) with log rotation</constraint>
+    <constraint>CI/CD: GitHub Actions, GitLab CI, or AWS CodePipeline for automated deployments - build frontend and upload to S3, deploy backend to EC2</constraint>
+    <constraint>Infrastructure as Code: Consider using Terraform or CloudFormation for reproducible infrastructure (optional for MVP, recommended for production)</constraint>
+    <constraint>Containerization: Docker containerization is optional but recommended for consistent deployments</constraint>
+    <constraint>Deployment Scripts: Extend `deployment/deploy.sh` to include production-specific steps (S3 frontend upload, S3 video storage configuration, environment variables, logging)</constraint>
+    <constraint>Configuration Files: Update `deployment/nginx.conf` to only proxy API requests (remove frontend serving blocks). Update `deployment/fastapi.service` to load `.env` from `/var/www/ad-mint-ai/backend/.env`. Update Nginx `server_name` to match API domain.</constraint>
+    <constraint>Security: All sensitive configuration (API keys, secrets) stored in .env file on EC2 instance with proper file permissions, never committed to version control</constraint>
+    <constraint>Database Migrations: Ensure migrations are forward/backward compatible for rollback capability</constraint>
+  </constraints>
+  <interfaces>
+    <interface name="Deployment Script" kind="bash script" signature="deploy.sh [deployment_path]" path="deployment/deploy.sh" reason="Main deployment script that orchestrates all deployment steps. Currently handles: system dependency installation, virtual environment setup, Nginx/systemd configuration, service startup. Needs extension for: S3 frontend upload (build and sync to `ad-mint-ai-frontend` bucket), S3 video storage setup (create `ad-mint-ai-videos` bucket, configure IAM), production environment variables (create `.env` at `/var/www/ad-mint-ai/backend/.env`), logging setup (create log directories, configure rotation)." />
+    <interface name="Nginx Configuration" kind="configuration file" signature="nginx.conf -> /etc/nginx/sites-available/ad-mint-ai" path="deployment/nginx.conf" reason="Nginx configuration file that reverse-proxies API requests to FastAPI backend only. CRITICAL: Remove frontend serving blocks (lines 20-27) - frontend now on S3, not EC2. Currently HTTP only (port 80). Update `server_name` from `_` to actual API domain. Needs security headers: CSP, X-Frame-Options, X-Content-Type-Options for production. Log files: `/var/log/nginx/ad-mint-ai-access.log`, `/var/log/nginx/ad-mint-ai-error.log`." />
+    <interface name="S3 Frontend Bucket" kind="AWS S3 bucket" signature="ad-mint-ai-frontend" reason="S3 bucket for hosting frontend static files. Configured for static website hosting with public read access. Website endpoint: `ad-mint-ai-frontend.s3-website-<region>.amazonaws.com`. CORS configured to allow API domain. Index document: `index.html`, error document: `index.html` (for SPA routing)." />
+    <interface name="S3 Video Bucket" kind="AWS S3 bucket" signature="ad-mint-ai-videos" reason="S3 bucket for video file storage. IAM role or access keys needed for EC2 instance to access. CORS configured if needed for direct browser access. Lifecycle policies for cost optimization. Backend uses boto3 to upload/download videos (presigned URLs for downloads)." />
+    <interface name="Systemd Service" kind="service file" signature="fastapi.service -> /etc/systemd/system/fastapi.service" path="deployment/fastapi.service" reason="Systemd service file that runs FastAPI backend as a managed service with auto-restart and boot startup. Update `EnvironmentFile` to `/var/www/ad-mint-ai/backend/.env` for production. Update `WorkingDirectory` to `/var/www/ad-mint-ai/backend`. Loads environment variables from .env file on EC2 instance." />
+    <interface name="Health Check Endpoint" kind="REST endpoint" signature="GET /api/health -> {\"status\": \"healthy\"}" path="backend/app/main.py" reason="Health check endpoint for monitoring. Currently returns basic status. Needs extension for production: database connectivity check (test RDS connection), S3 connectivity check (test `ad-mint-ai-videos` bucket access), external API health checks (Replicate, OpenAI), detailed component-level status (database, storage, external APIs)." />
+    <interface name="AWS RDS PostgreSQL" kind="AWS service" signature="postgresql+psycopg2://user:password@host:5432/dbname" path="external" reason="AWS RDS PostgreSQL instance for production database in private subnet (10.0.2.0/24). Connection string in DATABASE_URL environment variable (no SSL/TLS - VPC isolation provides security). Security group allows inbound port 5432 from EC2 security group only. Automated daily backups with retention policy (7-30 days)." />
+    <interface name="CI/CD Pipeline" kind="workflow" signature="GitHub Actions / GitLab CI / AWS CodePipeline" path=".github/workflows/deploy.yml" reason="CI/CD pipeline for automated deployments. Currently includes: test execution, frontend build, backend deployment to EC2 via SSH, frontend deployment to S3. Needs: security scanning, staging environment deployment, production approval gate, deployment notifications. S3 bucket: `ad-mint-ai-frontend`. EC2 deployment path: `/var/www/ad-mint-ai`." />
+  </interfaces>
+  <tests>
+    <standards>
+      Testing standards for production deployment: Unit tests for deployment scripts and configuration validation. Integration tests for health endpoint with database and S3 connectivity. End-to-end tests for complete deployment workflow. Security tests for environment variable configuration, firewall rules, security groups. Performance tests for deployment speed and rollback procedures. Manual verification steps for domain configuration, logging setup, backup/restore procedures, S3 bucket configuration, VPC and security group setup.
+    </standards>
+    <locations>
+      <location>backend/tests/ - Unit and integration tests for backend components</location>
+      <location>frontend/src/**/*.test.tsx - Frontend component and integration tests</location>
+      <location>deployment/tests/ - Deployment script and configuration tests (to be created)</location>
+      <location>.github/workflows/ - CI/CD pipeline tests (to be created)</location>
+    </locations>
+    <ideas>
+      <test ac_id="1">Test frontend S3 setup: Verify S3 bucket `ad-mint-ai-frontend` is created, static website hosting is enabled, bucket policy allows public read access, CORS allows API domain, frontend is accessible via S3 website endpoint (`ad-mint-ai-frontend.s3-website-<region>.amazonaws.com`). Test domain and DNS configuration: Verify frontend domain (S3) and API domain (EC2) resolve correctly, DNS records are correct (CNAME for frontend, A record for API)</test>
+      <test ac_id="1">Test production database setup: Verify RDS PostgreSQL instance in private subnet (10.0.2.0/24), RDS security group allows port 5432 from EC2 security group only, database connection works (no SSL/TLS required), automated backups are created, retention policy is correct (7-30 days), RDS has no public IP</test>
+      <test ac_id="1">Test S3 video storage: Verify S3 bucket `ad-mint-ai-videos` is created, video files upload to S3 during generation, files are accessible via presigned URLs, bucket policies and CORS are correct, IAM role/access keys work, lifecycle policies work</test>
+      <test ac_id="1">Test environment variables: Verify `.env` file exists at `/var/www/ad-mint-ai/backend/.env` with proper permissions (`chmod 600`, owned by `www-data` or app user), environment variables are loaded correctly (DATABASE_URL, AWS credentials, S3 bucket names), application starts correctly, no hardcoded secrets in config files</test>
+      <test ac_id="1">Test enhanced health endpoint: Verify database connectivity check (RDS connection), S3 connectivity check (`ad-mint-ai-videos` bucket), external API health checks (Replicate, OpenAI), detailed status returned with component-level checks</test>
+      <test ac_id="2">Test CI/CD pipeline: Verify tests run automatically, build succeeds, security scans pass, frontend builds and uploads to S3 bucket `ad-mint-ai-frontend`, backend deploys to EC2 at `/var/www/ad-mint-ai`, staging environment deployment works, production approval gate functions, notifications are sent</test>
+      <test ac_id="3">Test security hardening: Verify EC2 security group (ports 80, 22 open), RDS security group (port 5432 from EC2 only), rate limiting works, CORS allows only production frontend domain (S3 website endpoint or custom domain), security headers are present (CSP, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection), database is in private subnet (VPC isolation), `.env` file has proper permissions (600), RDS is not publicly accessible</test>
+      <test ac_id="4">Test logging setup: Verify structured logs are written to files (`/var/log/fastapi/app.log`, `/var/log/nginx/ad-mint-ai-access.log`, `/var/log/nginx/ad-mint-ai-error.log`), log rotation is configured, Nginx logs are accessible, log file locations are documented</test>
+      <test ac_id="5">Test backup and recovery: Verify automated daily database backups (RDS automated backups), S3 backup for video files (cross-region replication or lifecycle policies), restore procedures work, data integrity after restore, disaster recovery plan is documented</test>
+      <test ac_id="6">Test rollback and version management: Verify deployment artifact versioning, rollback procedure works, database migrations are forward/backward compatible, deployment events are logged</test>
+      <test ac_id="7">Test documentation: Verify deployment runbook is complete, environment configuration guide is accurate, troubleshooting guide covers common issues, incident response procedures are documented</test>
+    </ideas>
+  </tests>
+</story-context>
