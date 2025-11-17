@@ -9,6 +9,7 @@ import {
   splitClip,
   mergeClips,
   updateClipPosition,
+  deleteClip,
   saveEditingSession,
   exportVideo,
   getExportStatus,
@@ -555,6 +556,49 @@ export const Editor: React.FC = () => {
       setError(errorMessage);
     }
   }, [generationId, setTimelineState]);
+
+  // Handle clip delete
+  const handleClipDelete = useCallback(async (clipId: string) => {
+    if (!generationId || !editorData) return;
+
+    try {
+      setError(null);
+      
+      // Call delete clip API
+      const result = await deleteClip(generationId, clipId);
+      
+      // Update local state with updated clips from backend
+      const updatedClips = result.updated_state.clips.map((clip: any) => ({
+        clip_id: clip.id,
+        scene_number: clip.scene_number,
+        original_path: clip.original_path,
+        clip_url: "", // Will be loaded if needed
+        duration: clip.end_time - clip.start_time,
+        start_time: clip.start_time,
+        end_time: clip.end_time,
+        thumbnail_url: null,
+        text_overlay: clip.text_overlay,
+      }));
+      
+      setEditorData({
+        ...editorData,
+        clips: updatedClips,
+        total_duration: updatedClips.reduce((sum: number, clip: any) => sum + clip.duration, 0),
+      });
+      
+      // Clear selection if deleted clip was selected
+      setSelectedClipIds((prev) => prev.filter((id) => id !== clipId));
+      if (selectedClipId === clipId) {
+        setSelectedClipId(null);
+      }
+      
+      console.log(`Clip ${clipId} deleted successfully`);
+    } catch (err) {
+      console.error("Error deleting clip:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to delete clip";
+      setError(errorMessage);
+    }
+  }, [generationId, editorData, selectedClipId]);
 
   // Handle save button click
   const handleSave = useCallback(async () => {
@@ -1175,6 +1219,7 @@ export const Editor: React.FC = () => {
                 trackAssignments={trackAssignments}
                 onAddTrack={handleAddTrack}
                 onDeleteTrack={handleDeleteTrack}
+                onClipDelete={handleClipDelete}
                 onClipTrackChange={handleClipTrackChange}
                 onClipPositionChange={handleClipPositionChange}
                 clipPositionOverrides={clipPositionOverrides}
