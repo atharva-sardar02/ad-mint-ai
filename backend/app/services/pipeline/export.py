@@ -2,6 +2,8 @@
 Post-processing and export service for final video export, color grading, and thumbnail generation.
 """
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -99,17 +101,51 @@ def export_final_video(
             logger.debug(f"Resizing video from {current_size} to {target_resolution} for consistency")
             graded_video = graded_video.resized(target_resolution)
         
+        # Set temp directory for MoviePy to use (ensures temp files are created in writable location)
+        # Get original working directory BEFORE changing directories
+        original_cwd = os.getcwd()
+        
+        # Convert video_output_path to absolute BEFORE changing directory
+        if not Path(video_output_path).is_absolute():
+            video_output_path_abs = str(Path(original_cwd) / video_output_path)
+        else:
+            video_output_path_abs = str(video_output_path)
+        video_output_path_abs = str(Path(video_output_path_abs).resolve())
+        
+        # Set temp directory
+        temp_dir = os.environ.get('TMPDIR', '/tmp')
+        temp_dir_path = Path(temp_dir)
+        if not temp_dir_path.exists():
+            temp_dir_path.mkdir(parents=True, exist_ok=True)
+        # Set tempfile's tempdir to ensure MoviePy uses it
+        tempfile.tempdir = str(temp_dir_path.absolute())
+        # Also set TMPDIR in environment for FFmpeg and other subprocesses
+        os.environ['TMPDIR'] = str(temp_dir_path.absolute())
+        
+        # Change to temp directory so MoviePy creates temp files there
+        try:
+            os.chdir(str(temp_dir_path.absolute()))
+        except OSError as e:
+            logger.warning(f"Could not change to temp directory {temp_dir_path}: {e}. Continuing with current directory.")
+        
         # Export video as 1080p MP4 with H.264 codec
-        logger.info(f"Exporting video to {video_output_path} (1080p, H.264)")
-        graded_video.write_videofile(
-            str(video_output_path),
-            codec='libx264',
-            audio_codec='aac',
-            fps=24,  # Consistent frame rate
-            preset='medium',
-            bitrate='8000k',  # High quality for 1080p
-            logger=None  # Suppress MoviePy progress logs
-        )
+        logger.info(f"Exporting video to {video_output_path_abs} (1080p, H.264)")
+        try:
+            graded_video.write_videofile(
+                video_output_path_abs,
+                codec='libx264',
+                audio_codec='aac',
+                fps=24,  # Consistent frame rate
+                preset='medium',
+                bitrate='8000k',  # High quality for 1080p
+                logger=None  # Suppress MoviePy progress logs
+            )
+        finally:
+            # Restore original working directory
+            try:
+                os.chdir(original_cwd)
+            except OSError:
+                pass  # Ignore errors when restoring directory
         
         # Check cancellation before thumbnail generation
         if cancellation_check and cancellation_check():
