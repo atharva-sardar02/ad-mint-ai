@@ -37,7 +37,7 @@ class CoherenceSettings(BaseModel):
 
 class GenerateRequest(BaseModel):
     """Request schema for POST /api/generate endpoint."""
-    prompt: str = Field(..., min_length=10, max_length=500, description="User prompt for video generation")
+    prompt: str = Field(..., min_length=10, description="User prompt for video generation")
     title: Optional[str] = Field(default=None, max_length=200, description="Optional title for the video")
     coherence_settings: Optional[CoherenceSettings] = Field(
         default=None,

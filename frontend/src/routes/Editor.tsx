@@ -8,6 +8,7 @@ import type { EditorData } from "../lib/types/api";
 import { Button } from "../components/ui/Button";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { Timeline } from "../components/editor/Timeline";
+import { useUndoRedo } from "../lib/hooks/useUndoRedo";
 
 /**
  * Editor component for editing video generations.
@@ -34,10 +35,30 @@ export const Editor: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
-  const [trimState, setTrimState] = useState<Record<string, { trimStart: number; trimEnd: number }>>({});
-  const [trackAssignments, setTrackAssignments] = useState<Record<string, number>>({});
-  const [clipPositionOverrides, setClipPositionOverrides] = useState<Record<string, number>>({}); // clipId -> startTime
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
+  
+  // Undo/Redo state management for timeline operations
+  const {
+    state: timelineState,
+    setState: setTimelineState,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useUndoRedo<{
+    trimState: Record<string, { trimStart: number; trimEnd: number }>;
+    trackAssignments: Record<string, number>;
+    clipPositionOverrides: Record<string, number>;
+  }>({
+    trimState: {},
+    trackAssignments: {},
+    clipPositionOverrides: {},
+  });
+  
+  // Extract individual states for easier access
+  const trimState = timelineState.trimState;
+  const trackAssignments = timelineState.trackAssignments;
+  const clipPositionOverrides = timelineState.clipPositionOverrides;
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [pendingSplitTime, setPendingSplitTime] = useState<number | null>(null);
@@ -78,27 +99,12 @@ export const Editor: React.FC = () => {
         const data = await loadEditorData(generationId);
         setEditorData(data);
         
-        // Load trim state from editing session if available
-        if (data.trim_state) {
-          setTrimState(data.trim_state);
-        } else {
-          // Initialize with empty trim state if no trim state exists
-          setTrimState({});
-        }
-        
-        // Load track assignments from editing session if available
-        if (data.track_assignments) {
-          setTrackAssignments(data.track_assignments);
-        } else {
-          setTrackAssignments({});
-        }
-        
-        // Load clip position overrides from editing session if available
-        if (data.clip_positions) {
-          setClipPositionOverrides(data.clip_positions);
-        } else {
-          setClipPositionOverrides({});
-        }
+        // Load timeline state from editing session if available
+        setTimelineState({
+          trimState: data.trim_state || {},
+          trackAssignments: data.track_assignments || {},
+          clipPositionOverrides: data.clip_positions || {},
+        });
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load editor data";
@@ -171,14 +177,17 @@ export const Editor: React.FC = () => {
       const clip = editorData.clips.find((c) => c.clip_id === clipId);
       if (!clip) return;
 
-      // Update local trim state immediately for real-time feedback
-      setTrimState((prev) => {
-        const current = prev[clipId] || { trimStart: 0, trimEnd: clip.duration };
-        return {
-          ...prev,
-          [clipId]: { ...current, trimStart },
-        };
-      });
+      // Update local trim state immediately for real-time feedback (with undo history)
+      setTimelineState((prev) => ({
+        ...prev,
+        trimState: {
+          ...prev.trimState,
+          [clipId]: {
+            ...(prev.trimState[clipId] || { trimStart: 0, trimEnd: clip.duration }),
+            trimStart,
+          },
+        },
+      }));
 
       // Update preview to show trimmed content
       if (videoRef.current && selectedClipId === clipId) {
@@ -198,14 +207,17 @@ export const Editor: React.FC = () => {
       const clip = editorData.clips.find((c) => c.clip_id === clipId);
       if (!clip) return;
 
-      // Update local trim state immediately for real-time feedback
-      setTrimState((prev) => {
-        const current = prev[clipId] || { trimStart: 0, trimEnd: clip.duration };
-        return {
-          ...prev,
-          [clipId]: { ...current, trimEnd },
-        };
-      });
+      // Update local trim state immediately for real-time feedback (with undo history)
+      setTimelineState((prev) => ({
+        ...prev,
+        trimState: {
+          ...prev.trimState,
+          [clipId]: {
+            ...(prev.trimState[clipId] || { trimStart: 0, trimEnd: clip.duration }),
+            trimEnd,
+          },
+        },
+      }));
     },
     [generationId, editorData]
   );
@@ -223,10 +235,13 @@ export const Editor: React.FC = () => {
         clearTimeout(trimApiTimerRef.current);
       }
 
-      // Update local state immediately for real-time feedback
-      setTrimState((prev) => ({
+      // Update local state immediately for real-time feedback (with undo history)
+      setTimelineState((prev) => ({
         ...prev,
-        [clipId]: { trimStart, trimEnd },
+        trimState: {
+          ...prev.trimState,
+          [clipId]: { trimStart, trimEnd },
+        },
       }));
 
       // Update preview immediately
@@ -434,45 +449,56 @@ export const Editor: React.FC = () => {
     const maxTrack = currentTracks.length > 0 ? Math.max(...currentTracks) : -1;
     const newTrackIndex = maxTrack + 1;
     
-    // Create an empty track by adding a placeholder entry
+    // Create an empty track by adding a placeholder entry (with undo history)
     // We use a special key to ensure the track exists
-    setTrackAssignments((prev) => ({
+    setTimelineState((prev) => ({
       ...prev,
-      [`__track_${newTrackIndex}`]: newTrackIndex,
+      trackAssignments: {
+        ...prev.trackAssignments,
+        [`__track_${newTrackIndex}`]: newTrackIndex,
+      },
     }));
-  }, [editorData, trackAssignments]);
+  }, [editorData, trackAssignments, setTimelineState]);
 
   // Handle delete track
   const handleDeleteTrack = useCallback((trackIndex: number) => {
     if (!editorData) return;
     
-    // Reassign clips from deleted track to track 0
-    const updatedAssignments = { ...trackAssignments };
-    
-    Object.keys(updatedAssignments).forEach((clipId) => {
-      if (updatedAssignments[clipId] === trackIndex) {
-        // Remove placeholder tracks or reassign clips to track 0
-        if (clipId.startsWith('__track_')) {
-          delete updatedAssignments[clipId];
-        } else {
-          updatedAssignments[clipId] = 0;
+    // Update track assignments with undo history
+    setTimelineState((prev) => {
+      const updatedAssignments = { ...prev.trackAssignments };
+      
+      Object.keys(updatedAssignments).forEach((clipId) => {
+        if (updatedAssignments[clipId] === trackIndex) {
+          // Remove placeholder tracks or reassign clips to track 0
+          if (clipId.startsWith('__track_')) {
+            delete updatedAssignments[clipId];
+          } else {
+            updatedAssignments[clipId] = 0;
+          }
+        } else if (updatedAssignments[clipId] > trackIndex) {
+          // Shift down tracks above the deleted one
+          updatedAssignments[clipId]--;
         }
-      } else if (updatedAssignments[clipId] > trackIndex) {
-        // Shift down tracks above the deleted one
-        updatedAssignments[clipId]--;
-      }
+      });
+      
+      return {
+        ...prev,
+        trackAssignments: updatedAssignments,
+      };
     });
-    
-    setTrackAssignments(updatedAssignments);
-  }, [editorData, trackAssignments]);
+  }, [editorData, setTimelineState]);
 
   // Handle clip drag and drop to move between tracks
   const handleClipTrackChange = useCallback((clipId: string, newTrackIndex: number) => {
-    setTrackAssignments((prev) => ({
+    setTimelineState((prev) => ({
       ...prev,
-      [clipId]: newTrackIndex,
+      trackAssignments: {
+        ...prev.trackAssignments,
+        [clipId]: newTrackIndex,
+      },
     }));
-  }, []);
+  }, [setTimelineState]);
 
   // Handle clip position change (both track and time)
   const handleClipPositionChange = useCallback(async (clipId: string, newTrackIndex: number, newStartTime: number) => {
@@ -482,16 +508,17 @@ export const Editor: React.FC = () => {
       // Call backend API to update clip position
       await updateClipPosition(generationId, clipId, newStartTime, newTrackIndex);
       
-      // Update local state for immediate UI feedback
-      setTrackAssignments((prev) => ({
+      // Update local state for immediate UI feedback (with undo history)
+      setTimelineState((prev) => ({
         ...prev,
-        [clipId]: newTrackIndex,
-      }));
-      
-      // Update clip position override
-      setClipPositionOverrides((prev) => ({
-        ...prev,
-        [clipId]: newStartTime,
+        trackAssignments: {
+          ...prev.trackAssignments,
+          [clipId]: newTrackIndex,
+        },
+        clipPositionOverrides: {
+          ...prev.clipPositionOverrides,
+          [clipId]: newStartTime,
+        },
       }));
       
       console.log(`Clip ${clipId} moved to track ${newTrackIndex} at time ${newStartTime.toFixed(2)}s`);
@@ -501,7 +528,7 @@ export const Editor: React.FC = () => {
       const errorMessage = err instanceof Error ? err.message : "Failed to update clip position";
       setError(errorMessage);
     }
-  }, [generationId]);
+  }, [generationId, setTimelineState]);
 
   // Handle save button click
   const handleSave = useCallback(async () => {
@@ -1104,6 +1131,10 @@ export const Editor: React.FC = () => {
                 onClipTrackChange={handleClipTrackChange}
                 onClipPositionChange={handleClipPositionChange}
                 clipPositionOverrides={clipPositionOverrides}
+                onUndo={undo}
+                onRedo={redo}
+                canUndo={canUndo}
+                canRedo={canRedo}
               />
             </div>
 

@@ -6,6 +6,12 @@
  * - Uses requestAnimationFrame for smooth playhead updates during video playback (60fps target)
  * - Throttles zoom operations to prevent excessive re-renders during rapid scrolling
  * - Virtual rendering for long timelines (50+ clips) can be added as future enhancement
+ * 
+ * Undo/Redo Support:
+ * - Provides UI controls (buttons) and keyboard shortcuts (Ctrl+Z, Ctrl+Shift+Z/Ctrl+Y)
+ * - Actual state management should be handled by parent component via onUndo/onRedo callbacks
+ * - Parent should track canUndo/canRedo state and pass to Timeline component
+ * - Keyboard shortcuts are automatically disabled when typing in input/textarea elements
  */
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import type { ClipInfo } from "../../lib/types/api";
@@ -45,6 +51,14 @@ export interface TimelineProps {
   onClipTrackChange?: (clipId: string, newTrackIndex: number) => void;
   /** Callback when clip position changes (both track and time) */
   onClipPositionChange?: (clipId: string, newTrackIndex: number, newStartTime: number) => void;
+  /** Callback when undo is triggered */
+  onUndo?: () => void;
+  /** Callback when redo is triggered */
+  onRedo?: () => void;
+  /** Whether undo is available */
+  canUndo?: boolean;
+  /** Whether redo is available */
+  canRedo?: boolean;
 }
 
 interface ClipPosition {
@@ -88,9 +102,12 @@ export const Timeline: React.FC<TimelineProps> = ({
   onDeleteTrack,
   onClipTrackChange,
   onClipPositionChange,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }) => {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const [scrollPosition, setScrollPosition] = useState(0);
   const [localSelectedClipIds, setLocalSelectedClipIds] = useState<string[]>([]);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [isDraggingTimeline, setIsDraggingTimeline] = useState(false);
@@ -123,14 +140,14 @@ export const Timeline: React.FC<TimelineProps> = ({
   const throttledZoom = useThrottle(zoom, 100);
 
   // Calculate timeline width based on throttled zoom to prevent excessive recalculations
-  // Create an "infinite" timeline that extends 3x beyond the last clip
+  // Minimum timeline duration is 2 minutes (120 seconds)
+  const effectiveDuration = Math.max(totalDuration, 150);
+  
   const timelineWidth = useMemo(() => {
     const pixelsPerSecond = 100 * throttledZoom; // 100px per second at zoom 1
-    const contentWidth = totalDuration * pixelsPerSecond;
-    // Extend timeline to 3x the content duration or minimum 3000px for infinite feel
-    const extendedWidth = Math.max(contentWidth * 3, 3000);
-    return extendedWidth;
-  }, [totalDuration, throttledZoom]);
+    const contentWidth = effectiveDuration * pixelsPerSecond;
+    return contentWidth;
+  }, [effectiveDuration, throttledZoom]);
 
   // Calculate number of tracks and track assignments
   const { numTracks, clipTrackAssignments } = useMemo(() => {
@@ -160,7 +177,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Calculate clip positions
   const clipPositions = useMemo<ClipPosition[]>(() => {
-    if (clips.length === 0 || totalDuration === 0) return [];
+    if (clips.length === 0 || effectiveDuration === 0) return [];
 
     const positions: ClipPosition[] = [];
 
@@ -193,7 +210,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     });
 
     return positions;
-  }, [clips, throttledZoom, clipTrackAssignments, clipPositionOverrides]);
+  }, [clips, throttledZoom, clipTrackAssignments, clipPositionOverrides, effectiveDuration]);
 
   // Calculate playhead position based on actual time and zoom
   const playheadX = useMemo(() => {
@@ -219,13 +236,13 @@ export const Timeline: React.FC<TimelineProps> = ({
         const clickX = e.clientX - rect.left + container.scrollLeft;
         const pixelsPerSecond = 100 * throttledZoom;
         const time = Math.max(0, clickX / pixelsPerSecond);
-        // Only seek within actual video duration
+        // Only seek within actual video duration (not extended timeline)
         if (time <= totalDuration) {
           onSeek(time);
         }
       }
     },
-    [throttledZoom, totalDuration, onSeek, isDraggingPlayhead, selectedClipIds.length]
+    [throttledZoom, totalDuration, effectiveDuration, onSeek, isDraggingPlayhead, selectedClipIds.length]
   );
 
   // Handle clip click to select (supports multi-select with Ctrl/Cmd)
@@ -436,7 +453,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         document.removeEventListener("mouseup", handleMouseUp);
       };
     }
-  }, [isDraggingPlayhead, isDraggingTimeline, isDraggingSelection, isDraggingClip, draggedClipId, dragStartPos, dragOverTrackIndex, dragPreviewPos, selectionStart, throttledZoom, totalDuration, onSeek, clipPositions, selectedClipIds.length, numTracks, onClipTrackChange, onClipPositionChange, handleClipDragEnd, dragEnabled]);
+  }, [isDraggingPlayhead, isDraggingTimeline, isDraggingSelection, isDraggingClip, draggedClipId, dragStartPos, dragOverTrackIndex, dragPreviewPos, selectionStart, throttledZoom, totalDuration, effectiveDuration, onSeek, clipPositions, selectedClipIds.length, numTracks, onClipTrackChange, onClipPositionChange, handleClipDragEnd, dragEnabled]);
 
   // Handle zoom with mouse wheel (Ctrl/Cmd + scroll) - throttled via useThrottle hook
   const handleWheel = useCallback(
@@ -465,7 +482,6 @@ export const Timeline: React.FC<TimelineProps> = ({
     if (containerRef.current) {
       containerRef.current.scrollLeft = 0;
     }
-    setScrollPosition(0);
   }, []);
 
   // Calculate time markers (uses throttledZoom to prevent excessive recalculations)
@@ -474,18 +490,17 @@ export const Timeline: React.FC<TimelineProps> = ({
     // Adjust marker interval based on zoom level for better readability
     const markerInterval = throttledZoom < 0.5 ? 10 : throttledZoom < 1 ? 5 : throttledZoom < 2 ? 2 : throttledZoom < 5 ? 1 : 0.5;
     
-    // Calculate the virtual timeline duration (3x actual duration for infinite feel)
-    const virtualDuration = totalDuration * 3;
+    // Use the effective duration for time markers
     const pixelsPerSecond = 100 * throttledZoom;
     
-    // Generate markers across the entire virtual timeline
-    for (let time = 0; time <= virtualDuration; time += markerInterval) {
+    // Generate markers across the entire timeline (2 minutes minimum)
+    for (let time = 0; time <= effectiveDuration; time += markerInterval) {
       const x = time * pixelsPerSecond;
       markers.push({ time, x });
     }
 
     return markers;
-  }, [throttledZoom, totalDuration]);
+  }, [throttledZoom, effectiveDuration]);
 
   // Format time for display
   const formatTime = (seconds: number): string => {
@@ -496,6 +511,40 @@ export const Timeline: React.FC<TimelineProps> = ({
     const secs = seconds % 60;
     return `${mins}:${secs.toFixed(0).padStart(2, "0")}`;
   };
+
+  // Handle keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Ctrl+Z / Cmd+Z for undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo && onUndo) {
+          onUndo();
+        }
+      }
+      // Ctrl+Shift+Z / Cmd+Shift+Z or Ctrl+Y for redo
+      else if (
+        ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) ||
+        (e.ctrlKey && e.key === 'y')
+      ) {
+        e.preventDefault();
+        if (canRedo && onRedo) {
+          onRedo();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [canUndo, canRedo, onUndo, onRedo]);
 
   // Update scroll position to keep playhead visible using requestAnimationFrame for 60fps performance
   useEffect(() => {
@@ -554,33 +603,81 @@ export const Timeline: React.FC<TimelineProps> = ({
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleZoomOut}
-            disabled={zoom <= MIN_ZOOM}
-            className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded"
-            title="Zoom Out"
-          >
-            −
-          </button>
-          <span className="text-xs text-gray-600 min-w-[60px] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={handleZoomIn}
-            disabled={zoom >= MAX_ZOOM}
-            className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded"
-            title="Zoom In"
-          >
-            +
-          </button>
-          <button
-            onClick={handleZoomReset}
-            className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-            title="Reset Zoom"
-          >
-            Reset
-          </button>
+        <div className="flex items-center gap-4">
+          {/* Undo/Redo Controls */}
+          <div className="flex items-center gap-1 border-r border-gray-300 pr-4">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo || !onUndo}
+              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1"
+              title="Undo (Ctrl+Z)"
+            >
+              <svg 
+                width="14" 
+                height="14" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 7v6h6" />
+                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+              </svg>
+              <span className="text-xs">Undo</span>
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo || !onRedo}
+              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1"
+              title="Redo (Ctrl+Shift+Z or Ctrl+Y)"
+            >
+              <svg 
+                width="14" 
+                height="14" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 7v6h-6" />
+                <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" />
+              </svg>
+              <span className="text-xs">Redo</span>
+            </button>
+          </div>
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleZoomOut}
+              disabled={zoom <= MIN_ZOOM}
+              className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+              title="Zoom Out"
+            >
+              −
+            </button>
+            <span className="text-xs text-gray-600 min-w-[60px] text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={handleZoomIn}
+              disabled={zoom >= MAX_ZOOM}
+              className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+              title="Zoom In"
+            >
+              +
+            </button>
+            <button
+              onClick={handleZoomReset}
+              className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+              title="Reset Zoom"
+            >
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 
@@ -593,10 +690,6 @@ export const Timeline: React.FC<TimelineProps> = ({
           paddingBottom: '40px', // Extra padding at bottom
         }}
         onWheel={handleWheel}
-        onScroll={(e) => {
-          const target = e.target as HTMLDivElement;
-          setScrollPosition(target.scrollLeft);
-        }}
       >
         <style>{`
           .timeline-scroll-container::-webkit-scrollbar {
@@ -937,7 +1030,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                   y: HEADER_HEIGHT + (clipPos.trackIndex * TRACK_HEIGHT) + (TRACK_HEIGHT - CLIP_HEIGHT) / 2,
                 }}
                 timelineWidth={timelineWidth}
-                totalDuration={totalDuration}
+                totalDuration={effectiveDuration}
                 clipHeight={CLIP_HEIGHT}
                 trimStart={trim.trimStart}
                 trimEnd={trim.trimEnd}
@@ -964,7 +1057,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                   y: HEADER_HEIGHT + (clipPos.trackIndex * TRACK_HEIGHT) + (TRACK_HEIGHT - CLIP_HEIGHT) / 2,
                 }}
                 timelineWidth={timelineWidth}
-                totalDuration={totalDuration}
+                totalDuration={effectiveDuration}
                 currentTime={currentTime}
                 clipHeight={CLIP_HEIGHT}
                 isSplitMode={isSplitMode}
