@@ -43,6 +43,35 @@ export interface StatusResponse {
   available_clips: number;  // Number of clips currently available for download
 }
 
+/**
+ * Start a new video generation from a prompt and a reference image.
+ * Uses multipart/form-data and the /api/generate-with-image endpoint.
+ */
+export const startGenerationWithImage = async (
+  prompt: string,
+  image: File,
+  model?: string
+): Promise<GenerateResponse> => {
+  const formData = new FormData();
+  formData.append("prompt", prompt.trim());
+  formData.append("image", image);
+  if (model) {
+    formData.append("model", model);
+  }
+
+  const response = await apiClient.post<GenerateResponse>(
+    API_ENDPOINTS.GENERATIONS.CREATE_WITH_IMAGE,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+};
+
 export interface ParallelGenerateRequest {
   variations: GenerateRequest[];
   comparison_type: "settings" | "prompt";
@@ -211,6 +240,7 @@ export const getGenerationQueue = async (): Promise<GenerationQueue> => {
  */
 export const generationService = {
   startGeneration,
+  startGenerationWithImage,
   startSingleClipGeneration,
   getGenerationStatus,
   cancelGeneration,

@@ -4,11 +4,14 @@ FastAPI application entry point.
 import logging
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, editor, generations, users
+from app.api.routes import auth, editor, generations, generations_with_image, users
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -23,10 +26,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS middleware - allow all origins
+# CORS middleware - allow frontend origins
+# Note: Cannot use allow_origins=["*"] with allow_credentials=True
+# Must explicitly list allowed origins
+# IMPORTANT: CORS middleware must be added BEFORE exception handlers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +42,7 @@ app.add_middleware(
 # Include routers (after CORS middleware)
 app.include_router(auth.router)
 app.include_router(generations.router)
+app.include_router(generations_with_image.router)
 app.include_router(users.router)
 app.include_router(editor.router)
 
@@ -47,6 +54,39 @@ if output_dir.exists():
     logger.info("Static files mounted at /output")
 else:
     logger.warning("Output directory not found - static file serving disabled")
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to ensure CORS headers are always included,
+    even when unhandled exceptions occur.
+    """
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    # Get the origin from the request headers
+    origin = request.headers.get("origin")
+    
+    # Check if origin is in allowed origins
+    allowed_origin = None
+    if origin and origin in settings.CORS_ALLOWED_ORIGINS:
+        allowed_origin = origin
+    
+    # Create response with CORS headers
+    response = JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error"},
+    )
+    
+    # Add CORS headers manually
+    if allowed_origin:
+        response.headers["Access-Control-Allow-Origin"] = allowed_origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+    
+    return response
 
 
 @app.on_event("startup")
@@ -70,7 +110,7 @@ async def health():
         dict: Health status with database, storage, and external API checks
     """
     from app.core.config import settings
-    from app.db.session import engine
+    from app.db.base import engine
     from sqlalchemy import text
     
     health_status = {

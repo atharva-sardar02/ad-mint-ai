@@ -13,6 +13,7 @@ import { generationService } from "../lib/generationService";
 vi.mock("../lib/generationService", () => ({
   generationService: {
     startGeneration: vi.fn(),
+    startGenerationWithImage: vi.fn(),
     getGenerationStatus: vi.fn(),
     getCoherenceSettingsDefaults: vi.fn().mockResolvedValue({
       seed_control: true,
@@ -235,6 +236,100 @@ describe("Dashboard Prompt Validation", () => {
 
     // Should not call generationService
     expect(generationService.startGeneration).not.toHaveBeenCalled();
+  });
+
+  describe("Reference Image Upload", () => {
+    it("should reject invalid image file type", async () => {
+      render(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      );
+
+      const fileInput = screen.getByLabelText(/reference image/i) as HTMLInputElement;
+      expect(fileInput).toBeInTheDocument();
+
+      const invalidFile = new File(["test"], "test.pdf", { type: "application/pdf" });
+      fireEvent.change(fileInput, { target: { files: [invalidFile] } });
+
+      expect(
+        await screen.findByText(/only JPG and PNG images are allowed/i)
+      ).toBeInTheDocument();
+    });
+
+    it("should reject image file larger than 10MB", async () => {
+      render(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      );
+
+      const fileInput = screen.getByLabelText(/reference image/i) as HTMLInputElement;
+
+      const largeFile = new File(
+        ["a".repeat(11 * 1024 * 1024)],
+        "large.jpg",
+        { type: "image/jpeg" }
+      );
+
+      fireEvent.change(fileInput, { target: { files: [largeFile] } });
+
+      expect(
+        await screen.findByText(/image size must be less than 10MB/i)
+      ).toBeInTheDocument();
+    });
+
+    it("should accept valid JPG image and show preview", async () => {
+      render(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      );
+
+      // Mock URL.createObjectURL for preview
+      const createObjectURLSpy = vi
+        .spyOn(URL, "createObjectURL")
+        .mockReturnValue("blob:preview");
+
+      const fileInput = screen.getByLabelText(/reference image/i) as HTMLInputElement;
+
+      const validFile = new File(["test"], "test.jpg", { type: "image/jpeg" });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+
+      const preview = await screen.findByAltText(/reference preview/i);
+      expect(preview).toBeInTheDocument();
+
+      createObjectURLSpy.mockRestore();
+    });
+
+    it("should remove image when remove button is clicked", async () => {
+      render(
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      );
+
+      const createObjectURLSpy = vi
+        .spyOn(URL, "createObjectURL")
+        .mockReturnValue("blob:preview");
+
+      const fileInput = screen.getByLabelText(/reference image/i) as HTMLInputElement;
+
+      const validFile = new File(["test"], "test.jpg", { type: "image/jpeg" });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+
+      expect(await screen.findByAltText(/reference preview/i)).toBeInTheDocument();
+
+      const removeButton = screen.getByRole("button", { name: /remove image/i });
+      fireEvent.click(removeButton);
+
+      await waitFor(() => {
+        expect(screen.queryByAltText(/reference preview/i)).not.toBeInTheDocument();
+        expect(fileInput.value).toBe("");
+      });
+
+      createObjectURLSpy.mockRestore();
+    });
   });
 });
 

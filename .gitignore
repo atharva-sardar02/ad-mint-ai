@@ -125,6 +125,10 @@ logs/
 # Project Specific
 # ============================================
 
+# Environment variables
+.env
+.env.example
+
 # Generated files
 *.generated.*
 generated/

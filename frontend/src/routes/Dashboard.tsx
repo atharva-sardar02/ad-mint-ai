@@ -22,6 +22,7 @@ const MIN_PROMPT_LENGTH = 10;
 
 interface ValidationErrors {
   prompt?: string;
+  image?: string;
   coherence_settings?: { [key: string]: string };
 }
 
@@ -60,6 +61,8 @@ export const Dashboard: React.FC = () => {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
+  const [referenceImage, setReferenceImage] = useState<File | null>(null);
+  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
 
   /**
    * Fetch latest user profile data on mount and when generation completes.
@@ -168,6 +171,17 @@ export const Dashboard: React.FC = () => {
     setErrors(newErrors);
     setApiError(""); // Clear API error when user types
   }, [prompt]);
+
+  /**
+   * Cleanup object URL when reference image preview changes/unmounts.
+   */
+  useEffect(() => {
+    return () => {
+      if (referenceImagePreview) {
+        URL.revokeObjectURL(referenceImagePreview);
+      }
+    };
+  }, [referenceImagePreview]);
 
   /**
    * Poll status endpoint every 2 seconds when there's an active generation.
@@ -316,7 +330,14 @@ export const Dashboard: React.FC = () => {
 
     try {
       let response;
-      if (basicSettings.useSingleClip) {
+      if (referenceImage) {
+        // When a reference image is provided, use the dedicated image endpoint.
+        response = await generationService.startGenerationWithImage(
+          prompt,
+          referenceImage,
+          basicSettings.model || undefined
+        );
+      } else if (basicSettings.useSingleClip) {
         if (!basicSettings.model) {
           setApiError("Please select a model for single clip generation");
           setIsLoading(false);
@@ -354,6 +375,11 @@ export const Dashboard: React.FC = () => {
       // Clear prompt and title after successful submission
       setPrompt("");
       setTitle("");
+      setReferenceImage(null);
+      if (referenceImagePreview) {
+        URL.revokeObjectURL(referenceImagePreview);
+        setReferenceImagePreview(null);
+      }
     } catch (error: any) {
       setApiError(
         error?.message || "Failed to start video generation. Please try again."
@@ -595,6 +621,100 @@ export const Dashboard: React.FC = () => {
                 disabled={isLoading}
                 required
               />
+
+              {/* Optional reference image upload */}
+              <div>
+                <label
+                  htmlFor="reference-image"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Reference Image (Optional)
+                </label>
+                <input
+                  id="reference-image"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  disabled={isLoading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setErrors((prev) => ({ ...prev, image: undefined }));
+
+                    if (!file) {
+                      setReferenceImage(null);
+                      if (referenceImagePreview) {
+                        URL.revokeObjectURL(referenceImagePreview);
+                        setReferenceImagePreview(null);
+                      }
+                      return;
+                    }
+
+                    // Validate file type
+                    if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        image: "Only JPG and PNG images are allowed",
+                      }));
+                      event.target.value = "";
+                      return;
+                    }
+
+                    // Validate file size (10MB max)
+                    const maxSizeBytes = 10 * 1024 * 1024;
+                    if (file.size > maxSizeBytes) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        image: "Image size must be less than 10MB",
+                      }));
+                      event.target.value = "";
+                      return;
+                    }
+
+                    // Set file and preview
+                    setReferenceImage(file);
+                    if (referenceImagePreview) {
+                      URL.revokeObjectURL(referenceImagePreview);
+                    }
+                    const previewUrl = URL.createObjectURL(file);
+                    setReferenceImagePreview(previewUrl);
+                  }}
+                  className="block w-full text-sm text-gray-900 border border-gray-300 rounded-md cursor-pointer focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Optional. JPG or PNG up to 10MB. Used as a visual reference for the product.
+                </p>
+                {errors.image && (
+                  <p className="mt-1 text-xs text-red-600">{errors.image}</p>
+                )}
+
+                {referenceImagePreview && (
+                  <div className="mt-3 flex items-center space-x-4">
+                    <img
+                      src={referenceImagePreview}
+                      alt="Reference preview"
+                      className="h-20 w-20 object-cover rounded-md border"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setReferenceImage(null);
+                        if (referenceImagePreview) {
+                          URL.revokeObjectURL(referenceImagePreview);
+                          setReferenceImagePreview(null);
+                        }
+                        const input = document.getElementById(
+                          "reference-image"
+                        ) as HTMLInputElement | null;
+                        if (input) {
+                          input.value = "";
+                        }
+                      }}
+                    >
+                      Remove Image
+                    </Button>
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <BasicSettingsPanel
