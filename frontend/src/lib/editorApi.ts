@@ -635,7 +635,7 @@ export async function exportVideo(
       export_id: string;
       status: string;
       estimated_time_seconds?: number;
-    }>(`/api/editor/${generationId}/export`);
+    }>(`/api/editor/${generationId}/export`, {});
 
     return response.data;
   } catch (error: any) {
