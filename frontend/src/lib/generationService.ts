@@ -31,6 +31,39 @@ export interface GenerateResponse {
   message: string;
 }
 
+export interface StoryboardScene {
+  scene_number: number;
+  aida_stage: string;
+  detailed_prompt: string;
+  start_image_prompt?: string;
+  end_image_prompt?: string;
+  reference_image_prompt?: string; // Enhanced prompt used for reference image generation
+  start_image_enhanced_prompt?: string; // Enhanced prompt used for start image generation
+  end_image_enhanced_prompt?: string; // Enhanced prompt used for end image generation
+  reference_image_url?: string;
+  start_image_url?: string;
+  end_image_url?: string;
+  duration_seconds: number;
+  scene_description?: {
+    environment?: string;
+    character_action?: string;
+    camera_angle?: string;
+    composition?: string;
+    visual_elements?: string;
+  };
+}
+
+export interface StoryboardPlan {
+  consistency_markers?: {
+    style?: string;
+    color_palette?: string;
+    lighting?: string;
+    composition?: string;
+    mood?: string;
+  };
+  scenes: StoryboardScene[];
+}
+
 export interface StatusResponse {
   generation_id: string;
   status: string;
@@ -41,6 +74,7 @@ export interface StatusResponse {
   error: string | null;
   num_scenes: number | null;  // Total number of scenes planned
   available_clips: number;  // Number of clips currently available for download
+  storyboard_plan?: StoryboardPlan;  // Storyboard plan with scenes and images
 }
 
 /**
@@ -50,13 +84,17 @@ export interface StatusResponse {
 export const startGenerationWithImage = async (
   prompt: string,
   image: File,
-  model?: string
+  model?: string,
+  numClips?: number
 ): Promise<GenerateResponse> => {
   const formData = new FormData();
   formData.append("prompt", prompt.trim());
   formData.append("image", image);
   if (model) {
     formData.append("model", model);
+  }
+  if (numClips) {
+    formData.append("num_clips", numClips.toString());
   }
 
   const response = await apiClient.post<GenerateResponse>(

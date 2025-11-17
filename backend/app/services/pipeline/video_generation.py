@@ -22,7 +22,7 @@ REPLICATE_MODELS = {
     "default": "openai/sora-2",  # Sora 2 - Recommended default
     "veo_3": "google/veo-3",
     "pixverse_v5": "pixverse/pixverse-v5",
-    "kling_2_5": "klingai/kling-2.5-turbo",
+    "kling_2_5": "kwaivgi/kling-v2.5-turbo-pro",  # Kling 2.5 Turbo Pro on Replicate
     "hailuo_02": "minimax-ai/hailuo-02",
     "seedance_1": "bytedance/seedance-1",
     # Legacy models (kept for backward compatibility)
@@ -40,7 +40,7 @@ MODEL_COSTS = {
     "openai/sora-2": 0.10,  # Default - state-of-the-art
     "google/veo-3": 0.12,  # Premium cinematic quality
     "pixverse/pixverse-v5": 0.06,  # Balanced quality & cost
-    "klingai/kling-2.5-turbo": 0.07,  # Fast cinematic
+    "kwaivgi/kling-v2.5-turbo-pro": 0.07,  # Fast cinematic (Kling 2.5 Turbo Pro)
     "minimax-ai/hailuo-02": 0.09,  # Physics proficiency
     "bytedance/seedance-1": 0.05,  # Multi-shot specialist
     # Legacy models
@@ -67,7 +67,7 @@ MODEL_SEED_SUPPORT = {
     "openai/sora-2": ("seed", True),  # Sora-2 uses "seed" parameter (OpenAI standard)
     "google/veo-3": ("seed", False),  # Likely supports seed, but not verified
     "pixverse/pixverse-v5": ("seed", False),  # Likely supports seed, but not verified
-    "klingai/kling-2.5-turbo": ("seed", False),  # Likely supports seed, but not verified
+    "kwaivgi/kling-v2.5-turbo-pro": ("seed", False),  # Likely supports seed, but not verified
     "minimax-ai/hailuo-02": ("seed", False),  # Likely supports seed, but not verified
     "bytedance/seedance-1": ("seed", False),  # Likely supports seed, but not verified
     # Legacy models - verified support
@@ -82,6 +82,38 @@ MODEL_SEED_SUPPORT = {
 }
 
 
+def _enhance_prompt_with_markers(
+    base_prompt: str,
+    consistency_markers: Optional[dict] = None,
+) -> str:
+    """
+    Enhance prompt with consistency markers for visual cohesion.
+    
+    Markers are appended to the prompt to maintain consistency across scenes.
+    """
+    if not consistency_markers:
+        return base_prompt
+    
+    marker_parts = []
+    
+    if "style" in consistency_markers:
+        marker_parts.append(f"Style: {consistency_markers['style']}")
+    if "color_palette" in consistency_markers:
+        marker_parts.append(f"Color palette: {consistency_markers['color_palette']}")
+    if "lighting" in consistency_markers:
+        marker_parts.append(f"Lighting: {consistency_markers['lighting']}")
+    if "composition" in consistency_markers:
+        marker_parts.append(f"Composition: {consistency_markers['composition']}")
+    if "mood" in consistency_markers:
+        marker_parts.append(f"Mood: {consistency_markers['mood']}")
+    
+    if marker_parts:
+        markers_text = ", ".join(marker_parts)
+        return f"{base_prompt}. {markers_text}"
+    
+    return base_prompt
+
+
 async def generate_video_clip_with_model(
     prompt: str,
     duration: int,
@@ -89,7 +121,11 @@ async def generate_video_clip_with_model(
     generation_id: str,
     model_name: str,
     cancellation_check: Optional[callable] = None,
-    clip_index: Optional[int] = None
+    clip_index: Optional[int] = None,
+    consistency_markers: Optional[dict] = None,
+    reference_image_path: Optional[str] = None,
+    start_image_path: Optional[str] = None,
+    end_image_path: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     Generate a single video clip with a specific model (bypasses pipeline).
@@ -144,8 +180,11 @@ async def generate_video_clip_with_model(
             prompt=prompt,
             duration=duration,
             cancellation_check=cancellation_check,
-            reference_image_path=None,
+            reference_image_path=reference_image_path,
+            start_image_path=start_image_path,
+            end_image_path=end_image_path,
             scene_number=clip_index,
+            consistency_markers=consistency_markers,
         )
         
         # Download video clip
@@ -178,6 +217,9 @@ async def generate_video_clip(
     seed: Optional[int] = None,
     preferred_model: Optional[str] = None,
     reference_image_path: Optional[str] = None,
+    start_image_path: Optional[str] = None,
+    end_image_path: Optional[str] = None,
+    consistency_markers: Optional[dict] = None,
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -231,7 +273,7 @@ async def generate_video_clip(
     
     # Add fallback chain (only models that exist and work)
     # Removed models that return 404: 
-    # - klingai/kling-2.5-turbo (404)
+    # - kwaivgi/kling-v2.5-turbo-pro (updated to correct model name)
     # - klingai/kling-video (404)
     # - runway/gen3-alpha-turbo (404)
     # - bytedance/seedance-1 (404)
@@ -259,6 +301,10 @@ async def generate_video_clip(
                 raise RuntimeError("Generation cancelled by user")
             
             # Generate video with retry logic
+            # Use start/end images from scene if available (for Kling 2.5 Turbo)
+            scene_start_image = scene.start_image_path if scene.start_image_path else start_image_path
+            scene_end_image = scene.end_image_path if scene.end_image_path else end_image_path
+            
             video_url = await _generate_with_retry(
                 model_name=model_name,
                 prompt=scene.visual_prompt,
@@ -266,7 +312,10 @@ async def generate_video_clip(
                 cancellation_check=cancellation_check,
                 seed=seed,
                 reference_image_path=reference_image_path,
+                start_image_path=scene_start_image,
+                end_image_path=scene_end_image,
                 scene_number=scene_number,
+                consistency_markers=consistency_markers,
             )
             
             # Download video clip
@@ -321,7 +370,10 @@ async def _generate_with_retry(
     cancellation_check: Optional[callable] = None,
     seed: Optional[int] = None,
     reference_image_path: Optional[str] = None,
+    start_image_path: Optional[str] = None,
+    end_image_path: Optional[str] = None,
     scene_number: Optional[int] = None,
+    consistency_markers: Optional[dict] = None,
 ) -> str:
     """
     Generate video with retry logic and exponential backoff.
@@ -357,12 +409,15 @@ async def _generate_with_retry(
             # Track file handles that need to be closed (for reference images)
             file_handles_to_close = []
             
+            # Enhance prompt with consistency markers if provided
+            enhanced_prompt = _enhance_prompt_with_markers(prompt, consistency_markers)
+            
             # Prepare input parameters for Replicate
             # Note: Model-specific parameters may vary - adjust based on actual API
             if model_name == "openai/sora-2":
                 # Sora-2 requires aspect_ratio as "portrait" or "landscape"
                 input_params = {
-                    "prompt": prompt,
+                    "prompt": enhanced_prompt,
                     "duration": duration,
                     "aspect_ratio": "portrait",  # Vertical for MVP
                     "quality": "high",  # Request high quality output
@@ -373,7 +428,9 @@ async def _generate_with_retry(
                 logger.info(f"🎬 EXACT SORA-2 PROMPT FOR {scene_info} (duration: {duration}s):")
                 logger.info("=" * 80)
                 logger.info("PROMPT TEXT:")
-                logger.info(prompt)
+                logger.info(enhanced_prompt)
+                if consistency_markers:
+                    logger.info(f"CONSISTENCY MARKERS: {consistency_markers}")
                 logger.info("=" * 80)
                 if reference_image_path:
                     logger.info(f"📷 Reference image path: {reference_image_path}")
@@ -436,22 +493,85 @@ async def _generate_with_retry(
                 if veo_duration != duration:
                     logger.debug(f"Veo-3: Rounding duration from {duration}s to {veo_duration}s (valid values: 4, 6, 8)")
                 input_params = {
-                    "prompt": prompt,
+                    "prompt": enhanced_prompt,
                     "duration": veo_duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
             elif model_name == "pixverse/pixverse-v5":
                 # PixVerse requires quality as resolution string: "360p", "540p", "720p", "1080p"
                 input_params = {
-                    "prompt": prompt,
+                    "prompt": enhanced_prompt,
                     "duration": duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                     "quality": "1080p",  # Use resolution string instead of "high"
                 }
+            elif model_name == "kwaivgi/kling-v2.5-turbo-pro":
+                # Kling 2.5 Turbo Pro supports reference image, start image, and end image
+                # Based on Replicate API: https://replicate.com/kwaivgi/kling-v2.5-turbo-pro
+                input_params = {
+                    "prompt": enhanced_prompt,
+                }
+                
+                # Kling 2.5 Turbo Pro supports multiple image inputs:
+                # - image: reference image (main scene image) - optional
+                # - start_image: first frame of the video - optional
+                # - end_image: last frame of the video - optional
+                # Note: duration and aspect_ratio may be auto-detected or have defaults
+                # If the model requires them, we'll add them based on actual API behavior
+                
+                # Add reference image if available
+                if reference_image_path:
+                    try:
+                        ref_image_path_obj = Path(reference_image_path)
+                        if ref_image_path_obj.exists():
+                            ref_file_handle = open(ref_image_path_obj, "rb")
+                            input_params["image"] = ref_file_handle
+                            file_handles_to_close.append(ref_file_handle)
+                            logger.info(f"✅ Attached reference image for Kling 2.5 Turbo Pro: {reference_image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load reference image for Kling: {e}")
+                
+                # Add start image if available (first frame)
+                if start_image_path:
+                    try:
+                        start_image_path_obj = Path(start_image_path)
+                        if start_image_path_obj.exists():
+                            start_file_handle = open(start_image_path_obj, "rb")
+                            input_params["start_image"] = start_file_handle
+                            file_handles_to_close.append(start_file_handle)
+                            logger.info(f"✅ Attached start image for Kling 2.5 Turbo Pro: {start_image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load start image for Kling: {e}")
+                
+                # Add end image if available (last frame)
+                if end_image_path:
+                    try:
+                        end_image_path_obj = Path(end_image_path)
+                        if end_image_path_obj.exists():
+                            end_file_handle = open(end_image_path_obj, "rb")
+                            input_params["end_image"] = end_file_handle
+                            file_handles_to_close.append(end_file_handle)
+                            logger.info(f"✅ Attached end image for Kling 2.5 Turbo Pro: {end_image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load end image for Kling: {e}")
+                
+                # Log what images are being used
+                scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
+                logger.info("=" * 80)
+                logger.info(f"🎬 KLING 2.5 TURBO PRO INPUT FOR {scene_info} (duration: {duration}s):")
+                logger.info("=" * 80)
+                logger.info(f"PROMPT: {enhanced_prompt[:100]}...")
+                if reference_image_path:
+                    logger.info(f"📷 Reference Image: {reference_image_path}")
+                if start_image_path:
+                    logger.info(f"🎬 Start Image: {start_image_path}")
+                if end_image_path:
+                    logger.info(f"🎬 End Image: {end_image_path}")
+                logger.info("=" * 80)
             else:
                 # Other models use aspect ratio as ratio string
                 input_params = {
-                    "prompt": prompt,
+                    "prompt": enhanced_prompt,
                     "duration": duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
@@ -460,7 +580,9 @@ async def _generate_with_retry(
                 logger.info("=" * 80)
                 logger.info(f"EXACT PROMPT FOR {model_name} - {scene_info} (duration: {duration}s):")
                 logger.info("=" * 80)
-                logger.info(prompt)
+                logger.info(enhanced_prompt)
+                if consistency_markers:
+                    logger.info(f"CONSISTENCY MARKERS: {consistency_markers}")
                 logger.info("=" * 80)
             
             # Add seed parameter if provided and not disabled (for visual consistency)

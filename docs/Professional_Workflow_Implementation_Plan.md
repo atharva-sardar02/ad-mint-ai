@@ -101,7 +101,7 @@ This plan outlines the implementation of a professional-grade video generation w
 **Capabilities:**
 - Accept hero frame image as input
 - Use image-to-video models on Replicate:
-  - `klingai/kling-2.5-turbo` (primary - professional workflow uses Kling)
+  - `kwaivgi/kling-v2.5-turbo-pro` (primary - professional workflow uses Kling 2.5 Turbo Pro)
   - `alibaba/wan-2.5` (supports I2V, high quality)
   - `pixverse/pixverse-v5` (supports I2V, cinematic)
 - Generate video with cinematographer-level motion prompts

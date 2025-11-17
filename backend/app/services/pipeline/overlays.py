@@ -4,6 +4,7 @@ Text overlay service for adding styled text overlays to video clips.
 import logging
 import os
 import platform
+import re
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -414,6 +415,12 @@ def add_overlays_to_clips(
     
     for i, (clip_path, scene) in enumerate(zip(clip_paths, scene_plan.scenes), start=1):
         try:
+            # Skip overlay if text_overlay is None
+            if scene.text_overlay is None:
+                logger.info(f"No text overlay for clip {i}, skipping overlay addition")
+                output_paths.append(clip_path)  # Use original clip without overlay
+                continue
+            
             # Generate output path
             output_filename = f"overlay_{i}.mp4"
             output_path = output_dir_path / output_filename
@@ -434,4 +441,216 @@ def add_overlays_to_clips(
     
     logger.info(f"All {len(output_paths)} text overlays added successfully")
     return output_paths
+
+
+def extract_brand_name(prompt: str) -> Optional[str]:
+    """
+    Extract brand name from user prompt using common patterns.
+    
+    Args:
+        prompt: User's prompt text
+    
+    Returns:
+        Optional[str]: Extracted brand name or None if not found
+    """
+    if not prompt:
+        return None
+    
+    # Common brand patterns (case-insensitive)
+    # Look for capitalized words that might be brands
+    # Common brand names
+    common_brands = [
+        "nike", "adidas", "puma", "reebok", "converse", "vans",
+        "apple", "samsung", "google", "microsoft", "amazon",
+        "coca-cola", "pepsi", "starbucks", "mcdonald's",
+        "tesla", "ford", "toyota", "bmw", "mercedes",
+        "gucci", "prada", "versace", "louis vuitton",
+        "sony", "lg", "dell", "hp", "lenovo"
+    ]
+    
+    prompt_lower = prompt.lower()
+    
+    # Check for common brands first
+    for brand in common_brands:
+        if brand in prompt_lower:
+            # Return capitalized version
+            return brand.capitalize()
+    
+    # Look for capitalized words that might be brand names
+    # Pattern: word(s) that are capitalized and might be a brand
+    words = re.findall(r'\b[A-Z][a-z]+\b', prompt)
+    
+    # Filter out common words that aren't brands
+    common_words = {"The", "This", "That", "These", "Those", "A", "An", "And", "Or", "But", "For", "With", "From", "About"}
+    potential_brands = [w for w in words if w not in common_words]
+    
+    # Return first potential brand, or None
+    if potential_brands:
+        return potential_brands[0]
+    
+    return None
+
+
+def add_brand_overlay_to_final_video(
+    video_path: str,
+    brand_name: Optional[str],
+    output_path: str,
+    duration: float = 2.0
+) -> str:
+    """
+    Add a brand name overlay at the end of the final video.
+    
+    Args:
+        video_path: Path to input video file
+        brand_name: Brand name to display (if None, will try to extract from prompt)
+        output_path: Path to save output video with brand overlay
+        duration: Duration of brand overlay in seconds (default: 2.0)
+    
+    Returns:
+        str: Path to output video file
+    
+    Raises:
+        RuntimeError: If overlay addition fails
+    """
+    logger.info(f"Adding brand overlay to final video: {video_path}")
+    
+    try:
+        # Load video clip
+        video = VideoFileClip(video_path)
+        video_duration = video.duration
+        
+        # If no brand name provided, skip overlay
+        if not brand_name:
+            logger.info("No brand name provided, skipping brand overlay")
+            video.close()
+            return video_path
+        
+        # Create brand overlay text
+        brand_text = brand_name.upper()  # Display brand in uppercase
+        
+        # Create text overlay for brand (appears at the end, centered)
+        brand_overlay = TextOverlay(
+            text=brand_text,
+            position="center",  # Center position
+            font_size=72,  # Larger font for brand
+            color="#FFFFFF",  # White text
+            animation="fade_in"  # Fade in animation
+        )
+        
+        # Calculate when to show brand overlay (last N seconds)
+        overlay_start_time = max(0, video_duration - duration)
+        overlay_end_time = video_duration
+        
+        # Create text clip for brand
+        text_clip = _create_text_clip(
+            text_overlay=brand_overlay,
+            video_size=video.size,
+            duration=duration
+        )
+        
+        # Apply fade in animation
+        text_clip = _apply_animation(text_clip, brand_overlay.animation)
+        
+        # Get text dimensions for background sizing
+        text_width = text_clip.w
+        text_height = text_clip.h
+        
+        # Create background with padding (semi-transparent black)
+        padding_x = int(text_width * 0.3)  # 30% padding on each side
+        padding_y = int(text_height * 0.4)  # 40% padding on top/bottom
+        background_width = int(text_width + (padding_x * 2))
+        background_height = int(text_height + (padding_y * 2))
+        
+        # Create semi-transparent black background (RGBA: black with 80% opacity)
+        # MoviePy ColorClip uses RGB, so we'll use a dark gray/black
+        # For semi-transparency, we'll use a darker background that provides contrast
+        background_color = (0, 0, 0)  # Black
+        background_clip = ColorClip(
+            size=(background_width, background_height),
+            color=background_color,
+            duration=duration
+        ).with_opacity(0.7)  # 70% opacity for semi-transparency
+        
+        # Position text on background (centered)
+        text_on_bg = text_clip.with_position(('center', 'center'))
+        
+        # Composite text on background
+        brand_composite = CompositeVideoClip(
+            [background_clip, text_on_bg],
+            size=(background_width, background_height)
+        )
+        
+        # Center the brand composite on the video
+        video_width, video_height = video.size
+        x_pos = (video_width - background_width) // 2
+        y_pos = (video_height - background_height) // 2
+        
+        # Position the brand composite in the center of the video
+        positioned_brand = brand_composite.with_position((x_pos, y_pos))
+        
+        # Set the brand composite to appear at the end of the video
+        positioned_brand = positioned_brand.with_start(overlay_start_time)
+        
+        # Composite brand overlay onto video
+        final_video = CompositeVideoClip([video, positioned_brand])
+        
+        # Set temp directory for MoviePy to use
+        original_cwd = os.getcwd()
+        
+        # Convert output_path to absolute BEFORE changing directory
+        if not Path(output_path).is_absolute():
+            output_path_abs = str(Path(original_cwd) / output_path)
+        else:
+            output_path_abs = output_path
+        output_path_abs = str(Path(output_path_abs).resolve())
+        
+        # Set temp directory
+        temp_dir = os.environ.get('TMPDIR', '/tmp')
+        temp_dir_path = Path(temp_dir)
+        if not temp_dir_path.exists():
+            temp_dir_path.mkdir(parents=True, exist_ok=True)
+        tempfile.tempdir = str(temp_dir_path.absolute())
+        os.environ['TMPDIR'] = str(temp_dir_path.absolute())
+        
+        # Change to temp directory
+        try:
+            os.chdir(str(temp_dir_path.absolute()))
+        except OSError as e:
+            logger.warning(f"Could not change to temp directory {temp_dir_path}: {e}. Continuing with current directory.")
+        
+        # Write output video
+        output_path_obj = Path(output_path_abs)
+        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Writing video with brand overlay to {output_path_abs}")
+        try:
+            final_video.write_videofile(
+                output_path_abs,
+                codec='libx264',
+                audio_codec='aac',
+                fps=24,
+                preset='medium',
+                logger=None  # Suppress MoviePy progress logs
+            )
+        finally:
+            # Restore original working directory
+            try:
+                os.chdir(original_cwd)
+            except OSError:
+                pass
+        
+        # Clean up
+        video.close()
+        text_clip.close()
+        background_clip.close()
+        brand_composite.close()
+        positioned_brand.close()
+        final_video.close()
+        
+        logger.info(f"Brand overlay added successfully: {output_path_abs}")
+        return output_path_abs
+        
+    except Exception as e:
+        logger.error(f"Failed to add brand overlay: {e}", exc_info=True)
+        raise RuntimeError(f"Brand overlay addition failed: {e}")
 

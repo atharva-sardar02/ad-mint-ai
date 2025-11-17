@@ -16,6 +16,7 @@ import { GenerationStatus } from "./routes/GenerationStatus";
 import { ComparisonDetail } from "./routes/ComparisonDetail";
 import { Queue } from "./routes/Queue";
 import { Editor } from "./routes/Editor";
+import { Storyboard } from "./routes/Storyboard";
 import "./App.css";
 
 /**
@@ -136,6 +137,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <VideoDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/storyboard/:generationId"
+            element={
+              <ProtectedRoute>
+                <Storyboard />
               </ProtectedRoute>
             }
           />

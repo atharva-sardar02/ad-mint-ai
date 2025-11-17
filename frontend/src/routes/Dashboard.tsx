@@ -13,6 +13,7 @@ import type { CoherenceSettings as CoherenceSettingsType } from "../components/c
 import { BasicSettingsPanel } from "../components/basic/BasicSettingsPanel";
 import type { BasicSettings } from "../components/basic/BasicSettingsPanel";
 import { ParallelGenerationPanel } from "../components/generation";
+import { StoryboardVisualizer } from "../components/storyboard";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse, GenerateRequest } from "../lib/generationService";
 import { getUserProfile } from "../lib/userService";
@@ -340,7 +341,8 @@ export const Dashboard: React.FC = () => {
         await generationService.startGenerationWithImage(
           prompt,
           referenceImage,
-          basicSettings.model || undefined
+          basicSettings.model || undefined,
+          basicSettings.numClips > 1 ? basicSettings.numClips : undefined
         );
       } else if (basicSettings.useSingleClip) {
         if (!basicSettings.model) {
@@ -526,6 +528,16 @@ export const Dashboard: React.FC = () => {
                 onCancel={handleCancel}
                 error={activeGeneration.error}
               />
+              
+              {/* Storyboard Visualizer */}
+              {activeGeneration.storyboard_plan && (
+                <div className="mt-6">
+                  <StoryboardVisualizer
+                    storyboardPlan={activeGeneration.storyboard_plan}
+                    prompt={prompt}
+                  />
+                </div>
+              )}
 
               {/* Video Player (when completed) */}
               {activeGeneration.status === "completed" && activeGeneration.video_url && (
