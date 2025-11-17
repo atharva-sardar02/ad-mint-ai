@@ -6,10 +6,38 @@ import React, { useState, useEffect } from "react";
 import { Button } from "../ui/Button";
 import { Textarea } from "../ui/Textarea";
 import { Select } from "../ui/Select";
+import { ModelSelect } from "../ui/ModelSelect";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { CoherenceSettingsPanel, validateCoherenceSettings } from "../coherence";
 import type { CoherenceSettings as CoherenceSettingsType } from "../coherence";
 import type { GenerateRequest } from "../../lib/generationService";
+import { VIDEO_MODELS } from "../../lib/models/videoModels";
+
+/**
+ * Tooltip component for help text.
+ */
+const Tooltip: React.FC<{ content: string; children: React.ReactNode }> = ({
+  content,
+  children,
+}) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div className="relative inline-block">
+      <div
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+      >
+        {children}
+      </div>
+      {showTooltip && (
+        <div className="absolute z-10 w-64 p-2 mt-2 text-xs text-white bg-gray-900 rounded shadow-lg left-0">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export type ComparisonType = "settings" | "prompt";
 
@@ -23,7 +51,6 @@ export interface ParallelGenerationPanelProps {
 const MIN_VARIATIONS = 2;
 const MAX_VARIATIONS = 10;
 const MIN_PROMPT_LENGTH = 10;
-const MAX_PROMPT_LENGTH = 500;
 
 /**
  * Default coherence settings for new profiles.
@@ -35,7 +62,9 @@ const getDefaultCoherenceSettings = (): CoherenceSettingsType => ({
   lora: false,
   enhanced_planning: true,
   vbench_quality_control: true,
+  automatic_regeneration: false,
   post_processing_enhancement: true,
+  color_grading: false,
   controlnet: false,
   csfd_detection: false,
 });
@@ -153,8 +182,8 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
 
     if (comparisonType === "settings") {
       // Validate single prompt
-      if (!settingsPrompt || settingsPrompt.length < MIN_PROMPT_LENGTH || settingsPrompt.length > MAX_PROMPT_LENGTH) {
-        newErrors.settingsPrompt = `Prompt must be between ${MIN_PROMPT_LENGTH} and ${MAX_PROMPT_LENGTH} characters`;
+      if (!settingsPrompt || settingsPrompt.length < MIN_PROMPT_LENGTH) {
+        newErrors.settingsPrompt = `Prompt must be at least ${MIN_PROMPT_LENGTH} characters`;
       }
 
       // Validate each settings profile
@@ -167,8 +196,8 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
     } else {
       // Validate all prompts
       promptVariations.forEach((prompt, index) => {
-        if (!prompt || prompt.length < MIN_PROMPT_LENGTH || prompt.length > MAX_PROMPT_LENGTH) {
-          newErrors[`prompt_${index}`] = `Prompt ${index + 1} must be between ${MIN_PROMPT_LENGTH} and ${MAX_PROMPT_LENGTH} characters`;
+        if (!prompt || prompt.length < MIN_PROMPT_LENGTH) {
+          newErrors[`prompt_${index}`] = `Prompt ${index + 1} must be at least ${MIN_PROMPT_LENGTH} characters`;
         }
       });
 
@@ -423,11 +452,29 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
                     </h3>
                     
                     {/* Basic Settings and Coherence Settings side by side */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                       {/* Per-variation basic settings - Collapsible */}
                       <div className="border border-gray-200 rounded-md bg-gray-50">
                         <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setBasicSettingsExpanded(prev => ({ ...prev, [index]: !prev[index] }))}>
-                          <h4 className="text-sm font-medium text-gray-700">Basic Settings</h4>
+                          <div className="flex items-center">
+                            <h4 className="text-sm font-medium text-gray-700">Basic Settings</h4>
+                            <Tooltip content="Configure basic video generation options: generation mode, model selection, and number of clips.">
+                              <svg
+                                className="w-5 h-5 ml-2 text-gray-400 cursor-help"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                            </Tooltip>
+                          </div>
                           <button
                             type="button"
                             className="text-gray-500 hover:text-gray-700 focus:outline-none"
@@ -484,21 +531,15 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
 
                         {/* Model Selection */}
                         <div>
-                          <Select
+                          <ModelSelect
                             label="Video Model"
                             id={`model_${index}`}
+                            models={VIDEO_MODELS}
                             value={model[index] || ""}
                             onChange={(e) => updateModel(index, e.target.value)}
                             disabled={isLoading}
                             required={useSingleClip[index]}
-                            options={[
-                              { value: "", label: useSingleClip[index] ? "Select a model (required)" : "Auto (use default)" },
-                              { value: "bytedance/seedance-1-lite", label: "Seedance-1-Lite (Primary)" },
-                              { value: "minimax-ai/minimax-video-01", label: "Minimax Video-01" },
-                              { value: "klingai/kling-video", label: "Kling 1.5" },
-                              { value: "runway/gen3-alpha-turbo", label: "Runway Gen-3 Alpha Turbo" },
-                              { value: "openai/sora-2", label: "Sora-2" },
-                            ]}
+                            placeholder={useSingleClip[index] ? "Select a model (required)" : "Auto (use default)"}
                           />
                         </div>
 
@@ -581,7 +622,25 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
                       {/* Per-variation basic settings - Collapsible */}
                       <div className="border border-gray-200 rounded-md bg-gray-50">
                         <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setBasicSettingsExpanded(prev => ({ ...prev, [index]: !prev[index] }))}>
-                          <h4 className="text-sm font-medium text-gray-700">Basic Settings</h4>
+                          <div className="flex items-center">
+                            <h4 className="text-sm font-medium text-gray-700">Basic Settings</h4>
+                            <Tooltip content="Configure basic video generation options: generation mode, model selection, and number of clips.">
+                              <svg
+                                className="w-5 h-5 ml-2 text-gray-400 cursor-help"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                            </Tooltip>
+                          </div>
                           <button
                             type="button"
                             className="text-gray-500 hover:text-gray-700 focus:outline-none"
@@ -638,21 +697,15 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
 
                         {/* Model Selection */}
                         <div>
-                          <Select
+                          <ModelSelect
                             label="Video Model"
                             id={`model_prompt_${index}`}
+                            models={VIDEO_MODELS}
                             value={model[index] || ""}
                             onChange={(e) => updateModel(index, e.target.value)}
                             disabled={isLoading}
                             required={useSingleClip[index]}
-                            options={[
-                              { value: "", label: useSingleClip[index] ? "Select a model (required)" : "Auto (use default)" },
-                              { value: "bytedance/seedance-1-lite", label: "Seedance-1-Lite (Primary)" },
-                              { value: "minimax-ai/minimax-video-01", label: "Minimax Video-01" },
-                              { value: "klingai/kling-video", label: "Kling 1.5" },
-                              { value: "runway/gen3-alpha-turbo", label: "Runway Gen-3 Alpha Turbo" },
-                              { value: "openai/sora-2", label: "Sora-2" },
-                            ]}
+                            placeholder={useSingleClip[index] ? "Select a model (required)" : "Auto (use default)"}
                           />
                         </div>
 

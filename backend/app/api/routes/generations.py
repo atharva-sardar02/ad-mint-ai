@@ -4,6 +4,7 @@ Video generation route handlers.
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -39,6 +40,8 @@ from app.schemas.generation import (
     GenerationListItem,
     ParallelGenerateRequest,
     ParallelGenerateResponse,
+    QualityMetricsResponse,
+    QualityMetricDetail,
     Scene,
     ScenePlan,
     StatusResponse,
@@ -66,6 +69,8 @@ from app.services.pipeline.video_generation import (
     REPLICATE_MODELS
 )
 from app.services.pipeline.seed_manager import get_seed_for_generation
+from app.services.pipeline.quality_control import evaluate_and_store_quality, regenerate_clip
+from app.services.pipeline.time_estimation import estimate_generation_time, format_estimated_time
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +96,9 @@ async def process_generation(
     logger.info(f"[{generation_id}] Starting background generation task")
     logger.info(f"[{generation_id}] User prompt: {prompt[:100]}...")
     
+    # Track generation start time
+    generation_start_time = time.time()
+    
     # Create a new database session for the background task
     db = SessionLocal()
     try:
@@ -99,7 +107,14 @@ async def process_generation(
             logger.error(f"[{generation_id}] Generation not found in background task")
             return
         
+        # Store basic settings
+        generation.model = preferred_model
+        generation.num_clips = num_clips
+        generation.use_llm = use_llm
+        db.commit()
+        
         logger.info(f"[{generation_id}] Generation record found, starting processing")
+        logger.info(f"[{generation_id}] Basic settings: model={preferred_model}, num_clips={num_clips}, use_llm={use_llm}")
         
         try:
             if use_llm:
@@ -275,6 +290,112 @@ async def process_generation(
                             reference_image_path=image_path,
                         )
                         logger.info(f"[{generation_id}] Clip {scene_number} generated successfully: {clip_path} (model: {model_used})")
+                        
+                        # Quality control evaluation (if enabled)
+                        quality_passed = True
+                        quality_details = {}
+                        try:
+                            quality_passed, quality_details = await evaluate_and_store_quality(
+                                db=db,
+                                generation_id=generation_id,
+                                scene_number=scene_number,
+                                clip_path=clip_path,
+                                prompt_text=scene.visual_prompt,
+                                coherence_settings=generation.coherence_settings
+                            )
+                            
+                            # Log performance metrics
+                            perf_info = quality_details.get("performance", {})
+                            if perf_info:
+                                eval_time = perf_info.get("evaluation_time_seconds", 0)
+                                within_target = perf_info.get("within_target", True)
+                                if not within_target:
+                                    logger.warning(
+                                        f"[{generation_id}] Quality evaluation exceeded target time: "
+                                        f"{eval_time:.2f}s > 30s for clip {scene_number}"
+                                    )
+                            
+                            if not quality_passed and not quality_details.get("skipped", False):
+                                # Check if automatic regeneration is enabled in coherence settings
+                                coherence_settings_dict = generation.coherence_settings or {}
+                                automatic_regeneration_enabled = coherence_settings_dict.get("automatic_regeneration", False)
+                                
+                                # Log quality issue (metrics are stored, available via API)
+                                logger.warning(
+                                    f"[{generation_id}] Clip {scene_number} quality below threshold "
+                                    f"(overall: {quality_details.get('scores', {}).get('overall_quality', 0):.2f}). "
+                                    f"Quality metrics stored. Automatic regeneration: {'enabled' if automatic_regeneration_enabled else 'disabled'}."
+                                )
+                                
+                                # Only trigger regeneration if explicitly enabled in coherence settings
+                                if automatic_regeneration_enabled:
+                                    logger.info(
+                                        f"[{generation_id}] Automatic regeneration enabled. Triggering regeneration for clip {scene_number}."
+                                    )
+                                    
+                                    # Update progress to show regeneration
+                                    update_generation_progress(
+                                        db=db,
+                                        generation_id=generation_id,
+                                        progress=progress_start,
+                                        current_step=f"Regenerating clip {scene_number} due to quality issues"
+                                    )
+                                    
+                                    # Attempt regeneration
+                                    try:
+                                        regenerated_clip_path, regen_success, regen_details = await regenerate_clip(
+                                            db=db,
+                                            generation_id=generation_id,
+                                            scene_number=scene_number,
+                                            scene=scene,
+                                            output_dir=temp_output_dir,
+                                            original_clip_path=clip_path,
+                                            prompt_text=scene.visual_prompt,
+                                            coherence_settings=generation.coherence_settings,
+                                            cancellation_check=check_cancellation,
+                                            seed=seed,
+                                            preferred_model=preferred_model,
+                                            max_attempts=3
+                                        )
+                                        
+                                        if regenerated_clip_path and regen_success:
+                                            # Use regenerated clip
+                                            clip_path = regenerated_clip_path
+                                            logger.info(
+                                                f"[{generation_id}] Regeneration successful for clip {scene_number}. "
+                                                f"New quality: {regen_details.get('overall_quality', 0):.2f}"
+                                            )
+                                        elif regenerated_clip_path:
+                                            # Regeneration completed but quality still below threshold
+                                            clip_path = regenerated_clip_path
+                                            logger.warning(
+                                                f"[{generation_id}] Regeneration completed for clip {scene_number} "
+                                                f"but quality still below threshold. Using best available clip."
+                                            )
+                                        else:
+                                            # Regeneration failed - use original clip
+                                            logger.error(
+                                                f"[{generation_id}] Regeneration failed for clip {scene_number}. "
+                                                f"Using original clip despite quality issues."
+                                            )
+                                            
+                                    except Exception as regen_error:
+                                        logger.error(
+                                            f"[{generation_id}] Error during regeneration for clip {scene_number}: {regen_error}",
+                                            exc_info=True
+                                        )
+                                        # Continue with original clip on regeneration failure
+                                else:
+                                    # Automatic regeneration disabled - continue with original clip
+                                    # Quality metrics are already stored and available via API
+                                    logger.info(
+                                        f"[{generation_id}] Continuing with clip {scene_number} despite quality below threshold. "
+                                        f"Quality metrics available for review via API."
+                                    )
+                        except Exception as e:
+                            logger.error(f"[{generation_id}] Quality evaluation failed for clip {scene_number}: {e}", exc_info=True)
+                            # Graceful degradation: continue even if quality assessment fails
+                            quality_passed = True
                         
                         # Cache the clip if caching is enabled
                         if use_cache:
@@ -493,6 +614,11 @@ async def process_generation(
                     brand_style = visual_style.lower() if visual_style else "default"
                 logger.info(f"[{generation_id}] Brand style: {brand_style}")
                 
+                # Check if color grading is enabled in coherence settings
+                coherence_settings_dict = generation.coherence_settings or {}
+                apply_color_grading = coherence_settings_dict.get("color_grading", False)
+                logger.info(f"[{generation_id}] Color grading enabled: {apply_color_grading}")
+                
                 # Use output directory from config or default
                 output_base_dir = "output"
                 logger.info(f"[{generation_id}] Exporting to: {output_base_dir}")
@@ -502,15 +628,22 @@ async def process_generation(
                     brand_style=brand_style,
                     output_dir=output_base_dir,
                     generation_id=generation_id,
-                    cancellation_check=check_cancellation
+                    cancellation_check=check_cancellation,
+                    apply_color_grading=apply_color_grading
                 )
                 logger.info(f"[{generation_id}] Final video exported - Video URL: {video_url}, Thumbnail URL: {thumbnail_url}")
                 
-                # Update Generation record with final URLs
+                # Calculate generation time
+                generation_elapsed = int(time.time() - generation_start_time)
+                
+                # Update Generation record with final URLs and generation time
                 generation.video_url = video_url
                 generation.thumbnail_url = thumbnail_url
                 generation.completed_at = datetime.utcnow()
+                generation.generation_time_seconds = generation_elapsed
                 db.commit()
+                
+                logger.info(f"[{generation_id}] Generation completed in {generation_elapsed} seconds")
                 
                 # Mark as completed
                 update_generation_progress(
@@ -616,7 +749,7 @@ async def create_generation(
     Start a new video generation from a user prompt.
     
     Args:
-        request: GenerateRequest with prompt (10-500 characters)
+        request: GenerateRequest with prompt (10-2000 characters)
         current_user: Authenticated user (from JWT)
         db: Database session
     
@@ -722,13 +855,13 @@ async def create_parallel_generation(
     
     # Validate all prompts
     for i, variation in enumerate(request.variations):
-        if len(variation.prompt) < 10 or len(variation.prompt) > 500:
+        if len(variation.prompt) < 10 or len(variation.prompt) > 2000:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={
                     "error": {
                         "code": "INVALID_PROMPT_LENGTH",
-                        "message": f"Variation {i+1}: Prompt must be between 10 and 500 characters"
+                        "message": f"Variation {i+1}: Prompt must be between 10 and 2000 characters"
                     }
                 }
             )
@@ -900,12 +1033,18 @@ async def create_parallel_generation(
     
     logger.info(f"Created parallel generation group {group_id} with {len(generation_ids)} variations")
     
+    # Calculate estimated generation time
+    estimated_seconds = estimate_generation_time(request.variations, parallel=True)
+    estimated_time_formatted = format_estimated_time(estimated_seconds)
+    
     # Return immediately - processing happens in background
     return ParallelGenerateResponse(
         group_id=group_id,
         generation_ids=generation_ids,
         status="pending",
-        message=f"Parallel generation started with {len(generation_ids)} variations"
+        message=f"Parallel generation started with {len(generation_ids)} variations",
+        estimated_time_seconds=estimated_seconds,
+        estimated_time_formatted=estimated_time_formatted
     )
 
 
@@ -1299,7 +1438,7 @@ async def get_comparison_group(
         prompts = [v.prompt for v in variations]
         differences["prompts"] = prompts
     
-    logger.info(f"User {current_user.id} retrieved comparison group {group_id} with {len(variations)} variations")
+    logger.debug(f"User {current_user.id} retrieved comparison group {group_id} with {len(variations)} variations")
     
     return ComparisonGroupResponse(
         group_id=group_id,
@@ -1477,10 +1616,14 @@ async def get_generations(
                 variation_label=variation_label,
                 coherence_settings=gen.coherence_settings,
                 parent_generation_id=gen.parent_generation_id,
+                model=gen.model,
+                num_clips=gen.num_clips,
+                use_llm=gen.use_llm,
+                generation_time_seconds=gen.generation_time_seconds,
             )
         )
 
-    logger.info(
+    logger.debug(
         f"User {current_user.id} retrieved {len(generation_items)} generations "
         f"(total: {total}, offset: {offset}, limit: {limit})"
     )
@@ -1490,6 +1633,123 @@ async def get_generations(
         limit=limit,
         offset=offset,
         generations=generation_items,
+    )
+
+
+@router.get("/generations/{generation_id}", response_model=GenerationListItem, status_code=status.HTTP_200_OK)
+async def get_generation(
+    generation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> GenerationListItem:
+    """
+    Get a single video generation by ID.
+    
+    Args:
+        generation_id: UUID of the generation
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        GenerationListItem with generation details
+    
+    Raises:
+        HTTPException: 404 if generation not found
+        HTTPException: 403 if user doesn't own the generation
+    """
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Check authorization - user can only access their own generations
+    if generation.user_id != current_user.id:
+        logger.warning(f"User {current_user.id} attempted to access generation {generation_id} owned by {generation.user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to access this generation"
+                }
+            }
+        )
+    
+    # Helper function to convert relative paths to full URLs (reuse from get_generations)
+    def get_full_url(relative_path: Optional[str], skip_s3: bool = False) -> Optional[str]:
+        """Convert relative path to full URL for frontend consumption."""
+        if not relative_path:
+            return None
+        from app.core.config import settings
+        
+        # If already a full URL, return as-is
+        if relative_path.startswith("http://") or relative_path.startswith("https://"):
+            return relative_path
+        
+        # If storage mode is S3 and we're not skipping
+        if settings.STORAGE_MODE == "s3" and not skip_s3:
+            try:
+                from app.services.storage.s3_storage import get_s3_storage
+                s3_storage = get_s3_storage()
+                presigned_url = s3_storage.generate_presigned_url(relative_path, expiration=3600)
+                return presigned_url
+            except Exception as e:
+                logger.warning(f"Failed to generate presigned URL for {relative_path}: {e}, falling back to static URL")
+                base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
+                path = relative_path.lstrip("/")
+                return f"{base_url}/{path}" if base_url else relative_path
+        else:
+            base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
+            path = relative_path.lstrip("/")
+            return f"{base_url}/{path}" if base_url else relative_path
+    
+    # Calculate variation label if part of a parallel generation group
+    variation_label = None
+    if generation.generation_group_id:
+        try:
+            # Get all generations in the same group, ordered by creation time
+            group_generations = db.query(Generation).filter(
+                Generation.generation_group_id == generation.generation_group_id
+            ).order_by(Generation.created_at).all()
+            
+            # Find index of this generation in the group
+            for idx, gen in enumerate(group_generations):
+                if gen.id == generation.id:
+                    variation_label = chr(65 + idx)  # 65 is ASCII for 'A'
+                    break
+        except Exception as e:
+            logger.error(f"Error calculating variation label: {e}")
+    
+    # Only generate S3 presigned URLs for completed videos
+    skip_s3_urls = generation.status not in ["completed"]
+    
+    return GenerationListItem(
+        id=generation.id,
+        title=generation.title,
+        prompt=generation.prompt,
+        status=generation.status,
+        video_url=get_full_url(generation.video_url, skip_s3=skip_s3_urls),
+        thumbnail_url=get_full_url(generation.thumbnail_url, skip_s3=skip_s3_urls),
+        duration=generation.duration,
+        cost=generation.cost,
+        created_at=generation.created_at,
+        completed_at=generation.completed_at,
+        generation_group_id=generation.generation_group_id,
+        variation_label=variation_label,
+        coherence_settings=generation.coherence_settings,
+        parent_generation_id=generation.parent_generation_id,
+        model=generation.model,
+        num_clips=generation.num_clips,
+        use_llm=generation.use_llm,
+        generation_time_seconds=generation.generation_time_seconds,
     )
 
 
@@ -1579,6 +1839,110 @@ async def download_clip(
         path=clip_path,
         media_type="video/mp4",
         filename=filename
+    )
+
+
+@router.get("/generations/{generation_id}/quality", response_model=QualityMetricsResponse, status_code=status.HTTP_200_OK)
+async def get_generation_quality_metrics(
+    generation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> QualityMetricsResponse:
+    """
+    Get quality metrics for all clips in a generation.
+    
+    Args:
+        generation_id: UUID of the generation
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        QualityMetricsResponse with quality metrics for all clips and summary statistics
+    
+    Raises:
+        HTTPException: 404 if generation not found
+        HTTPException: 403 if user doesn't own the generation
+    """
+    from app.db.models.quality_metric import QualityMetric
+    
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Check authorization - user can only access their own quality metrics
+    if generation.user_id != current_user.id:
+        logger.warning(f"User {current_user.id} attempted to access quality metrics for generation {generation_id} owned by {generation.user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You can only access quality metrics for your own generations"
+                }
+            }
+        )
+    
+    # Query quality metrics for this generation
+    quality_metrics = db.query(QualityMetric).filter(
+        QualityMetric.generation_id == generation_id
+    ).order_by(QualityMetric.scene_number.asc()).all()
+    
+    if not quality_metrics:
+        # Return empty response if no quality metrics found
+        return QualityMetricsResponse(
+            generation_id=generation_id,
+            clips=[],
+            summary={
+                "average_quality": 0.0,
+                "total_clips": 0,
+                "passed_count": 0,
+                "failed_count": 0,
+            }
+        )
+    
+    # Convert to response format
+    clip_details = [
+        QualityMetricDetail(
+            scene_number=metric.scene_number,
+            clip_path=metric.clip_path,
+            vbench_scores=metric.vbench_scores,
+            overall_quality=metric.overall_quality,
+            passed_threshold=metric.passed_threshold,
+            regeneration_attempts=metric.regeneration_attempts,
+            created_at=metric.created_at,
+        )
+        for metric in quality_metrics
+    ]
+    
+    # Calculate summary statistics
+    total_clips = len(quality_metrics)
+    passed_count = sum(1 for m in quality_metrics if m.passed_threshold)
+    failed_count = total_clips - passed_count
+    average_quality = sum(m.overall_quality for m in quality_metrics) / total_clips if total_clips > 0 else 0.0
+    
+    logger.debug(
+        f"User {current_user.id} retrieved quality metrics for generation {generation_id}: "
+        f"{total_clips} clips, {passed_count} passed, {failed_count} failed, avg quality: {average_quality:.2f}"
+    )
+    
+    return QualityMetricsResponse(
+        generation_id=generation_id,
+        clips=clip_details,
+        summary={
+            "average_quality": round(average_quality, 2),
+            "total_clips": total_clips,
+            "passed_count": passed_count,
+            "failed_count": failed_count,
+        }
     )
 
 
@@ -1672,6 +2036,9 @@ async def process_single_clip_generation(
     logger.info(f"[{generation_id}] Starting single clip generation task")
     logger.info(f"[{generation_id}] Model: {model_name}, Clips: {num_clips}, Prompt: {prompt[:100]}...")
     
+    # Track generation start time
+    generation_start_time = time.time()
+    
     # Create a new database session for the background task
     db = SessionLocal()
     try:
@@ -1679,6 +2046,12 @@ async def process_single_clip_generation(
         if not generation:
             logger.error(f"[{generation_id}] Generation not found in background task")
             return
+        
+        # Store basic settings
+        generation.model = model_name
+        generation.num_clips = num_clips
+        generation.use_llm = False  # Single clip mode doesn't use LLM
+        db.commit()
         
         try:
             # Update status to processing
@@ -1798,7 +2171,14 @@ async def process_single_clip_generation(
             # Store clip paths
             generation.temp_clip_paths = clip_paths
             generation.num_scenes = len(clip_paths)
+            
+            # Calculate generation time
+            generation_elapsed = int(time.time() - generation_start_time)
+            generation.generation_time_seconds = generation_elapsed
+            generation.completed_at = datetime.utcnow()
             db.commit()
+            
+            logger.info(f"[{generation_id}] Single clip generation completed in {generation_elapsed} seconds")
             
             # Update progress to completed
             update_generation_progress(

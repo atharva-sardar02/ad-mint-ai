@@ -3,6 +3,7 @@ Audio layer service for adding background music and sound effects to videos.
 """
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -62,7 +63,44 @@ def add_audio_layer(
     if cancellation_check and cancellation_check():
         raise RuntimeError("Audio layer processing cancelled by user")
     
-    logger.info(f"Adding audio layer to video: {video_path} (style: {music_style})")
+    # Get original working directory BEFORE changing directories
+    original_cwd = os.getcwd()
+    
+    # Convert paths to absolute BEFORE changing directory
+    # This ensures paths are resolved relative to the original working directory
+    if not Path(video_path).is_absolute():
+        # If relative, resolve from original working directory
+        video_path_abs = str(Path(original_cwd) / video_path)
+    else:
+        video_path_abs = video_path
+    
+    if not Path(output_path).is_absolute():
+        # If relative, resolve from original working directory
+        output_path_abs = str(Path(original_cwd) / output_path)
+    else:
+        output_path_abs = output_path
+    
+    # Normalize paths (resolve any .. or .)
+    video_path_abs = str(Path(video_path_abs).resolve())
+    output_path_abs = str(Path(output_path_abs).resolve())
+    
+    # Set temp directory for MoviePy to use (ensures temp files are created in writable location)
+    temp_dir = os.environ.get('TMPDIR', '/tmp')
+    temp_dir_path = Path(temp_dir)
+    if not temp_dir_path.exists():
+        temp_dir_path.mkdir(parents=True, exist_ok=True)
+    # Set tempfile's tempdir to ensure MoviePy uses it
+    tempfile.tempdir = str(temp_dir_path.absolute())
+    # Also set TMPDIR in environment for FFmpeg and other subprocesses
+    os.environ['TMPDIR'] = str(temp_dir_path.absolute())
+    
+    # Change to temp directory so MoviePy creates temp files there (not in working directory)
+    try:
+        os.chdir(str(temp_dir_path.absolute()))
+    except OSError as e:
+        logger.warning(f"Could not change to temp directory {temp_dir_path}: {e}. Continuing with current directory.")
+    
+    logger.info(f"Adding audio layer to video: {video_path_abs} (style: {music_style})")
     
     try:
         # Check cancellation before loading video
@@ -70,7 +108,7 @@ def add_audio_layer(
             raise RuntimeError("Audio layer processing cancelled by user")
         
         # Load video (preserve original audio from Sora-2 if present)
-        video = VideoFileClip(video_path)
+        video = VideoFileClip(video_path_abs)
         video_duration = video.duration
         
         # Check if video already has audio (from Sora-2 generation)
@@ -291,12 +329,12 @@ def add_audio_layer(
             final_video = video
         
         # Write output video
-        output_path_obj = Path(output_path)
+        output_path_obj = Path(output_path_abs)
         output_path_obj.parent.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Writing video with audio to {output_path}")
+        logger.info(f"Writing video with audio to {output_path_abs}")
         final_video.write_videofile(
-            output_path,
+            output_path_abs,
             codec='libx264',
             audio_codec='aac',
             fps=video.fps,
@@ -316,8 +354,8 @@ def add_audio_layer(
             final_audio.close()
         final_video.close()
         
-        logger.info(f"Audio layer added successfully: {output_path}")
-        return output_path
+        logger.info(f"Audio layer added successfully: {output_path_abs}")
+        return output_path_abs
         
     except RuntimeError as e:
         if "cancelled" in str(e).lower():
@@ -327,6 +365,12 @@ def add_audio_layer(
     except Exception as e:
         logger.error(f"Unexpected error during audio layer addition: {e}", exc_info=True)
         raise RuntimeError(f"Audio layer addition failed: {e}")
+    finally:
+        # Restore original working directory
+        try:
+            os.chdir(original_cwd)
+        except OSError:
+            pass  # Ignore errors when restoring directory
 
 
 def _select_music_file(style: str) -> Optional[Path]:

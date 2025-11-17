@@ -30,6 +30,7 @@ app = FastAPI(
 # Note: Cannot use allow_origins=["*"] with allow_credentials=True
 # Must explicitly list allowed origins
 # IMPORTANT: CORS middleware must be added BEFORE exception handlers
+logger.info(f"CORS allowed origins: {settings.CORS_ALLOWED_ORIGINS}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ALLOWED_ORIGINS,
@@ -38,6 +39,68 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Helper function to get CORS headers
+def get_cors_headers(request: Request) -> dict:
+    """
+    Get CORS headers for a request, respecting allowed origins.
+    """
+    origin = request.headers.get("origin")
+    if origin and origin in settings.CORS_ALLOWED_ORIGINS:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    # If origin not in allowed list, don't add CORS headers (CORS middleware will handle it)
+    return {}
+
+# Global exception handler to ensure CORS headers are added to error responses
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to ensure CORS headers are added to all error responses.
+    """
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    # Return error response with CORS headers
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An internal server error occurred"
+            }
+        },
+        headers=get_cors_headers(request)
+    )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    HTTP exception handler to ensure CORS headers are added.
+    """
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.detail if isinstance(exc.detail, dict) else {"detail": str(exc.detail)},
+        headers=get_cors_headers(request)
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Validation exception handler to ensure CORS headers are added.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Validation error",
+                "details": exc.errors()
+            }
+        },
+        headers=get_cors_headers(request)
+    )
 
 # Include routers (after CORS middleware)
 app.include_router(auth.router)
@@ -54,39 +117,6 @@ if output_dir.exists():
     logger.info("Static files mounted at /output")
 else:
     logger.warning("Output directory not found - static file serving disabled")
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """
-    Global exception handler to ensure CORS headers are always included,
-    even when unhandled exceptions occur.
-    """
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    
-    # Get the origin from the request headers
-    origin = request.headers.get("origin")
-    
-    # Check if origin is in allowed origins
-    allowed_origin = None
-    if origin and origin in settings.CORS_ALLOWED_ORIGINS:
-        allowed_origin = origin
-    
-    # Create response with CORS headers
-    response = JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error"},
-    )
-    
-    # Add CORS headers manually
-    if allowed_origin:
-        response.headers["Access-Control-Allow-Origin"] = allowed_origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Expose-Headers"] = "*"
-    
-    return response
 
 
 @app.on_event("startup")

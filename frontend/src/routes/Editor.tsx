@@ -3,13 +3,24 @@
  */
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { loadEditorData, trimClip, splitClip, mergeClips, saveEditingSession, exportVideo, getExportStatus, cancelExport } from "../lib/editorApi";
-import type { EditorData } from "../lib/types/api";
+import {
+  loadEditorData,
+  trimClip,
+  splitClip,
+  mergeClips,
+  updateClipPosition,
+  saveEditingSession,
+  exportVideo,
+  getExportStatus,
+  cancelExport,
+  getEditingSessions,
+} from "../lib/editorApi";
+import { getQualityMetrics } from "../lib/services/generations";
+import type { EditorData, QualityMetricsResponse } from "../lib/types/api";
 import { Button } from "../components/ui/Button";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
-import { GalleryPanel } from "../components/editor/GalleryPanel";
 import { Timeline } from "../components/editor/Timeline";
-import { MergeControls } from "../components/editor/MergeControls";
+import { useUndoRedo } from "../lib/hooks/useUndoRedo";
 
 /**
  * Editor component for editing video generations.
@@ -23,13 +34,41 @@ export const Editor: React.FC = () => {
   const [editorData, setEditorData] = useState<EditorData | null>(null);
   const [loading, setLoading] = useState(!!generationId); // Only loading if generationId provided
   const [error, setError] = useState<string | null>(null);
+  const [editingSessions, setEditingSessions] = useState<Array<{
+    id: string;
+    generation_id: string;
+    title: string;
+    thumbnail_url: string | null;
+    duration: number | null;
+    status: string;
+    updated_at: string;
+    created_at: string;
+  }>>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
-  const [trimState, setTrimState] = useState<Record<string, { trimStart: number; trimEnd: number }>>({});
-  const [trackAssignments, setTrackAssignments] = useState<Record<string, number>>({});
-  const [clipPositionOverrides, setClipPositionOverrides] = useState<Record<string, number>>({}); // clipId -> startTime
-  const [_draggedClipId, _setDraggedClipId] = useState<string | null>(null);
+  // Undo/Redo state management for timeline operations
+  const {
+    state: timelineState,
+    setState: setTimelineState,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useUndoRedo<{
+    trimState: Record<string, { trimStart: number; trimEnd: number }>;
+    trackAssignments: Record<string, number>;
+    clipPositionOverrides: Record<string, number>;
+  }>({
+    trimState: {},
+    trackAssignments: {},
+    clipPositionOverrides: {},
+  });
+  
+  // Extract individual states for easier access
+  const trimState = timelineState.trimState;
+  const trackAssignments = timelineState.trackAssignments;
+  const clipPositionOverrides = timelineState.clipPositionOverrides;
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [pendingSplitTime, setPendingSplitTime] = useState<number | null>(null);
@@ -41,13 +80,27 @@ export const Editor: React.FC = () => {
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const exportStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [qualityMetrics, setQualityMetrics] = useState<QualityMetricsResponse | null>(null);
+  const [_loadingQualityMetrics, setLoadingQualityMetrics] = useState(false);
 
-  // Load editor data if generationId is provided
+  // Load editor data if generationId is provided, otherwise load editing sessions
   useEffect(() => {
-    const fetchEditorData = async () => {
+    const fetchData = async () => {
       if (!generationId) {
-        // Empty state - no data to load
-        setLoading(false);
+        // No generation ID - load list of editing sessions
+        try {
+          setLoading(true);
+          setError(null);
+          const sessionsData = await getEditingSessions();
+          setEditingSessions(sessionsData.sessions);
+        } catch (err) {
+          const errorMessage =
+            err instanceof Error ? err.message : "Failed to load editing sessions";
+          setError(errorMessage);
+          console.error("Error loading editing sessions:", err);
+        } finally {
+          setLoading(false);
+        }
         return;
       }
 
@@ -58,13 +111,12 @@ export const Editor: React.FC = () => {
         const data = await loadEditorData(generationId);
         setEditorData(data);
         
-        // Load trim state from editing session if available
-        if (data.trim_state) {
-          setTrimState(data.trim_state);
-        } else {
-          // Initialize with empty trim state if no trim state exists
-          setTrimState({});
-        }
+        // Load timeline state from editing session if available
+        setTimelineState({
+          trimState: data.trim_state || {},
+          trackAssignments: data.track_assignments || {},
+          clipPositionOverrides: data.clip_positions || {},
+        });
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load editor data";
@@ -75,23 +127,36 @@ export const Editor: React.FC = () => {
       }
     };
 
-    fetchEditorData();
+    fetchData();
   }, [generationId]);
 
-  // Handle video selection from gallery panel
-  const handleVideoSelect = (selectedGenerationId: string) => {
-    navigate(`/editor/${selectedGenerationId}`);
-  };
+  // Fetch quality metrics when editor data is loaded
+  useEffect(() => {
+    const fetchQualityMetricsData = async () => {
+      if (!generationId || !editorData) {
+        return;
+      }
 
+      try {
+        setLoadingQualityMetrics(true);
+        const metrics = await getQualityMetrics(generationId);
+        console.log("Quality metrics fetched in Editor:", metrics);
+        setQualityMetrics(metrics);
+      } catch (err) {
+        console.error("Error fetching quality metrics:", err);
+        // Set to null so UI can handle gracefully
+        setQualityMetrics(null);
+      } finally {
+        setLoadingQualityMetrics(false);
+      }
+    };
+
+    fetchQualityMetricsData();
+  }, [generationId, editorData]);
   // Handle exit editor button
   const handleExitEditor = () => {
-    if (generationId) {
-      // Navigate back to video detail page
-      navigate(`/gallery/${generationId}`);
-    } else {
-      // Navigate to gallery
-      navigate("/gallery");
-    }
+    // Navigate back to editor sessions list
+    navigate("/editor");
   };
 
   // Handle timeline seek
@@ -147,14 +212,17 @@ export const Editor: React.FC = () => {
       const clip = editorData.clips.find((c) => c.clip_id === clipId);
       if (!clip) return;
 
-      // Update local trim state immediately for real-time feedback
-      setTrimState((prev) => {
-        const current = prev[clipId] || { trimStart: 0, trimEnd: clip.duration };
-        return {
-          ...prev,
-          [clipId]: { ...current, trimStart },
-        };
-      });
+      // Update local trim state immediately for real-time feedback (with undo history)
+      setTimelineState((prev) => ({
+        ...prev,
+        trimState: {
+          ...prev.trimState,
+          [clipId]: {
+            ...(prev.trimState[clipId] || { trimStart: 0, trimEnd: clip.duration }),
+            trimStart,
+          },
+        },
+      }));
 
       // Update preview to show trimmed content
       if (videoRef.current && selectedClipId === clipId) {
@@ -174,14 +242,17 @@ export const Editor: React.FC = () => {
       const clip = editorData.clips.find((c) => c.clip_id === clipId);
       if (!clip) return;
 
-      // Update local trim state immediately for real-time feedback
-      setTrimState((prev) => {
-        const current = prev[clipId] || { trimStart: 0, trimEnd: clip.duration };
-        return {
-          ...prev,
-          [clipId]: { ...current, trimEnd },
-        };
-      });
+      // Update local trim state immediately for real-time feedback (with undo history)
+      setTimelineState((prev) => ({
+        ...prev,
+        trimState: {
+          ...prev.trimState,
+          [clipId]: {
+            ...(prev.trimState[clipId] || { trimStart: 0, trimEnd: clip.duration }),
+            trimEnd,
+          },
+        },
+      }));
     },
     [generationId, editorData]
   );
@@ -199,10 +270,13 @@ export const Editor: React.FC = () => {
         clearTimeout(trimApiTimerRef.current);
       }
 
-      // Update local state immediately for real-time feedback
-      setTrimState((prev) => ({
+      // Update local state immediately for real-time feedback (with undo history)
+      setTimelineState((prev) => ({
         ...prev,
-        [clipId]: { trimStart, trimEnd },
+        trimState: {
+          ...prev.trimState,
+          [clipId]: { trimStart, trimEnd },
+        },
       }));
 
       // Update preview immediately
@@ -319,6 +393,50 @@ export const Editor: React.FC = () => {
     setPendingSplitTime(null);
   }, []);
 
+  // Check if selected clips are adjacent (for merge validation)
+  const areSelectedClipsAdjacent = useCallback((): boolean => {
+    if (!editorData || selectedClipIds.length < 2) return false;
+    
+    const selectedClips = editorData.clips.filter(c => selectedClipIds.includes(c.clip_id));
+    
+    // Sort clips by start_time to check sequence
+    const sortedClips = [...selectedClips].sort((a, b) => a.start_time - b.start_time);
+    
+    // Check if clips are in sequence (no gaps)
+    for (let i = 0; i < sortedClips.length - 1; i++) {
+      const currentClip = sortedClips[i];
+      const nextClip = sortedClips[i + 1];
+      
+      // Check if clips are adjacent (current clip's end_time should equal next clip's start_time)
+      // Allow small floating point tolerance (0.01 seconds)
+      const gap = Math.abs(currentClip.end_time - nextClip.start_time);
+      if (gap > 0.01) {
+        return false;
+      }
+    }
+    
+    // Verify clips are in correct order in timeline
+    const clipIndices: number[] = [];
+    const sortedAllClips = [...editorData.clips].sort((a, b) => a.start_time - b.start_time);
+    
+    sortedClips.forEach(selectedClip => {
+      const index = sortedAllClips.findIndex(c => c.clip_id === selectedClip.clip_id);
+      if (index !== -1) {
+        clipIndices.push(index);
+      }
+    });
+    
+    // Check if indices are consecutive
+    clipIndices.sort((a, b) => a - b);
+    for (let i = 0; i < clipIndices.length - 1; i++) {
+      if (clipIndices[i + 1] - clipIndices[i] !== 1) {
+        return false;
+      }
+    }
+    
+    return true;
+  }, [editorData, selectedClipIds]);
+
   // Handle merge operation
   const handleMerge = useCallback(async (clipIds: string[]) => {
     if (!generationId || !editorData || clipIds.length < 2) return;
@@ -347,83 +465,96 @@ export const Editor: React.FC = () => {
     }
   }, [generationId, editorData]);
 
-  // Handle merge cancel
-  const handleMergeCancel = useCallback(() => {
-    setSelectedClipIds([]);
-    // Restore single selection if only one clip was selected before multi-select
-    if (selectedClipId) {
-      setSelectedClipId(selectedClipId);
-    }
-  }, [selectedClipId]);
-
   // Handle add track
   const handleAddTrack = useCallback(() => {
     if (!editorData) return;
     
-    // Calculate max track index from current assignments
+    // Calculate max track index from current assignments only
+    // All clips default to track 0, so we only need to check explicit assignments
     const currentTracks = Object.values(trackAssignments);
-    const sceneTracks = editorData.clips.map((c) => (c.scene_number || 1) - 1);
-    const allTracks = [...currentTracks, ...sceneTracks];
-    
-    const maxTrack = allTracks.length > 0 ? Math.max(...allTracks) : -1;
+    const maxTrack = currentTracks.length > 0 ? Math.max(...currentTracks) : -1;
     const newTrackIndex = maxTrack + 1;
     
-    // Create an empty track by adding a placeholder entry
+    // Create an empty track by adding a placeholder entry (with undo history)
     // We use a special key to ensure the track exists
-    setTrackAssignments((prev) => ({
+    setTimelineState((prev) => ({
       ...prev,
-      [`__track_${newTrackIndex}`]: newTrackIndex,
+      trackAssignments: {
+        ...prev.trackAssignments,
+        [`__track_${newTrackIndex}`]: newTrackIndex,
+      },
     }));
-  }, [editorData, trackAssignments]);
+  }, [editorData, trackAssignments, setTimelineState]);
 
   // Handle delete track
   const handleDeleteTrack = useCallback((trackIndex: number) => {
     if (!editorData) return;
     
-    // Reassign clips from deleted track to track 0
-    const updatedAssignments = { ...trackAssignments };
-    
-    Object.keys(updatedAssignments).forEach((clipId) => {
-      if (updatedAssignments[clipId] === trackIndex) {
-        // Remove placeholder tracks or reassign clips to track 0
-        if (clipId.startsWith('__track_')) {
-          delete updatedAssignments[clipId];
-        } else {
-          updatedAssignments[clipId] = 0;
+    // Update track assignments with undo history
+    setTimelineState((prev) => {
+      const updatedAssignments = { ...prev.trackAssignments };
+      
+      Object.keys(updatedAssignments).forEach((clipId) => {
+        if (updatedAssignments[clipId] === trackIndex) {
+          // Remove placeholder tracks or reassign clips to track 0
+          if (clipId.startsWith('__track_')) {
+            delete updatedAssignments[clipId];
+          } else {
+            updatedAssignments[clipId] = 0;
+          }
+        } else if (updatedAssignments[clipId] > trackIndex) {
+          // Shift down tracks above the deleted one
+          updatedAssignments[clipId]--;
         }
-      } else if (updatedAssignments[clipId] > trackIndex) {
-        // Shift down tracks above the deleted one
-        updatedAssignments[clipId]--;
-      }
+      });
+      
+      return {
+        ...prev,
+        trackAssignments: updatedAssignments,
+      };
     });
-    
-    setTrackAssignments(updatedAssignments);
-  }, [editorData, trackAssignments]);
+  }, [editorData, setTimelineState]);
 
   // Handle clip drag and drop to move between tracks
   const handleClipTrackChange = useCallback((clipId: string, newTrackIndex: number) => {
-    setTrackAssignments((prev) => ({
+    setTimelineState((prev) => ({
       ...prev,
-      [clipId]: newTrackIndex,
+      trackAssignments: {
+        ...prev.trackAssignments,
+        [clipId]: newTrackIndex,
+      },
     }));
-  }, []);
+  }, [setTimelineState]);
 
   // Handle clip position change (both track and time)
-  const handleClipPositionChange = useCallback((clipId: string, newTrackIndex: number, newStartTime: number) => {
-    // Update track assignment
-    setTrackAssignments((prev) => ({
-      ...prev,
-      [clipId]: newTrackIndex,
-    }));
+  const handleClipPositionChange = useCallback(async (clipId: string, newTrackIndex: number, newStartTime: number) => {
+    if (!generationId) return;
     
-    // Update clip position override
-    setClipPositionOverrides((prev) => ({
-      ...prev,
-      [clipId]: newStartTime,
-    }));
-    
-    console.log(`Clip ${clipId} moved to track ${newTrackIndex} at time ${newStartTime.toFixed(2)}s`);
-  }, []);
+    try {
+      // Call backend API to update clip position
+      await updateClipPosition(generationId, clipId, newStartTime, newTrackIndex);
+      
+      // Update local state for immediate UI feedback (with undo history)
+      setTimelineState((prev) => ({
+        ...prev,
+        trackAssignments: {
+          ...prev.trackAssignments,
+          [clipId]: newTrackIndex,
+        },
+        clipPositionOverrides: {
+          ...prev.clipPositionOverrides,
+          [clipId]: newStartTime,
+        },
+      }));
+      
+      console.log(`Clip ${clipId} moved to track ${newTrackIndex} at time ${newStartTime.toFixed(2)}s`);
+    } catch (err) {
+      console.error("Error updating clip position:", err);
+      // Optionally show error to user
+      const errorMessage = err instanceof Error ? err.message : "Failed to update clip position";
+      setError(errorMessage);
+    }
+  }, [generationId, setTimelineState]);
 
   // Handle save button click
   const handleSave = useCallback(async () => {
@@ -672,26 +803,93 @@ export const Editor: React.FC = () => {
     );
   }
 
-  // Empty state - show gallery panel
+  // Empty state - show list of edited videos
   if (!generationId || !editorData) {
     return (
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Video Editor</h1>
-            <Button onClick={handleExitEditor} variant="secondary">
-              Exit Editor
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-900">Edited Videos</h1>
+            <Button onClick={() => navigate("/gallery")} variant="secondary">
+              Go to Gallery
             </Button>
           </div>
 
-          {/* Gallery Panel */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Select a video to edit
-            </h2>
-            <GalleryPanel onVideoSelect={handleVideoSelect} />
-          </div>
+          {loading && (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              <p className="mt-4 text-gray-600">Loading editing sessions...</p>
+            </div>
+          )}
+
+          {error && (
+            <ErrorMessage message={error} />
+          )}
+
+          {!loading && !error && editingSessions.length === 0 && (
+            <div className="bg-white shadow rounded-lg p-12 text-center">
+              <div className="text-gray-400 mb-4">
+                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No edited videos yet
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Go to the Gallery and click "Edit" on a video to start editing.
+              </p>
+              <Button onClick={() => navigate("/gallery")} variant="primary">
+                Browse Gallery
+              </Button>
+            </div>
+          )}
+
+          {!loading && !error && editingSessions.length > 0 && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Your Edited Videos ({editingSessions.length})
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {editingSessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                    onClick={() => navigate(`/editor/${session.generation_id}`)}
+                  >
+                    {session.thumbnail_url && (
+                      <img
+                        src={session.thumbnail_url}
+                        alt={session.title}
+                        className="w-full h-48 object-cover"
+                      />
+                    )}
+                    {!session.thumbnail_url && (
+                      <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+                        <svg className="h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2 truncate">
+                        {session.title}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>
+                          {session.duration ? `${session.duration.toFixed(1)}s` : "N/A"}
+                        </span>
+                        <span className="capitalize">{session.status}</span>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-400">
+                        Updated {new Date(session.updated_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -740,15 +938,16 @@ export const Editor: React.FC = () => {
 
         {/* Editor Layout */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          {/* Video Preview Player Area */}
-          <div className="aspect-video bg-gray-200 relative">
+          {/* Video Preview Player Area - Aspect-aware container */}
+          <div className="w-full bg-gray-200 relative" style={{ minHeight: '400px' }}>
             {editorData.original_video_url ? (
               <video
                 ref={videoRef}
                 src={editorData.original_video_url}
                 controls
-                className="w-full h-full object-contain bg-black"
+                className="w-full h-auto max-h-[80vh] object-contain bg-black mx-auto block"
                 preload="metadata"
+                style={{ aspectRatio: 'auto' }}
               >
                 Your browser does not support the video tag.
               </video>
@@ -869,58 +1068,94 @@ export const Editor: React.FC = () => {
                 Scene Clips ({editorData.clips.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {editorData.clips.map((clip) => (
-                  <div
-                    key={clip.clip_id}
-                    className="border border-gray-200 rounded-lg p-4"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">
-                        Scene {clip.scene_number}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {clip.duration.toFixed(1)}s
-                      </span>
-                    </div>
-                    {clip.text_overlay && (
-                      <div className="text-xs text-gray-600 mt-2">
-                        Overlay: {clip.text_overlay.text}
+                {editorData.clips.map((clip) => {
+                  // Find quality metric for this clip
+                  const clipQuality = qualityMetrics?.clips.find(
+                    (q) => q.scene_number === clip.scene_number
+                  );
+                  
+                  return (
+                    <div
+                      key={clip.clip_id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700">
+                            Scene {clip.scene_number}
+                          </span>
+                          {clipQuality && (
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                              clipQuality.overall_quality >= 80
+                                ? "bg-green-100 text-green-800"
+                                : clipQuality.overall_quality >= 70
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}>
+                              {clipQuality.overall_quality.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {clip.duration.toFixed(1)}s
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {clip.text_overlay && (
+                        <div className="text-xs text-gray-600 mt-2">
+                          Overlay: {clip.text_overlay.text}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Editor Controls */}
-            {selectedClipId && (
-              <div className="mb-4 flex items-center gap-2">
-                <Button
-                  onClick={handleSplitClick}
-                  variant="primary"
-                  disabled={!selectedClipId}
-                >
-                  Split Clip (S)
-                </Button>
-                {isSplitMode && (
-                  <span className="text-sm text-gray-600">
-                    Position playhead and click Split or press S
-                  </span>
-                )}
-              </div>
-            )}
+            <div className="mb-4 flex items-center gap-3">
+              {selectedClipId && (
+                <>
+                  <Button
+                    onClick={handleSplitClick}
+                    variant="primary"
+                    disabled={!selectedClipId}
+                  >
+                    Split Clip (S)
+                  </Button>
+                  {isSplitMode && (
+                    <span className="text-sm text-gray-600">
+                      Position playhead and click Split or press S
+                    </span>
+                  )}
+                </>
+              )}
+              
+              <Button
+                onClick={() => {
+                  if (selectedClipIds.length >= 2) {
+                    handleMerge(selectedClipIds);
+                  }
+                }}
+                variant="primary"
+                disabled={selectedClipIds.length < 2 || !areSelectedClipsAdjacent()}
+                title={
+                  selectedClipIds.length < 2
+                    ? "Select 2 or more clips to merge"
+                    : !areSelectedClipsAdjacent()
+                    ? "Selected clips must be adjacent to merge"
+                    : "Merge selected clips"
+                }
+              >
+                Merge Clips ({selectedClipIds.length})
+              </Button>
+              
+              {selectedClipIds.length >= 2 && !areSelectedClipsAdjacent() && (
+                <span className="text-xs text-red-600">
+                  Clips must be adjacent
+                </span>
+              )}
+            </div>
 
-            {/* Merge Controls - Show when multiple clips are selected */}
-            {selectedClipIds.length >= 2 && (
-              <div className="mb-4">
-                <MergeControls
-                  selectedClips={editorData.clips.filter((c) => selectedClipIds.includes(c.clip_id))}
-                  allClips={editorData.clips}
-                  onMerge={handleMerge}
-                  onCancel={handleMergeCancel}
-                />
-              </div>
-            )}
 
             {/* Timeline */}
             <div className="mt-6">
@@ -943,6 +1178,10 @@ export const Editor: React.FC = () => {
                 onClipTrackChange={handleClipTrackChange}
                 onClipPositionChange={handleClipPositionChange}
                 clipPositionOverrides={clipPositionOverrides}
+                onUndo={undo}
+                onRedo={redo}
+                canUndo={canUndo}
+                canRedo={canRedo}
               />
             </div>
 

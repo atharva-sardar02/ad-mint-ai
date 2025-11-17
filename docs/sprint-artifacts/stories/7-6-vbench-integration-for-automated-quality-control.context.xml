@@ -1,0 +1,183 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>7</epicId>
+    <storyId>6</storyId>
+    <title>VBench Integration for Automated Quality Control</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-16 14:57:54</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/7-6-vbench-integration-for-automated-quality-control.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>integrate VBench metrics for automated quality assessment</iWant>
+    <soThat>the system can automatically evaluate video quality and trigger regeneration for low-quality clips</soThat>
+    <tasks>
+- [ ] Task 1: Research and Set Up VBench Integration (AC: 1, 4)
+- [ ] Task 2: Create Quality Control Service (AC: 1, 2)
+- [ ] Task 3: Create Quality Metrics Database Model (AC: 4)
+- [ ] Task 4: Implement Quality Threshold Configuration (AC: 2, 3)
+- [ ] Task 5: Integrate Quality Control into Video Generation Pipeline (AC: 1, 3, 4)
+- [ ] Task 6: Implement Automatic Regeneration Logic (AC: 3)
+- [ ] Task 7: Create Quality Metrics API Endpoint (AC: 4)
+- [ ] Task 8: Update Coherence Settings Integration (AC: 4)
+- [ ] Task 9: Add Quality Metrics Display (Optional UI Enhancement) (AC: 4)
+- [ ] Task 10: Performance Optimization and Monitoring (AC: 1, 4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **VBench Metrics Integration:**
+   **Given** a video clip has been generated
+   **When** the quality control service processes it
+   **Then** it evaluates:
+   - Temporal quality (subject consistency, background consistency, motion smoothness, dynamic degree)
+   - Frame-wise quality (aesthetic quality, imaging quality, object class alignment)
+   - Text-video alignment (prompt adherence)
+   - Multiple objects assessment (if applicable)
+
+2. **Automated Quality Assessment:**
+   **Given** VBench metrics are computed for a clip
+   **When** the system processes the results
+   **Then** it:
+   - Generates quality scores for each dimension (0-100 scale)
+   - Computes overall quality score
+   - Compares scores against quality thresholds
+   - Identifies clips falling below acceptable quality
+
+3. **Quality Threshold Triggers:**
+   **Given** a clip's quality scores are below thresholds
+   **When** the system evaluates the results
+   **Then** it:
+   - Automatically triggers regeneration for low-quality clips
+   - Logs quality issues for analysis
+   - Tracks regeneration attempts and success rates
+   - Updates generation progress to reflect regeneration
+
+4. **Quality Dashboard:**
+   **Given** quality metrics are being tracked
+   **When** a video generation completes
+   **Then** the system:
+   - Checks if VBench quality control is enabled in coherence settings (default: enabled)
+   - Runs VBench evaluation only if enabled
+   - Stores all VBench scores in database
+   - Makes quality metrics available via API
+   - Displays quality scores in video detail page (optional)
+   - Uses metrics for quality feedback loop (Story 7.9)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic 7 Stories" section="Story 7.6: VBench Integration for Automated Quality Control">
+        Story definition with acceptance criteria and technical notes. Defines VBench metrics integration, automated quality assessment, threshold triggers, and quality dashboard requirements.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-7.md" title="Epic 7 Technical Specification" section="Services and Modules, Data Models and Contracts">
+        Technical specification for Epic 7. Defines QualityMetric database model with fields: id (UUID), generation_id (FK), scene_number, clip_path, vbench_scores (JSON), overall_quality, passed_threshold. Specifies quality_control.py service design patterns.
+      </doc>
+      <doc path="docs/Multi_Scene_Video_Ad_Generation_Research_Report.md" title="Multi-Scene Video Ad Generation Research Report" section="6. Evaluation and Benchmarks">
+        VBench evaluation framework documentation. VBench dissects video generation quality into hierarchical dimensions: temporal quality (subject consistency, background consistency, motion smoothness, dynamic degree), frame-wise quality (aesthetic quality, imaging quality, object class alignment), text-video alignment, and multiple objects assessment.
+      </doc>
+      <doc path="docs/video-generation-models.md" title="Top AI Video Generation Models" section="Model Rankings">
+        Context on video generation models and quality benchmarks. References VBench scores (e.g., Wan 2.1 scored 84.7% overall on VBench). Provides context for quality assessment expectations.
+      </doc>
+      <doc path="docs/sprint-artifacts/7-6-vbench-integration-for-automated-quality-control.md" title="Story 7.6 Draft" section="Dev Notes, Learnings from Previous Story">
+        Complete story draft with tasks, architecture patterns, project structure notes, testing standards, and learnings from Stories 7-1, 7-2, and 7-0. Includes database migration patterns, service integration patterns, and API design patterns.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Project Structure, Implementation Patterns">
+        Backend and frontend structure patterns. Defines service layer patterns, database schema patterns, API design patterns, and testing requirements. Quality control should follow existing pipeline service patterns.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="20.2 Phase 3 Features">
+        Quality optimization requirements context. References automated quality control and coherence enhancement as Phase 3 features.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/coherence_settings.py" kind="service" symbol="CoherenceSettings, get_default_settings, validate_settings" lines="1-205" reason="VBench quality control flag (vbench_quality_control) is already defined in CoherenceSettings schema. Default is True. Service validates settings and provides metadata. Quality control service must read this flag to determine if VBench evaluation should run." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_video_clip, generate_video_clip_with_model" lines="1-697" reason="Video generation service where quality control must be integrated. Quality control should run after each clip generation (if enabled). Follows existing pipeline patterns with error handling and progress tracking." />
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="31-73" reason="Generation model that needs quality_metrics relationship added. Follows existing pattern with UUID primary keys, foreign keys, and JSON fields. QualityMetric model should follow GenerationGroup pattern for related models." />
+      <artifact path="backend/app/schemas/generation.py" kind="schema" symbol="CoherenceSettings, GenerateRequest, StatusResponse" lines="10-36, 38-49, 51-63" reason="Pydantic schemas for generation requests and responses. CoherenceSettings already includes vbench_quality_control. StatusResponse may need quality metrics fields. Generation schemas should be extended to include quality metrics." />
+      <artifact path="backend/app/api/routes/generations.py" kind="controller" symbol="process_generation, router" lines="68-1833" reason="Generation API routes. New GET /api/generations/{id}/quality endpoint should be added here following RESTful patterns. Follows existing endpoint patterns from parallel generation (/api/comparison/{group_id})." />
+      <artifact path="backend/app/db/migrations/add_generation_groups.py" kind="migration" symbol="run_migration" lines="1-199" reason="Example migration pattern for creating new tables with UUID primary keys, foreign keys, and indexes. Quality metrics migration should follow this pattern: idempotent, handles SQLite and PostgreSQL, creates table with proper constraints." />
+      <artifact path="backend/app/db/migrations/add_seed_value.py" kind="migration" symbol="run_migration" lines="1-87" reason="Example migration for adding fields to existing table. Shows pattern for ALTER TABLE with SQLite and PostgreSQL compatibility. Quality metrics migration will create new table, but pattern is similar." />
+      <artifact path="backend/app/services/pipeline/seed_manager.py" kind="service" symbol="get_seed_for_generation" lines="1-100" reason="Example service structure for pipeline services. Quality control service should follow similar pattern: clean service interface, proper error handling, logging, database session management." />
+      <artifact path="backend/app/core/config.py" kind="config" symbol="Settings" lines="1-60" reason="Application configuration. Quality threshold configuration should be added here with environment variable support. Default thresholds: temporal (70), frame-wise (70), text-video alignment (70), overall (70)." />
+      <artifact path="backend/app/services/pipeline/progress_tracking.py" kind="service" symbol="update_generation_progress, update_generation_status" reason="Progress tracking service. Quality control should update generation progress to reflect quality assessment and regeneration attempts. Follows existing progress tracking patterns." />
+    </code>
+    <dependencies>
+      <python>
+        <package name="fastapi">>=0.104.0</package>
+        <package name="sqlalchemy">>=2.0.0</package>
+        <package name="pydantic">>=2.0.0</package>
+        <package name="pytest">>=7.4.0</package>
+        <package name="pytest-asyncio">>=0.21.0</package>
+        <package name="moviepy">>=1.0.3</package>
+        <package name="opencv-python">>=4.8.0</package>
+        <package name="pillow">>=10.1.0</package>
+        <package name="vbench">TBD - Research VBench library availability (GitHub: Vchitect/VBench)</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Service Layer Pattern: Create new quality_control.py service following existing service structure from video_generation.py and cost_tracking.py. Quality control should be a separate service that integrates with the pipeline.</constraint>
+    <constraint>Database Schema: New quality_metrics table with foreign key to generations table. Quality metrics are optional - generation continues even if quality assessment fails. Use UUID primary keys, proper foreign keys, and migration scripts following GenerationGroup pattern.</constraint>
+    <constraint>API Design: New /api/generations/{id}/quality endpoint extends existing generation endpoints. Follows RESTful patterns established in Epic 3. Add authorization check (user can only access their own quality metrics).</constraint>
+    <constraint>Pipeline Integration: Quality control runs after each clip generation (if enabled). Should not block pipeline - use async processing where possible. Regeneration triggers new clip generation with updated parameters.</constraint>
+    <constraint>Error Handling: If VBench evaluation fails, log error but continue generation without quality assessment. Graceful degradation ensures pipeline reliability.</constraint>
+    <constraint>Coherence Settings Integration: Quality control respects vbench_quality_control flag from coherence settings. Default: enabled (recommended). Service already exists in coherence_settings.py.</constraint>
+    <constraint>Testing: Use pytest for all backend service and API endpoint tests. Test VBench integration, threshold checking, and regeneration logic. Follow comprehensive integration test patterns from parallel generation tests.</constraint>
+    <constraint>Performance: Quality assessment should not significantly slow pipeline. Target: &lt;30 seconds per clip. Implement async quality assessment where possible.</constraint>
+    <constraint>Regeneration Logic: Max 2 regeneration attempts per clip. Track regeneration attempts in QualityMetric model. Update generation progress to show regeneration status.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="Quality Control Service API" kind="function signature" signature="evaluate_vbench(video_clip_path: str, prompt_text: str) -&gt; Dict[str, float]" path="backend/app/services/pipeline/quality_control.py">
+      Evaluates video clip using VBench metrics. Returns structured quality scores (0-100 scale per dimension): temporal quality, frame-wise quality, text-video alignment, overall quality.
+    </interface>
+    <interface name="Quality Threshold Check" kind="function signature" signature="check_quality_thresholds(vbench_scores: Dict[str, float], thresholds: Dict[str, float]) -&gt; tuple[bool, Dict[str, Any]]" path="backend/app/services/pipeline/quality_control.py">
+      Compares VBench scores against configurable thresholds. Returns (passed, details) tuple with quality assessment result.
+    </interface>
+    <interface name="Regeneration Trigger" kind="function signature" signature="regenerate_clip(generation_id: str, scene_number: int, clip_path: str, attempt: int) -&gt; tuple[str, bool]" path="backend/app/services/pipeline/quality_control.py">
+      Triggers regeneration for low-quality clip. Returns (new_clip_path, success) tuple. Implements retry logic (max 2 attempts).
+    </interface>
+    <interface name="Quality Metrics API Endpoint" kind="REST endpoint" signature="GET /api/generations/{generation_id}/quality" path="backend/app/api/routes/generations.py">
+      Returns quality metrics for all clips in generation. Response includes: overall quality scores per clip, VBench dimension scores, regeneration attempts and outcomes, quality assessment summary. Requires authentication and authorization (user can only access their own metrics).
+    </interface>
+    <interface name="Coherence Settings" kind="Pydantic schema" signature="CoherenceSettings.vbench_quality_control: bool" path="backend/app/schemas/generation.py">
+      Boolean flag to enable/disable VBench quality control. Default: True. Read by quality control service to determine if evaluation should run.
+    </interface>
+    <interface name="QualityMetric Database Model" kind="SQLAlchemy model" signature="QualityMetric(id: UUID, generation_id: FK, scene_number: int, clip_path: str, vbench_scores: JSON, overall_quality: float, passed_threshold: bool, created_at: timestamp)" path="backend/app/db/models/">
+      Database model for storing quality metrics per clip. Foreign key to generations table. JSON field for VBench dimension scores.
+    </interface>
+    <interface name="Generation.quality_metrics Relationship" kind="SQLAlchemy relationship" signature="Generation.quality_metrics: relationship('QualityMetric')" path="backend/app/db/models/generation.py">
+      One-to-many relationship from Generation to QualityMetric. Allows querying all quality metrics for a generation.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest for all backend service and API endpoint tests. Test quality control service functions, database models, and API endpoints in isolation (unit tests). Test full quality control flow from clip generation to quality assessment to regeneration (integration tests). Test user flow from generation with quality control enabled to viewing quality metrics (E2E tests). Measure quality assessment overhead and ensure it doesn't significantly slow pipeline (performance tests). Follow comprehensive integration test patterns from parallel generation tests - test full flow from API to database.
+    </standards>
+    <locations>
+      <location>backend/tests/test_quality_control.py</location>
+      <location>backend/tests/test_quality_metrics.py</location>
+      <location>backend/tests/test_generation_routes.py</location>
+      <location>backend/tests/test_integration_quality_control.py</location>
+    </locations>
+    <ideas>
+      <test ac="1">Unit test: VBench evaluation function with sample video. Test that evaluate_vbench() returns structured scores for all dimensions (temporal, frame-wise, text-video alignment). Test error handling when VBench unavailable (graceful degradation).</test>
+      <test ac="1,2">Unit test: Quality score computation and aggregation. Test that overall quality score is computed correctly (weighted average). Test score normalization to 0-100 scale.</test>
+      <test ac="2,3">Unit test: Threshold checking logic with various score combinations. Test that check_quality_thresholds() correctly identifies clips below thresholds. Test with edge cases (all scores above threshold, all below, mixed).</test>
+      <test ac="3">Unit test: Regeneration logic with retry limits. Test that regenerate_clip() respects max 2 attempts. Test that regeneration attempts are tracked in QualityMetric model.</test>
+      <test ac="4">Unit test: QualityMetric model creation and relationships. Test that QualityMetric can be created with all required fields. Test relationship to Generation model. Test JSON field for vbench_scores.</test>
+      <test ac="4">Integration test: Migration up and down. Test that quality_metrics table migration runs successfully on SQLite and PostgreSQL. Test that migration is idempotent.</test>
+      <test ac="1,3,4">Integration test: Quality control integrated into full generation pipeline. Test that quality control runs after clip generation (if enabled). Test that quality metrics are stored in database. Test that regeneration is triggered on low quality.</test>
+      <test ac="3">Integration test: Successful regeneration improves quality. Test that regenerated clip has better quality scores than original. Test that regeneration attempts are tracked correctly.</test>
+      <test ac="4">Integration test: Quality metrics endpoint returns correct data. Test GET /api/generations/{id}/quality returns all quality metrics for generation. Test response structure includes all required fields.</test>
+      <test ac="4">Integration test: Authorization prevents access to other users' metrics. Test that users cannot access quality metrics for other users' generations. Test authentication requirement.</test>
+      <test ac="4">Unit test: Quality control respects coherence settings flag. Test that quality control is skipped when vbench_quality_control is False. Test that quality control runs when enabled.</test>
+      <test ac="1,4">Performance test: Quality assessment doesn't significantly slow pipeline. Measure VBench evaluation time per clip. Test that async quality assessment works correctly. Target: &lt;30 seconds per clip overhead.</test>
+    </ideas>
+  </tests>
+</story-context>
+
