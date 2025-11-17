@@ -24,7 +24,7 @@ FRAMEWORK_TEMPLATES: Dict[str, List[Dict[str, any]]] = {
         {"type": "Attention", "duration": 4, "description": "Grab attention with compelling visuals"},
         {"type": "Interest", "duration": 4, "description": "Build interest with product features"},
         {"type": "Desire", "duration": 4, "description": "Create desire through benefits"},
-        {"type": "Action", "duration": 3, "description": "Prompt action with clear CTA"}
+        {"type": "Action", "duration": 4, "description": "Prompt action with clear CTA"}
     ]
 }
 
@@ -104,13 +104,29 @@ def _generate_scenes_from_template(
 
 
 def _enrich_scene(scene: Scene, ad_spec: AdSpecification, index: int) -> Scene:
-    """Enrich scene visual prompt with brand keywords and context."""
+    """
+    Enrich scene visual prompt with brand keywords and context.
+    
+    Note: The scene.visual_prompt is already built from compact fragments (3-7 words each)
+    by _build_sora_scene_prompt(). This function adds style/mood guidance as post-processing
+    to help Sora-2 understand the overall aesthetic without modifying the core scene fragments.
+    """
     # Enhance visual prompt with brand guidelines
     brand_keywords = ad_spec.brand_guidelines.visual_style_keywords
     mood = ad_spec.brand_guidelines.mood
-    
-    # Add brand context to visual prompt
-    enriched_prompt = f"{scene.visual_prompt}. Visual style: {brand_keywords}. Mood: {mood}. Brand colors: {', '.join(ad_spec.brand_guidelines.brand_colors)}"
+
+    # Start with the compact fragment-based prompt from LLM
+    enriched_parts = [scene.visual_prompt]
+
+    # Add style/mood guidance (these are style hints, not scene description fragments)
+    # They help Sora-2 understand the overall aesthetic
+    if brand_keywords:
+        enriched_parts.append(f"The overall visual style feels {brand_keywords}.")
+
+    if mood:
+        enriched_parts.append(f"The mood is {mood}.")
+
+    enriched_prompt = "\n".join(enriched_parts)
     
     # Ensure text overlay uses brand colors
     text_overlay = scene.text_overlay
