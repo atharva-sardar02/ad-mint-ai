@@ -1,9 +1,28 @@
 """
 Pydantic schemas for video editor requests and responses.
 """
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class EditingSessionListItem(BaseModel):
+    """Schema for a single editing session in the list."""
+    id: str = Field(..., description="Editing session ID")
+    generation_id: str = Field(..., description="Generation ID")
+    title: str = Field(..., description="Video title")
+    thumbnail_url: Optional[str] = Field(None, description="Video thumbnail URL")
+    duration: Optional[float] = Field(None, description="Video duration in seconds")
+    status: str = Field(..., description="Session status (active, saved, exported)")
+    updated_at: datetime = Field(..., description="Last updated timestamp")
+    created_at: datetime = Field(..., description="Created timestamp")
+
+
+class EditingSessionListResponse(BaseModel):
+    """Schema for editing sessions list response."""
+    total: int = Field(..., description="Total number of editing sessions")
+    sessions: List[EditingSessionListItem] = Field(..., description="List of editing sessions")
 
 
 class ClipInfo(BaseModel):
@@ -31,6 +50,8 @@ class EditorDataResponse(BaseModel):
     aspect_ratio: str = Field(..., description="Video aspect ratio (e.g., '9:16')")
     framework: Optional[str] = Field(None, description="Ad framework used (PAS, BAB, AIDA)")
     trim_state: Optional[dict] = Field(None, description="Trim state for clips (clipId -> {trimStart, trimEnd})")
+    track_assignments: Optional[dict] = Field(None, description="Track assignments for clips (clipId -> trackIndex)")
+    clip_positions: Optional[dict] = Field(None, description="Clip position overrides (clipId -> startTime)")
 
 
 class TrimClipRequest(BaseModel):
@@ -119,3 +140,21 @@ class ExportStatusResponse(BaseModel):
     progress: float = Field(..., ge=0, le=100, description="Export progress percentage (0-100)")
     current_step: str = Field(..., description="Current export step description")
     estimated_time_remaining: Optional[int] = Field(None, description="Estimated time remaining in seconds")
+
+
+class UpdateClipPositionRequest(BaseModel):
+    """Request schema for POST /api/editor/{generation_id}/position endpoint."""
+
+    clip_id: str = Field(..., description="ID of the clip to move")
+    start_time: float = Field(..., ge=0, description="New start time for the clip")
+    track_index: int = Field(0, ge=0, description="New track index (0-based, default 0)")
+
+
+class UpdateClipPositionResponse(BaseModel):
+    """Response schema for POST /api/editor/{generation_id}/position endpoint."""
+
+    message: str = Field(..., description="Success message")
+    clip_id: str = Field(..., description="ID of the moved clip")
+    start_time: float = Field(..., description="New start time")
+    track_index: int = Field(..., description="New track index")
+    updated_state: dict = Field(..., description="Updated editing state")

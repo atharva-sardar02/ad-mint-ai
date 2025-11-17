@@ -186,6 +186,7 @@ def get_or_create_editing_session(
                 "merged_with": [],
                 "scene_number": clip.scene_number,
                 "text_overlay": clip.text_overlay,
+                "track_index": 0,  # Default to track 0
             }
             for clip in clips
         ],

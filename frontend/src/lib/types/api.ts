@@ -195,6 +195,8 @@ export interface EditorData {
   aspect_ratio: string;
   framework: string | null;
   trim_state?: Record<string, { trimStart: number; trimEnd: number }> | null;
+  track_assignments?: Record<string, number> | null;
+  clip_positions?: Record<string, number> | null;
 }
 
 /**
