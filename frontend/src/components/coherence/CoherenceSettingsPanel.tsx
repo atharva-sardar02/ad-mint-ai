@@ -11,7 +11,9 @@ export interface CoherenceSettings {
   lora: boolean;
   enhanced_planning: boolean;
   vbench_quality_control: boolean;
+  automatic_regeneration: boolean; // Automatically regenerate clips that fail quality thresholds
   post_processing_enhancement: boolean;
+  color_grading: boolean; // Apply color grading based on brand style
   controlnet: boolean;
   csfd_detection: boolean;
 }
@@ -191,25 +193,50 @@ const TECHNIQUE_INFO: TechniqueInfo[] = [
     recommended: true,
     timeImpact: "Medium",
     costImpact: "Low",
-    tooltip: "VBench quality control automatically evaluates generated video clips using research-backed quality metrics to ensure high standards.",
+    tooltip: "VBench quality control automatically evaluates generated video clips using research-backed quality metrics to ensure high standards. Quality scores are displayed for each clip.",
     requires: [],
     incompatibleWith: [],
-    implemented: false, // ⏸️ Story 7.5 - Backlog
-    comingSoonMessage: "Coming soon - Story 7.5",
+    implemented: true, // ✅ Story 7.6 - Implemented
+  },
+  {
+    key: "automatic_regeneration",
+    label: "Automatic Regeneration",
+    description: "Automatically regenerate clips that fail quality thresholds",
+    defaultEnabled: false,
+    recommended: false,
+    timeImpact: "High",
+    costImpact: "Medium",
+    tooltip: "When enabled, clips that fail quality thresholds will be automatically regenerated up to 2 times. This can significantly increase generation time and cost. Requires VBench Quality Control to be enabled.",
+    requires: ["vbench_quality_control"],
+    incompatibleWith: [],
+    implemented: true, // ✅ Story 7.6 - Implemented
   },
   {
     key: "post_processing_enhancement",
     label: "Post-Processing Enhancement",
-    description: "Applies color grading and visual enhancements to final video",
+    description: "Applies visual enhancements to final video",
     defaultEnabled: true,
     recommended: true,
     timeImpact: "Low",
     costImpact: "None",
-    tooltip: "Post-processing enhancement applies color grading, contrast adjustments, and other visual improvements to the final video output.",
+    tooltip: "Post-processing enhancement applies contrast adjustments and other visual improvements to the final video output.",
     requires: [],
     incompatibleWith: [],
     implemented: false, // ⏸️ Story 7.6 - Backlog
     comingSoonMessage: "Coming soon - Story 7.6",
+  },
+  {
+    key: "color_grading",
+    label: "Color Grading",
+    description: "Apply color grading based on brand style (cinematic, luxury, vibrant)",
+    defaultEnabled: false,
+    recommended: false,
+    timeImpact: "Low",
+    costImpact: "None",
+    tooltip: "Color grading applies brand-specific color treatments to the final video. Styles include cinematic (desaturated, cooler tones), luxury (warm tones, enhanced contrast), and vibrant (enhanced saturation, bright colors).",
+    requires: [],
+    incompatibleWith: [],
+    implemented: true, // ✅ Implemented
   },
   {
     key: "controlnet",
@@ -298,10 +325,17 @@ export const CoherenceSettingsPanel: React.FC<CoherenceSettingsPanelProps> = ({
       return;
     }
     
-    onChange({
+    const newSettings = {
       ...settings,
       [key]: !settings[key],
-    });
+    };
+    
+    // If disabling vbench_quality_control, also disable automatic_regeneration
+    if (key === "vbench_quality_control" && !newSettings.vbench_quality_control) {
+      newSettings.automatic_regeneration = false;
+    }
+    
+    onChange(newSettings);
   };
 
   const isTechniqueDisabled = (technique: TechniqueInfo): boolean => {

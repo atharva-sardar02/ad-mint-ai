@@ -6,6 +6,7 @@ import { useAuthStore } from "../store/authStore";
 import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Textarea";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
+import { Toast } from "../components/ui/Toast";
 import { ProgressBar } from "../components/ProgressBar";
 import { CoherenceSettingsPanel, validateCoherenceSettings } from "../components/coherence";
 import type { CoherenceSettings as CoherenceSettingsType } from "../components/coherence";
@@ -46,7 +47,9 @@ export const Dashboard: React.FC = () => {
     lora: false,
     enhanced_planning: true,
     vbench_quality_control: true,
+    automatic_regeneration: false,
     post_processing_enhancement: true,
+    color_grading: false,
     controlnet: false,
     csfd_detection: false,
   });
@@ -60,6 +63,11 @@ export const Dashboard: React.FC = () => {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+    isVisible: boolean;
+  }>({ message: "", type: "info", isVisible: false });
 
   /**
    * Fetch latest user profile data on mount and when generation completes.
@@ -330,27 +338,29 @@ export const Dashboard: React.FC = () => {
         );
       }
       
-      // Set initial status for polling
-      setActiveGeneration({
-        generation_id: response.generation_id,
-        status: response.status,
-        progress: 0,
-        current_step: "Initializing",
-        video_url: null,
-        cost: null,
-        error: null,
-        num_scenes: null,
-        available_clips: 0,
-      });
-      
-      // Clear prompt and title after successful submission
+      // Clear prompt and title immediately after successful submission
       setPrompt("");
       setTitle("");
+      setIsLoading(false);
+      
+      // Show notification
+      setToast({
+        message: "Video is being generated! Check the Queue tab for progress and Gallery for finished videos.",
+        type: "success",
+        isVisible: true,
+      });
+      
+      // Auto-hide after 10 seconds
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+      }, 10000);
+      
+      // Don't set activeGeneration - let user continue generating if desired
+      // User can check Queue tab for status
     } catch (error: any) {
       setApiError(
         error?.message || "Failed to start video generation. Please try again."
       );
-    } finally {
       setIsLoading(false);
     }
   };
@@ -366,8 +376,22 @@ export const Dashboard: React.FC = () => {
     try {
       const response = await generationService.generateParallel(variations, comparisonType);
       
-      // Navigate to comparison view
-      navigate(`/comparison/${response.group_id}`);
+      // Show notification instead of navigating
+      const estimatedTime = response.estimated_time_formatted || "a few minutes";
+      const message = `Videos are being generated! Estimated time: ${estimatedTime}. Check the Queue tab for status and Gallery for finished videos.`;
+      
+      setToast({
+        message,
+        type: "success",
+        isVisible: true,
+      });
+      
+      // Auto-hide after 10 seconds
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+      }, 10000);
+      
+      // Stay on dashboard (don't navigate)
     } catch (error: any) {
       setApiError(
         error?.response?.data?.error?.message || error?.message || "Failed to start parallel generation. Please try again."
@@ -483,7 +507,8 @@ export const Dashboard: React.FC = () => {
                       ? activeGeneration.video_url 
                       : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/output/${activeGeneration.video_url}`}
                     controls
-                    className="w-full rounded-lg"
+                    className="w-full h-auto max-h-[80vh] object-contain rounded-lg mx-auto block"
+                    style={{ aspectRatio: 'auto' }}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -588,7 +613,7 @@ export const Dashboard: React.FC = () => {
                 required
               />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                 <BasicSettingsPanel
                   settings={basicSettings}
                   onChange={setBasicSettings}
@@ -620,6 +645,15 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
+        duration={10000}
+      />
     </div>
   );
 };

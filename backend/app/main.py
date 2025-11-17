@@ -4,9 +4,12 @@ FastAPI application entry point.
 import logging
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import auth, editor, generations, users
 from app.core.config import settings
@@ -23,15 +26,78 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS middleware - allow all origins
+# CORS middleware - use specific origins when credentials are enabled
+# Cannot use allow_origins=["*"] with allow_credentials=True per CORS spec
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,  # Use configured origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Helper function to get CORS headers
+def get_cors_headers(request: Request) -> dict:
+    """
+    Get CORS headers for a request, respecting allowed origins.
+    """
+    origin = request.headers.get("origin")
+    if origin and origin in settings.CORS_ALLOWED_ORIGINS:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    # If origin not in allowed list, don't add CORS headers (CORS middleware will handle it)
+    return {}
+
+# Global exception handler to ensure CORS headers are added to error responses
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to ensure CORS headers are added to all error responses.
+    """
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    # Return error response with CORS headers
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An internal server error occurred"
+            }
+        },
+        headers=get_cors_headers(request)
+    )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    HTTP exception handler to ensure CORS headers are added.
+    """
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.detail if isinstance(exc.detail, dict) else {"detail": str(exc.detail)},
+        headers=get_cors_headers(request)
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Validation exception handler to ensure CORS headers are added.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Validation error",
+                "details": exc.errors()
+            }
+        },
+        headers=get_cors_headers(request)
+    )
 
 # Include routers (after CORS middleware)
 app.include_router(auth.router)

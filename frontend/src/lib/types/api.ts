@@ -84,6 +84,10 @@ export interface GenerationListItem {
   variation_label?: string | null; // Variation label (A, B, C, etc.) if part of parallel generation
   coherence_settings?: Record<string, boolean> | null; // Coherence technique settings
   parent_generation_id?: string | null; // ID of original generation if this is an edited version
+  model?: string | null; // Model used for generation (e.g., "openai/sora-2")
+  num_clips?: number | null; // Number of clips requested
+  use_llm?: boolean | null; // Whether LLM enhancement was used
+  generation_time_seconds?: number | null; // Time taken to generate the video in seconds
 }
 
 /**
@@ -139,6 +143,44 @@ export interface ClipInfo {
     color: string;
     animation: string;
   } | null;
+}
+
+/**
+ * Quality metric detail for a single clip.
+ */
+export interface QualityMetricDetail {
+  scene_number: number;
+  clip_path: string;
+  vbench_scores: {
+    temporal_quality?: number;
+    subject_consistency?: number;
+    background_consistency?: number;
+    motion_smoothness?: number;
+    dynamic_degree?: number;
+    aesthetic_quality?: number;
+    imaging_quality?: number;
+    object_class_alignment?: number;
+    text_video_alignment?: number;
+    overall_quality: number;
+  };
+  overall_quality: number;
+  passed_threshold: boolean;
+  regeneration_attempts: number;
+  created_at: string; // ISO datetime string
+}
+
+/**
+ * Quality metrics response from the API.
+ */
+export interface QualityMetricsResponse {
+  generation_id: string;
+  clips: QualityMetricDetail[];
+  summary: {
+    average_quality: number;
+    total_clips: number;
+    passed_count: number;
+    failed_count: number;
+  };
 }
 
 /**

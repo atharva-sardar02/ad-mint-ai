@@ -23,7 +23,9 @@ def get_default_settings() -> CoherenceSettings:
         lora=False,
         enhanced_planning=True,
         vbench_quality_control=True,
+        automatic_regeneration=False,  # Disabled by default - user must explicitly enable
         post_processing_enhancement=True,
+        color_grading=False,  # Disabled by default - user must explicitly enable
         controlnet=False,
         csfd_detection=False,
     )
@@ -60,7 +62,9 @@ def apply_defaults(settings: Optional[Dict]) -> CoherenceSettings:
         lora=settings.get("lora", defaults.lora),
         enhanced_planning=settings.get("enhanced_planning", defaults.enhanced_planning),
         vbench_quality_control=settings.get("vbench_quality_control", defaults.vbench_quality_control),
+        automatic_regeneration=settings.get("automatic_regeneration", defaults.automatic_regeneration),
         post_processing_enhancement=settings.get("post_processing_enhancement", defaults.post_processing_enhancement),
+        color_grading=settings.get("color_grading", defaults.color_grading),
         controlnet=settings.get("controlnet", defaults.controlnet),
         csfd_detection=settings.get("csfd_detection", defaults.csfd_detection),
     )
@@ -96,6 +100,10 @@ def validate_settings(settings: CoherenceSettings) -> tuple[bool, Optional[str]]
     # CSFD Detection requires Enhanced Planning for entity detection
     if settings.csfd_detection and not settings.enhanced_planning:
         return False, "CSFD Character Consistency Detection requires Enhanced LLM Planning to be enabled"
+    
+    # Automatic regeneration requires VBench quality control
+    if settings.automatic_regeneration and not settings.vbench_quality_control:
+        return False, "Automatic Regeneration requires VBench Quality Control to be enabled"
     
     # Check incompatibilities
     # ControlNet and CSFD both do compositional consistency - using both is redundant

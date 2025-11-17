@@ -56,6 +56,9 @@ class Generation(Base):
     coherence_settings = Column(JSON, nullable=True)  # Coherence technique settings
     seed_value = Column(Integer, nullable=True)  # Seed value for visual consistency across scenes
     cancellation_requested = Column(Boolean, default=False)  # Cancellation flag
+    model = Column(String(100), nullable=True)  # Model used for generation (e.g., "openai/sora-2")
+    num_clips = Column(Integer, nullable=True)  # Number of clips requested
+    use_llm = Column(Boolean, default=True, nullable=True)  # Whether LLM enhancement was used
     generation_group_id = Column(
         String(36),
         ForeignKey("generation_groups.id"),
@@ -70,4 +73,5 @@ class Generation(Base):
     user = relationship("User", back_populates="generations")
     generation_group = relationship("GenerationGroup", back_populates="generations")
     parent_generation = relationship("Generation", remote_side=[id], backref="edited_versions")
+    quality_metrics = relationship("QualityMetric", back_populates="generation", cascade="all, delete-orphan")
 

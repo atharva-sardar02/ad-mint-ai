@@ -4,7 +4,8 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { loadEditorData, trimClip, splitClip, mergeClips, saveEditingSession, exportVideo, getExportStatus, cancelExport } from "../lib/editorApi";
-import type { EditorData } from "../lib/types/api";
+import { getQualityMetrics } from "../lib/services/generations";
+import type { EditorData, QualityMetricsResponse } from "../lib/types/api";
 import { Button } from "../components/ui/Button";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { GalleryPanel } from "../components/editor/GalleryPanel";
@@ -41,6 +42,8 @@ export const Editor: React.FC = () => {
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const exportStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [qualityMetrics, setQualityMetrics] = useState<QualityMetricsResponse | null>(null);
+  const [loadingQualityMetrics, setLoadingQualityMetrics] = useState(false);
 
   // Load editor data if generationId is provided
   useEffect(() => {
@@ -77,6 +80,30 @@ export const Editor: React.FC = () => {
 
     fetchEditorData();
   }, [generationId]);
+
+  // Fetch quality metrics when editor data is loaded
+  useEffect(() => {
+    const fetchQualityMetrics = async () => {
+      if (!generationId || !editorData) {
+        return;
+      }
+
+      try {
+        setLoadingQualityMetrics(true);
+        const metrics = await getQualityMetrics(generationId);
+        console.log("Quality metrics fetched in Editor:", metrics);
+        setQualityMetrics(metrics);
+      } catch (err) {
+        console.error("Error fetching quality metrics:", err);
+        // Set to null so UI can handle gracefully
+        setQualityMetrics(null);
+      } finally {
+        setLoadingQualityMetrics(false);
+      }
+    };
+
+    fetchQualityMetrics();
+  }, [generationId, editorData]);
 
   // Handle video selection from gallery panel
   const handleVideoSelect = (selectedGenerationId: string) => {
@@ -740,15 +767,16 @@ export const Editor: React.FC = () => {
 
         {/* Editor Layout */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          {/* Video Preview Player Area */}
-          <div className="aspect-video bg-gray-200 relative">
+          {/* Video Preview Player Area - Aspect-aware container */}
+          <div className="w-full bg-gray-200 relative" style={{ minHeight: '400px' }}>
             {editorData.original_video_url ? (
               <video
                 ref={videoRef}
                 src={editorData.original_video_url}
                 controls
-                className="w-full h-full object-contain bg-black"
+                className="w-full h-auto max-h-[80vh] object-contain bg-black mx-auto block"
                 preload="metadata"
+                style={{ aspectRatio: 'auto' }}
               >
                 Your browser does not support the video tag.
               </video>
@@ -869,26 +897,46 @@ export const Editor: React.FC = () => {
                 Scene Clips ({editorData.clips.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {editorData.clips.map((clip) => (
-                  <div
-                    key={clip.clip_id}
-                    className="border border-gray-200 rounded-lg p-4"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">
-                        Scene {clip.scene_number}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {clip.duration.toFixed(1)}s
-                      </span>
-                    </div>
-                    {clip.text_overlay && (
-                      <div className="text-xs text-gray-600 mt-2">
-                        Overlay: {clip.text_overlay.text}
+                {editorData.clips.map((clip) => {
+                  // Find quality metric for this clip
+                  const clipQuality = qualityMetrics?.clips.find(
+                    (q) => q.scene_number === clip.scene_number
+                  );
+                  
+                  return (
+                    <div
+                      key={clip.clip_id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700">
+                            Scene {clip.scene_number}
+                          </span>
+                          {clipQuality && (
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                              clipQuality.overall_quality >= 80
+                                ? "bg-green-100 text-green-800"
+                                : clipQuality.overall_quality >= 70
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}>
+                              {clipQuality.overall_quality.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {clip.duration.toFixed(1)}s
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {clip.text_overlay && (
+                        <div className="text-xs text-gray-600 mt-2">
+                          Overlay: {clip.text_overlay.text}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

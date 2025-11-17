@@ -86,7 +86,7 @@ development_status:
   7-3-llm-guided-multi-scene-planning-videodirectorgpt-style: backlog
   7-4-ip-adapter-integration-for-characterproduct-identity-preservation: backlog
   7-5-lora-training-pipeline-for-recurring-characterproduct-identity: backlog
-  7-6-vbench-integration-for-automated-quality-control: backlog
+  7-6-vbench-integration-for-automated-quality-control: done
   7-7-enhanced-post-processing-with-brand-palette-preservation: backlog
   7-8-cross-scene-entity-consistency-detection-csfd-score: backlog
   7-9-controlnet-integration-for-compositional-consistency: backlog

@@ -10,12 +10,14 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.models.editing_session import EditingSession
 from app.db.models.generation import Generation
+from app.db.models.quality_metric import QualityMetric
 from app.db.models.user import User
 
 # Ensure models are registered (explicit import)
 _ = Generation
 _ = User
 _ = EditingSession
+_ = QualityMetric
 
 
 @pytest.fixture(scope="function")

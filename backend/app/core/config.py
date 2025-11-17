@@ -54,6 +54,17 @@ class Settings:
     
     # Storage mode: 'local' for local disk, 's3' for S3 storage
     STORAGE_MODE: str = os.getenv("STORAGE_MODE", "local")
+    
+    # Quality control thresholds (VBench metrics)
+    QUALITY_THRESHOLD_TEMPORAL: float = float(os.getenv("QUALITY_THRESHOLD_TEMPORAL", "70.0"))
+    QUALITY_THRESHOLD_FRAME_WISE: float = float(os.getenv("QUALITY_THRESHOLD_FRAME_WISE", "70.0"))
+    QUALITY_THRESHOLD_TEXT_VIDEO_ALIGNMENT: float = float(os.getenv("QUALITY_THRESHOLD_TEXT_VIDEO_ALIGNMENT", "70.0"))
+    QUALITY_THRESHOLD_OVERALL: float = float(os.getenv("QUALITY_THRESHOLD_OVERALL", "70.0"))
+    
+    # Automatic regeneration based on quality scores (disabled by default)
+    # When False: Quality is evaluated and stored, but regeneration is not triggered automatically
+    # Quality metrics are still available via API for manual review
+    ENABLE_AUTOMATIC_REGENERATION: bool = os.getenv("ENABLE_AUTOMATIC_REGENERATION", "false").lower() == "true"
 
 
 settings = Settings()

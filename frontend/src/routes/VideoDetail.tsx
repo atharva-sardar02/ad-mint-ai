@@ -3,9 +3,8 @@
  */
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getGenerations } from "../lib/services/generations";
-import { deleteGeneration } from "../lib/services/generations";
-import type { GenerationListItem } from "../lib/types/api";
+import { getGenerations, getGeneration, deleteGeneration, getQualityMetrics } from "../lib/services/generations";
+import type { GenerationListItem, QualityMetricsResponse } from "../lib/types/api";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toast } from "../components/ui/Toast";
@@ -21,9 +20,27 @@ const SETTING_LABELS: Record<string, string> = {
   lora: "LoRA Training",
   enhanced_planning: "Enhanced LLM Planning",
   vbench_quality_control: "VBench Quality Control",
+  automatic_regeneration: "Automatic Regeneration",
   post_processing_enhancement: "Post-Processing Enhancement",
   controlnet: "ControlNet for Compositional Consistency",
   csfd_detection: "CSFD Character Consistency Detection",
+};
+
+/**
+ * Map coherence setting keys to implementation status.
+ * Only features that are actually implemented should show as green when enabled.
+ */
+const IMPLEMENTED_FEATURES: Record<string, boolean> = {
+  seed_control: true, // ✅ Story 7.1 - Implemented
+  ip_adapter_reference: false, // ⏸️ Story 7.3 - Backlog
+  ip_adapter_sequential: false, // ⏸️ Story 7.3 - Backlog
+  lora: false, // ⏸️ Story 7.4 - Backlog
+  enhanced_planning: false, // ⏸️ Story 7.2 - Backlog
+  vbench_quality_control: true, // ✅ Story 7.6 - Implemented
+  automatic_regeneration: true, // ✅ Story 7.6 - Implemented
+  post_processing_enhancement: false, // ⏸️ Story 7.6 - Backlog
+  controlnet: false, // ⏸️ Story 7.8 - Backlog
+  csfd_detection: false, // ⏸️ Story 7.7 - Backlog
 };
 
 /**
@@ -59,6 +76,9 @@ export const VideoDetail: React.FC = () => {
     isVisible: boolean;
   }>({ message: "", type: "info", isVisible: false });
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [qualityMetrics, setQualityMetrics] = useState<QualityMetricsResponse | null>(null);
+  const [loadingQualityMetrics, setLoadingQualityMetrics] = useState(false);
+  const [showQualityMetrics, setShowQualityMetrics] = useState(false);
 
   // Fetch generation details
   useEffect(() => {
@@ -79,33 +99,15 @@ export const VideoDetail: React.FC = () => {
           setError(null);
         }
 
-        // Fetch generations and find the one matching the ID
-        // Note: Backend limits to 100 per page, so we paginate if needed
-        // TODO: Create dedicated GET /api/generations/{id} endpoint for better performance
-        let found: GenerationListItem | undefined;
-        let offset = 0;
-        const limit = 100; // Backend maximum limit
+        // Fetch generation directly by ID using dedicated endpoint
+        const found = await getGeneration(id);
         
-        while (!found && isMounted) {
-          const response = await getGenerations({ limit, offset, sort: "created_at_desc" });
-          
-          if (!isMounted) return;
-          
-          found = response.generations.find((g) => g.id === id);
-          
-          if (found) {
-            setGeneration(found);
-            break;
-          }
-          
-          // If we've fetched all available generations, stop
-          if (offset + response.generations.length >= response.total) {
-            setError("Video not found");
-            break;
-          }
-          
-          // Fetch next page
-          offset += limit;
+        if (!isMounted) return;
+        
+        if (found) {
+          setGeneration(found);
+        } else {
+          setError("Video not found");
         }
       } catch (err) {
         if (!isMounted) return;
@@ -127,6 +129,42 @@ export const VideoDetail: React.FC = () => {
       isMounted = false;
     };
   }, [id]);
+
+  // Fetch quality metrics when generation is loaded
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchQualityMetrics = async () => {
+      if (!id || !generation || generation.status !== "completed") {
+        return;
+      }
+
+      try {
+        if (isMounted) {
+          setLoadingQualityMetrics(true);
+        }
+
+        const metrics = await getQualityMetrics(id);
+        
+        if (isMounted) {
+          console.log("Quality metrics fetched:", metrics);
+          setQualityMetrics(metrics);
+        }
+      } catch (err) {
+        // Log error for debugging - quality metrics are optional but should be visible if available
+        console.error("Error fetching quality metrics:", err);
+        if (isMounted) {
+          setQualityMetrics(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingQualityMetrics(false);
+        }
+      }
+    };
+
+    fetchQualityMetrics();
+  }, [id, generation]);
 
   // Fetch related versions (original or edited versions)
   useEffect(() => {
@@ -241,6 +279,19 @@ export const VideoDetail: React.FC = () => {
     });
   };
 
+  // Format generation time for display
+  const formatGenerationTime = (seconds: number): string => {
+    if (seconds < 60) {
+      return `${seconds} second${seconds !== 1 ? "s" : ""}`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (remainingSeconds === 0) {
+      return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+    }
+    return `${minutes} minute${minutes !== 1 ? "s" : ""} and ${remainingSeconds} second${remainingSeconds !== 1 ? "s" : ""}`;
+  };
+
   // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -342,15 +393,16 @@ export const VideoDetail: React.FC = () => {
 
         {/* Video details */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          {/* Video Player or Thumbnail */}
-          <div className="aspect-video bg-gray-200 relative">
+          {/* Video Player or Thumbnail - Aspect-aware container */}
+          <div className="w-full bg-gray-200 relative" style={{ minHeight: '400px' }}>
             {generation.status === "completed" && generation.video_url ? (
-              // Show video player for completed videos
+              // Show video player for completed videos - aspect-aware
               <video
                 src={generation.video_url}
                 controls
-                className="w-full h-full object-contain bg-black"
+                className="w-full h-auto max-h-[80vh] object-contain bg-black mx-auto block"
                 preload="metadata"
+                style={{ aspectRatio: 'auto' }}
               >
                 Your browser does not support the video tag.
               </video>
@@ -471,6 +523,43 @@ export const VideoDetail: React.FC = () => {
               <p className="text-gray-900">{generation.prompt}</p>
             </div>
 
+            {/* Basic Settings */}
+            <div className="mb-6">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">
+                Basic Settings
+              </h2>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {generation.model && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Model</span>
+                      <p className="text-sm text-gray-900 mt-1">{generation.model}</p>
+                    </div>
+                  )}
+                  {generation.num_clips !== null && generation.num_clips !== undefined && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Number of Clips</span>
+                      <p className="text-sm text-gray-900 mt-1">{generation.num_clips}</p>
+                    </div>
+                  )}
+                  {generation.use_llm !== null && generation.use_llm !== undefined && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">LLM Enhancement</span>
+                      <p className="text-sm text-gray-900 mt-1">{generation.use_llm ? "Yes" : "No"}</p>
+                    </div>
+                  )}
+                  {generation.generation_time_seconds !== null && generation.generation_time_seconds !== undefined && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Generation Time</span>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {formatGenerationTime(generation.generation_time_seconds)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Coherence Settings */}
             {generation.coherence_settings && (
               <div className="mb-6">
@@ -489,14 +578,14 @@ export const VideoDetail: React.FC = () => {
                       })
                       .map(([key, enabled]) => {
                         const label = getSettingLabel(key);
-                        // VBench is not implemented yet - grey it out
-                        const isNotImplemented = key === 'vbench_quality_control';
+                        const isImplemented = IMPLEMENTED_FEATURES[key] ?? false;
+                        const isNotImplemented = !isImplemented;
                         
                         return (
                           <div
                             key={key}
                             className={`flex items-center space-x-2 ${
-                              enabled && !isNotImplemented 
+                              enabled && isImplemented 
                                 ? 'text-gray-900' 
                                 : isNotImplemented
                                 ? 'text-gray-400'
@@ -504,13 +593,13 @@ export const VideoDetail: React.FC = () => {
                             }`}
                           >
                             <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
-                              enabled && !isNotImplemented
+                              enabled && isImplemented
                                 ? 'bg-green-100 border-green-500' 
                                 : isNotImplemented
                                 ? 'bg-gray-50 border-gray-200'
                                 : 'bg-gray-100 border-gray-300'
                             }`}>
-                              {enabled && !isNotImplemented && (
+                              {enabled && isImplemented && (
                                 <svg
                                   className="w-3 h-3 text-green-600"
                                   fill="currentColor"
@@ -534,6 +623,139 @@ export const VideoDetail: React.FC = () => {
                         );
                       })}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quality Metrics Section - Always visible when available */}
+            {generation.status === "completed" && (
+              <div className="mb-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  {loadingQualityMetrics ? (
+                    <p className="text-sm text-gray-500">Loading quality metrics...</p>
+                  ) : qualityMetrics && qualityMetrics.clips.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Summary */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pb-4 border-b border-gray-200">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Average Quality</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {qualityMetrics.summary.average_quality.toFixed(1)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Total Clips</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {qualityMetrics.summary.total_clips}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Passed</p>
+                          <p className="text-lg font-semibold text-green-600">
+                            {qualityMetrics.summary.passed_count}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Failed</p>
+                          <p className="text-lg font-semibold text-red-600">
+                            {qualityMetrics.summary.failed_count}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Clip Details - Per Clip Quality */}
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3">Quality by Clip</h3>
+                        {qualityMetrics.clips.map((clip) => (
+                            <div
+                              key={clip.scene_number}
+                              className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    Clip {clip.scene_number}: {clip.overall_quality.toFixed(1)}%
+                                  </span>
+                                  {clip.passed_threshold ? (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">
+                                      Passed
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">
+                                      Failed
+                                    </span>
+                                  )}
+                                  {clip.regeneration_attempts > 0 && (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded bg-yellow-100 text-yellow-800">
+                                      Regenerated ({clip.regeneration_attempts}x)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Overall Quality Score Bar */}
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-gray-600">Overall Quality</span>
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {clip.overall_quality.toFixed(1)}
+                                  </span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full ${
+                                      clip.overall_quality >= 80
+                                        ? "bg-green-500"
+                                        : clip.overall_quality >= 70
+                                        ? "bg-yellow-500"
+                                        : "bg-red-500"
+                                    }`}
+                                    style={{ width: `${clip.overall_quality}%` }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Dimension Scores (Collapsible) */}
+                              <details className="mt-2">
+                                <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-900">
+                                  View dimension scores
+                                </summary>
+                                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                  {clip.vbench_scores.temporal_quality !== undefined && (
+                                    <div>
+                                      <span className="text-gray-600">Temporal:</span>{" "}
+                                      <span className="font-medium">{clip.vbench_scores.temporal_quality.toFixed(1)}</span>
+                                    </div>
+                                  )}
+                                  {clip.vbench_scores.aesthetic_quality !== undefined && (
+                                    <div>
+                                      <span className="text-gray-600">Aesthetic:</span>{" "}
+                                      <span className="font-medium">{clip.vbench_scores.aesthetic_quality.toFixed(1)}</span>
+                                    </div>
+                                  )}
+                                  {clip.vbench_scores.imaging_quality !== undefined && (
+                                    <div>
+                                      <span className="text-gray-600">Imaging:</span>{" "}
+                                      <span className="font-medium">{clip.vbench_scores.imaging_quality.toFixed(1)}</span>
+                                    </div>
+                                  )}
+                                  {clip.vbench_scores.text_video_alignment !== undefined && (
+                                    <div>
+                                      <span className="text-gray-600">Text-Video:</span>{" "}
+                                      <span className="font-medium">{clip.vbench_scores.text_video_alignment.toFixed(1)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </details>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">
+                        Quality metrics not available for this generation.
+                      </p>
+                    )}
                 </div>
               </div>
             )}

@@ -53,6 +53,8 @@ export interface ParallelGenerateResponse {
   generation_ids: string[];
   status: string;
   message: string;
+  estimated_time_seconds?: number;
+  estimated_time_formatted?: string;
 }
 
 export interface VariationDetail {

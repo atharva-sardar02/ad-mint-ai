@@ -15,7 +15,9 @@ class CoherenceSettings(BaseModel):
     lora: bool = Field(default=False, description="LoRA training for character/product consistency")
     enhanced_planning: bool = Field(default=True, description="Enhanced LLM planning")
     vbench_quality_control: bool = Field(default=True, description="VBench quality control")
+    automatic_regeneration: bool = Field(default=False, description="Automatically regenerate clips that fail quality thresholds")
     post_processing_enhancement: bool = Field(default=True, description="Post-processing enhancement")
+    color_grading: bool = Field(default=False, description="Apply color grading based on brand style")
     controlnet: bool = Field(default=False, description="ControlNet for compositional consistency")
     csfd_detection: bool = Field(default=False, description="CSFD character consistency detection")
 
@@ -28,7 +30,9 @@ class CoherenceSettings(BaseModel):
                 "lora": False,
                 "enhanced_planning": True,
                 "vbench_quality_control": True,
+                "automatic_regeneration": False,
                 "post_processing_enhancement": True,
+                "color_grading": False,
                 "controlnet": False,
                 "csfd_detection": False,
             }
@@ -37,7 +41,7 @@ class CoherenceSettings(BaseModel):
 
 class GenerateRequest(BaseModel):
     """Request schema for POST /api/generate endpoint."""
-    prompt: str = Field(..., min_length=10, max_length=500, description="User prompt for video generation")
+    prompt: str = Field(..., min_length=10, description="User prompt for video generation")
     title: Optional[str] = Field(default=None, max_length=200, description="Optional title for the video")
     coherence_settings: Optional[CoherenceSettings] = Field(
         default=None,
@@ -86,6 +90,10 @@ class GenerationListItem(BaseModel):
     variation_label: Optional[str] = None  # Variation label (A, B, C, etc.) if part of parallel generation
     coherence_settings: Optional[dict] = None  # Coherence technique settings
     parent_generation_id: Optional[str] = Field(None, description="ID of original generation if this is an edited version")
+    model: Optional[str] = Field(None, description="Model used for generation (e.g., 'openai/sora-2')")
+    num_clips: Optional[int] = Field(None, description="Number of clips requested")
+    use_llm: Optional[bool] = Field(None, description="Whether LLM enhancement was used")
+    generation_time_seconds: Optional[int] = Field(None, description="Time taken to generate the video in seconds")
 
     class Config:
         from_attributes = True
@@ -121,6 +129,8 @@ class ParallelGenerateResponse(BaseModel):
     generation_ids: List[str]
     status: str
     message: str
+    estimated_time_seconds: Optional[int] = Field(None, description="Estimated generation time in seconds")
+    estimated_time_formatted: Optional[str] = Field(None, description="Human-readable estimated time (e.g., '2 minutes')")
 
 
 class VariationDetail(BaseModel):
@@ -197,3 +207,28 @@ class ScenePlan(BaseModel):
     scenes: List[Scene]
     total_duration: int
     framework: str
+
+
+# Quality Metrics Schemas
+class QualityMetricDetail(BaseModel):
+    """Quality metric detail for a single clip."""
+    scene_number: int
+    clip_path: str
+    vbench_scores: dict
+    overall_quality: float
+    passed_threshold: bool
+    regeneration_attempts: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class QualityMetricsResponse(BaseModel):
+    """Response schema for GET /api/generations/{id}/quality endpoint."""
+    generation_id: str
+    clips: List[QualityMetricDetail]
+    summary: dict = Field(
+        ...,
+        description="Summary statistics: average_quality, total_clips, passed_count, failed_count"
+    )
