@@ -254,9 +254,12 @@ def test_plan_scenes_enriches_visual_prompts(sample_ad_spec_pas):
     
     # Check that visual prompts contain brand keywords (enrichment adds these)
     for scene in scene_plan.scenes:
-        assert "luxury" in scene.visual_prompt.lower() or "modern" in scene.visual_prompt.lower() or "elegant" in scene.visual_prompt.lower()
-        assert "sophisticated" in scene.visual_prompt.lower()  # Mood is added during enrichment
-        assert "#8B4513" in scene.visual_prompt or "#D2691E" in scene.visual_prompt  # Brand colors are added
+        visual_lower = scene.visual_prompt.lower()
+        # Visual style keywords should be present
+        assert "luxury" in visual_lower or "modern" in visual_lower or "elegant" in visual_lower
+        # Mood should be present
+        assert "sophisticated" in visual_lower
+        # Brand colors are now used only in overlays, not embedded in the prompt text
 
 
 def test_plan_scenes_adjusts_durations(sample_ad_spec_pas):

@@ -1,15 +1,28 @@
 """
 LLM enhancement service for processing user prompts into structured ad specifications.
+Now includes a SECOND LLM STAGE:
+  Stage 1 → JSON blueprint generator (AIDA)
+  Stage 2 → Scene Assembler → Sora cinematic paragraph generation
 """
 import asyncio
 import json
 import logging
 from typing import Optional
+
 import openai
 from pydantic import ValidationError
 
 from app.core.config import settings
-from app.schemas.generation import AdSpecification
+from app.schemas.generation import (
+    AdSpecification,
+    AdSpec,
+    BrandGuidelines,
+    Scene,
+    TextOverlay,
+)
+
+# NEW IMPORT — the new LLM scene assembler
+from app.services.pipeline.scene_assembler import _assemble_scene_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -17,242 +30,453 @@ logger = logging.getLogger(__name__)
 INITIAL_RETRY_DELAY = 2  # seconds
 MAX_RETRY_DELAY = 60  # seconds
 
-# System prompt for LLM enhancement
-SYSTEM_PROMPT = """You are an expert advertising copywriter and strategist. Your task is to analyze a user's product description and create a comprehensive ad specification that will be used to generate a professional video advertisement.
+# System prompt for LLM enhancement - Sora-optimized
+SYSTEM_PROMPT = """SYSTEM: SORA AIDA BLUEPRINT GENERATOR — v4.0 (RICH DETAIL EDITION)
 
-Analyze the user's prompt and extract:
-1. Product description - A clear, compelling description of the product or service
-2. Brand guidelines - Brand name, colors (hex codes), visual style keywords, and mood
-3. Ad specifications - Target audience, call-to-action, and tone
-4. Framework selection - Choose the best framework (PAS, BAB, or AIDA) based on the product type:
-   - PAS (Problem-Agitation-Solution): Best for products that solve a specific problem
-   - BAB (Before-After-Bridge): Best for transformation or improvement products
-   - AIDA (Attention-Interest-Desire-Action): Best for general products needing awareness
-5. Scene breakdown - REQUIRED: You MUST create 3-5 scenes (minimum 3, maximum 5) that follow the selected framework, each with:
-   - Scene number (1, 2, 3...)
-   - Scene type (framework-specific, e.g., "Problem", "Agitation", "Solution" for PAS)
-   - Visual prompt (detailed description for video generation)
-   - Text overlay (text, position, font_size, color, animation)
-   - Duration (3-7 seconds per scene)
+ROLE:
+You are a professional video creative director.  
+You expand a short user prompt (1–3 sentences) into a rich, expressive, cinematic  
+**4-scene AIDA blueprint**.
 
-CRITICAL: The "scenes" array MUST contain at least 3 scenes and at most 5 scenes. Do not return fewer than 3 scenes.
+You do NOT produce Sora prose.  
+You produce the **semantic blueprint** that another LLM will later format into the final Sora prompt.
 
-Return your response as valid JSON matching this exact structure:
+Your output is consumed by a second LLM, so it must be:
+- high-quality
+- detailed
+- well-structured
+- varied by scene
+- semantically rich
+- behavior-focused
+- production-friendly
+
+---
+
+## 🔒 GLOBAL OUTPUT RULES
+
+- Output **ONLY valid JSON**.
+- No commentary or explanations outside JSON.
+- Produce **exactly 4 scenes**.
+- Each scene MUST be **exactly 4 seconds**.
+- `total_duration_seconds` MUST equal **16**.
+- Never describe or infer the product’s **appearance**, **color**, **shape**, **materials**, **screen/UI**, or **branding**.
+- Describe only **behavior**, **usage**, and **contextual interaction**.
+
+---
+
+## 🖼 REFERENCE IMAGE RULES (STRICT)
+
+Output this literal value:
+
+You NEVER see the image.  
+You MUST NOT describe it.  
+You MUST NOT guess visual features.
+
+Allowed:
+- “glances at the product”
+- “interacts with the product naturally”
+- “checks an update”
+- “uses during their activity”
+
+Not allowed:
+- any appearance description
+- any UI guess
+- any logo or material guess
+
+When a reference image is provided:
+- prefer **static**, **push-in**, or **slow glide** camera motion  
+- avoid excessive movement to reduce flicker
+
+---
+
+## 🎥 SCENE DESCRIPTION FORMAT (UPGRADED — RICH DETAIL)
+
+Each field must be a **semantic fragment**, not a sentence.  
+**3–7 words** each (except action & product_usage, which are short phrases).
+
+Your job is to provide *meaningful, precise, varied* scene materials.
+
+### **scene_description fields**
+
+**visual:**  
+- environment with strong contextual cues  
+- examples of detail level (not to be used literally):  
+  - “sunlit office with glass walls”  
+  - “cozy apartment with warm evening lamps”  
+  - “busy café with soft morning light”  
+
+**action:**  
+- one physical action, behavior-based  
+- e.g., “checking notifications”, “glancing mid-conversation”, “navigating features mid-jog”
+
+**camera:**  
+- one filmable movement:  
+  - “static”  
+  - “push-in”  
+  - “glide”  
+  - “slow pan”
+
+**lighting:**  
+- lighting tone + source (“morning window light”, “warm evening lamp light”)
+
+**mood:**  
+- one emotional word (“focused”, “optimistic”, “energized”, “calm”, “motivated”)
+
+**product_usage:**  
+- behavior ONLY (no appearance)  
+- e.g., “quick glance for updates”, “checking progress while jogging”
+
+---
+
+## 🎧 SOUND DESIGN (UPGRADED)
+
+A short 3–6 word ambient fragment, naturalistic only:
+
+- “quiet office hum”
+- “soft city ambience”
+- “light café chatter”
+- “park footsteps and breeze”
+
+Never include:
+- music  
+- whooshes  
+- impacts  
+- transitions  
+- stylized or cinematic SFX  
+
+Ambient only.
+
+---
+
+## 🎙 VOICEOVER (AIDA UPGRADE)
+
+Write **1–2 natural sentences** for each scene.
+
+Follow the AIDA emotional arc:
+
+**Scene 1: Curiosity**  
+- spark interest, raise a question, tease possibility  
+
+**Scene 2: Clarity**  
+- explain benefit simply and confidently  
+
+**Scene 3: Aspiration**  
+- elevate emotion, show what could improve  
+
+**Scene 4: Urgency**  
+- motivate decision; soft CTA tone  
+
+Examples of tone (NOT templates):
+- Curiosity: “Ever feel like you need a moment of clarity?”  
+- Clarity: “Stay aware of what matters most.”  
+- Aspiration: “See your day take shape with ease.”  
+- Urgency: “Now’s the time—step into what’s next.”
+
+---
+
+## 📝 OVERLAY TEXT (UPGRADED)
+
+1–6 words.  
+Short, visual, bold.  
+Readable at mobile ad scale.
+
+Examples of tone:
+- “Stay Ready”
+- “Health at a Glance”
+- “Move With Purpose”
+- “Take Control Now”
+
+(Do NOT output these; generate your own.)
+
+---
+
+## 🎵 MUSIC GUIDANCE (RICHER)
+
+Provide:
+- a short style/genre phrase  
+- `low | medium | high` energy  
+- a short emotional purpose phrase  
+
+Example tonal categories (not literal examples):
+- “warm ambient electronic, low energy, supportive”
+- “minimal modern beat, medium energy, confident”
+- “soft atmospheric pads, low energy, reflective”
+
+---
+
+## 🎬 OUTPUT JSON FORMAT (UNCHANGED)
+
+Use this exact schema (same as before):
+
 {
-  "product_description": "string",
-  "brand_guidelines": {
-    "brand_name": "string",
-    "brand_colors": ["#hex1", "#hex2"],
-    "visual_style_keywords": "string",
-    "mood": "string"
-  },
-  "ad_specifications": {
-    "target_audience": "string",
-    "call_to_action": "string",
-    "tone": "string"
-  },
-  "framework": "PAS" | "BAB" | "AIDA",
+  "ad_framework": "AIDA",
+  "total_duration_seconds": 16,
+
+  "reference_image_path": "{{REFERENCE_IMAGE_PATH}}",
+  "reference_image_usage": "string",
+  "style_tone": "string",
+
   "scenes": [
     {
       "scene_number": 1,
-      "scene_type": "string",
-      "visual_prompt": "string",
-      "text_overlay": {
-        "text": "string",
-        "position": "top" | "center" | "bottom",
-        "font_size": 48,
-        "color": "#hex",
-        "animation": "fade_in" | "slide_up" | "none"
+      "aida_stage": "Attention",
+      "duration_seconds": 4,
+      "scene_description": {
+        "visual": "string",
+        "action": "string",
+        "camera": "string",
+        "lighting": "string",
+        "mood": "string",
+        "product_usage": "string"
       },
-      "duration": 5
+      "voiceover": "string",
+      "overlay_text": "string",
+      "sound_design": "string"
     },
     {
       "scene_number": 2,
-      "scene_type": "string",
-      "visual_prompt": "string",
-      "text_overlay": {
-        "text": "string",
-        "position": "top" | "center" | "bottom",
-        "font_size": 48,
-        "color": "#hex",
-        "animation": "fade_in" | "slide_up" | "none"
+      "aida_stage": "Interest",
+      "duration_seconds": 4,
+      "scene_description": {
+        "visual": "string",
+        "action": "string",
+        "camera": "string",
+        "lighting": "string",
+        "mood": "string",
+        "product_usage": "string"
       },
-      "duration": 5
+      "voiceover": "string",
+      "overlay_text": "string",
+      "sound_design": "string"
     },
     {
       "scene_number": 3,
-      "scene_type": "string",
-      "visual_prompt": "string",
-      "text_overlay": {
-        "text": "string",
-        "position": "top" | "center" | "bottom",
-        "font_size": 48,
-        "color": "#hex",
-        "animation": "fade_in" | "slide_up" | "none"
+      "aida_stage": "Desire",
+      "duration_seconds": 4,
+      "scene_description": {
+        "visual": "string",
+        "action": "string",
+        "camera": "string",
+        "lighting": "string",
+        "mood": "string",
+        "product_usage": "string"
       },
-      "duration": 5
+      "voiceover": "string",
+      "overlay_text": "string",
+      "sound_design": "string"
+    },
+    {
+      "scene_number": 4,
+      "aida_stage": "Action",
+      "duration_seconds": 4,
+      "scene_description": {
+        "visual": "string",
+        "action": "string",
+        "camera": "string",
+        "lighting": "string",
+        "mood": "string",
+        "product_usage": "string"
+      },
+      "voiceover": "string",
+      "overlay_text": "string",
+      "sound_design": "string"
     }
-  ]
+  ],
+
+  "music": {
+    "style": "string",
+    "energy": "string",
+    "notes": "string"
+  }
 }
 
-IMPORTANT: 
-- The "scenes" array MUST have at least 3 items (you can add 4 or 5 if appropriate)
-- Ensure the total duration of all scenes equals approximately 15 seconds for MVP
-- Each scene must have a unique scene_number (1, 2, 3, etc.)"""
+---
 
+## 📌 FINAL NOTE
+Your job is to create the **deeply detailed semantic blueprint**.  
+Another LLM will convert this into the final Sora 2 prompt.
 
-async def enhance_prompt_with_llm(
-    user_prompt: str, max_retries: int = 3
+"""
+
+async def _convert_sora_blueprint_to_ad_spec(
+    blueprint: dict,
+    user_prompt: str,
+    client: openai.OpenAI,
+    has_reference_image: bool = False,
 ) -> AdSpecification:
     """
-    Send user prompt to OpenAI GPT-4 Turbo API and return structured AdSpecification.
-    
-    Args:
-        user_prompt: User's text prompt (10-2000 characters)
-        max_retries: Maximum number of retry attempts (default: 3)
-    
-    Returns:
-        AdSpecification: Validated Pydantic model with ad specification
-    
-    Raises:
-        ValueError: If API key is missing or invalid
-        openai.APIError: If API call fails after retries
-        ValidationError: If LLM response doesn't match schema
+    Convert Sora AIDA JSON into AdSpecification.
+    Now:
+      • Calls the Scene Assembler LLM (_assemble_scene_prompt)
+      • Builds full cinematic text per scene
+      • Passes sound_design downstream
     """
-    # Mask API key for logging (first 4 + last 4 chars)
-    def mask_key(key: str) -> str:
-        if not key or len(key) < 8:
-            return "***"
-        return f"{key[:4]}...{key[-4:]}"
-    
+
+    scenes_data = blueprint.get("scenes", []) or []
+    style_tone = blueprint.get("style_tone") or "cinematic, modern"
+    ad_framework = blueprint.get("ad_framework") or "AIDA"
+
+    scenes: list[Scene] = []
+
+    for idx, scene_data in enumerate(scenes_data, start=1):
+
+        desc = scene_data.get("scene_description") or {}
+        sound_design = scene_data.get("sound_design") or ""
+
+        # --- Prepare fragments cleanly ---
+        fragment_input = {
+            "visual": desc.get("visual", "").strip(),
+            "action": desc.get("action", "").strip(),
+            "camera": desc.get("camera", "").strip(),
+            "lighting": desc.get("lighting", "").strip(),
+            "mood": desc.get("mood", "").strip(),
+            "product_usage": desc.get("product_usage", "").strip(),
+            "sound_design": sound_design.strip() if sound_design else "",
+            "has_reference_image": bool(has_reference_image),
+        }
+
+        # --- SCENE ASSEMBLER LLM CALL ---
+        visual_prompt = await _assemble_scene_prompt(
+            fragment=fragment_input,
+            client=client,
+            fallback_prompt=user_prompt,
+        )
+
+        # --- Overlay Text ---
+        overlay_text_value = (scene_data.get("overlay_text") or "").strip()
+        text_overlay = TextOverlay(
+            text=overlay_text_value,
+            position="center",
+            font_size=48,
+            color="#FFFFFF",
+            animation="fade_in",
+        )
+
+        scenes.append(
+            Scene(
+                scene_number=scene_data.get("scene_number") or idx,
+                scene_type=scene_data.get("aida_stage") or "Scene",
+                visual_prompt=visual_prompt,
+                text_overlay=text_overlay,
+                duration=int(scene_data.get("duration_seconds") or 4),
+                sound_design=sound_design,
+            )
+        )
+
+    call_to_action = scenes[-1].text_overlay.text if scenes else ""
+
+    return AdSpecification(
+        product_description=user_prompt,
+        brand_guidelines=BrandGuidelines(
+            brand_name="Brand",
+            brand_colors=["#FFFFFF"],
+            visual_style_keywords=style_tone,
+            mood=style_tone,
+        ),
+        ad_specifications=AdSpec(
+            target_audience="general audience",
+            call_to_action=call_to_action or "Learn more",
+            tone=style_tone,
+        ),
+        framework=ad_framework,
+        scenes=scenes,
+    )
+
+
+# =====================================================================
+# MAIN ENTRY POINT — same, but calls new converter
+# =====================================================================
+
+async def enhance_prompt_with_llm(
+    user_prompt: str,
+    max_retries: int = 3,
+    image_path: Optional[str] = None,
+) -> AdSpecification:
+    """
+    Stage 1: LLM expands short user prompt → AIDA JSON blueprint.
+    Stage 2: Blueprint converted → AdSpecification with full SORA prose.
+    """
+
     if not settings.OPENAI_API_KEY:
-        logger.error("OPENAI_API_KEY not configured")
-        raise ValueError("OpenAI API key is not configured. API Key: (not set)")
-    
-    masked_key = mask_key(settings.OPENAI_API_KEY)
-    logger.info(f"Using OpenAI API key: {masked_key}")
-    
-    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-    
+        raise ValueError("OPENAI_API_KEY not configured.")
+
+    # Use AsyncOpenAI for async operations
+    async_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+    # --- Build user content with safe, non-visual reference metadata ---
+    if image_path:
+        user_content = (
+            "REFERENCE IMAGE CONTEXT:\n"
+            "- You will NOT see the image.\n"
+            "- DO NOT describe appearance.\n"
+            "- Only describe usage behavior.\n\n"
+            + user_prompt
+        )
+    else:
+        user_content = user_prompt
+
     last_error = None
-    current_prompt = user_prompt  # Use a mutable variable for retries
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"Calling OpenAI API (attempt {attempt}/{max_retries})")
-            
-            response = client.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": current_prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.7,
-                max_tokens=2000
-            )
-            
-            # Extract JSON from response
-            content = response.choices[0].message.content
-            logger.debug(f"OpenAI response: {content}")
-            
-            # Parse JSON
+    current_prompt = user_content
+
+    try:
+        for attempt in range(1, max_retries + 1):
             try:
-                json_data = json.loads(content)
-            except json.JSONDecodeError as e:
-                logger.warning(f"Invalid JSON in LLM response (attempt {attempt}): {e}")
-                if attempt < max_retries:
-                    continue
-                raise ValueError(f"LLM returned invalid JSON: {e}")
-            
-            # Check scenes count before validation for better error messages
-            scenes_count = len(json_data.get("scenes", []))
-            if scenes_count < 3:
-                logger.warning(
-                    f"LLM returned only {scenes_count} scene(s), but at least 3 are required (attempt {attempt})"
+                logger.info(f"[Stage 1 LLM] Attempt {attempt}/{max_retries}")
+
+                response = await async_client.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": current_prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.5,
+                    max_tokens=2000,
                 )
-                if attempt < max_retries:
-                    # Add a more explicit instruction for retry
-                    current_prompt = f"{user_prompt}\n\nIMPORTANT: You must return at least 3 scenes in the 'scenes' array. You previously returned only {scenes_count} scene(s)."
-                    continue
-                raise ValueError(
-                    f"LLM returned only {scenes_count} scene(s), but at least 3 are required. "
-                    f"Please ensure your prompt is clear about needing multiple scenes."
+
+                content = response.choices[0].message.content
+
+                # --- Parse JSON from LLM ---
+                try:
+                    blueprint = json.loads(content)
+                except json.JSONDecodeError:
+                    if attempt < max_retries:
+                        current_prompt += (
+                            "\n\nYour previous output was invalid JSON. "
+                            "Output ONLY valid JSON matching the schema."
+                        )
+                        continue
+                    raise
+
+                # --- Validate scene count ---
+                scenes = blueprint.get("scenes", [])
+                if len(scenes) != 4:
+                    if attempt < max_retries:
+                        current_prompt += (
+                            "\n\nERROR: You MUST output exactly 4 scenes."
+                        )
+                        continue
+                    raise ValueError("Blueprint did not contain exactly 4 scenes.")
+
+                # --- Convert to AdSpecification (calls Scene Assembler LLM) ---
+                # Create a sync client for the scene assembler (it will create its own async client)
+                sync_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                result = await _convert_sora_blueprint_to_ad_spec(
+                    blueprint,
+                    user_prompt=user_prompt,
+                    client=sync_client,
+                    has_reference_image=(image_path is not None),
                 )
-            
-            # Validate with Pydantic schema
-            try:
-                ad_spec = AdSpecification(**json_data)
-                logger.info(f"Successfully validated LLM response (attempt {attempt})")
-                
-                # Log cost (approximate - GPT-4 Turbo pricing)
-                # Input tokens ~500, output tokens ~1500 = ~$0.01 per generation
-                logger.info(f"LLM enhancement completed - framework: {ad_spec.framework}, scenes: {len(ad_spec.scenes)}")
-                
-                return ad_spec
-                
-            except ValidationError as e:
-                logger.warning(f"Pydantic validation failed (attempt {attempt}): {e}")
-                if attempt < max_retries:
-                    continue
-                raise ValueError(f"LLM response doesn't match schema: {e}")
-                
-        except openai.RateLimitError as e:
-            last_error = e
-            if attempt < max_retries:
-                # Exponential backoff for rate limits (429 errors)
-                delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
-                logger.warning(
-                    f"OpenAI rate limit/quota exceeded (attempt {attempt}/{max_retries}). "
-                    f"Retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
+                return result
+
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[Stage 1 LLM Error] {e}")
+                await asyncio.sleep(min(2 ** attempt, 20))
                 continue
-            logger.error(f"OpenAI rate limit exceeded after {max_retries} attempts: {e}")
-            error_msg = f"OpenAI rate limit/quota exceeded after {max_retries} attempts. "
-            error_msg += f"API Key: {masked_key}. "
-            error_msg += "Please check your OpenAI account billing and quota limits."
-            raise RuntimeError(error_msg)
-        
-        except openai.APIError as e:
-            last_error = e
-            # Check if it's a 429 error (rate limit/quota) - check status_code or response body
-            status_code = getattr(e, 'status_code', None)
-            response_body = getattr(e, 'response', None) or getattr(e, 'body', None)
-            
-            # Check for 429 in status code or error response
-            is_rate_limit = (
-                status_code == 429 or
-                (response_body and isinstance(response_body, dict) and 
-                 response_body.get('error', {}).get('code') == 'insufficient_quota') or
-                (hasattr(e, 'message') and 'quota' in str(e.message).lower()) or
-                (hasattr(e, 'message') and '429' in str(e.message))
-            )
-            
-            if is_rate_limit:
-                if attempt < max_retries:
-                    # Exponential backoff for 429/quota errors
-                    delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
-                    logger.warning(
-                        f"OpenAI 429/quota error (attempt {attempt}/{max_retries}). "
-                        f"Retrying in {delay}s... Error: {e}"
-                    )
-                    await asyncio.sleep(delay)
-                    continue
-                logger.error(f"OpenAI 429/quota error after {max_retries} attempts: {e}")
-                error_msg = f"OpenAI rate limit/quota exceeded after {max_retries} attempts. "
-                error_msg += f"API Key: {masked_key}. "
-                error_msg += "Please check your OpenAI account billing and quota limits at https://platform.openai.com/account/billing"
-                raise RuntimeError(error_msg)
-            
-            logger.warning(f"OpenAI API error (attempt {attempt}/{max_retries}): {e}")
-            if attempt < max_retries:
-                # Small delay for other API errors
-                await asyncio.sleep(1)
-                continue
-            raise
-    
-    # If we get here, all retries failed
-    if last_error:
-        raise last_error
-    raise ValueError("Failed to get valid response from LLM after retries")
+
+        raise RuntimeError(f"LLM failed after retries: {last_error}")
+    finally:
+        # Clean up async client
+        await async_client.close()
 
