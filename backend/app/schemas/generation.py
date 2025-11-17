@@ -178,12 +178,19 @@ class TextOverlay(BaseModel):
 
 
 class Scene(BaseModel):
-    """Scene specification from LLM response."""
+    """
+    Scene specification from LLM response.
+    
+    Note: With the new v2.0 compact format, scenes use 3-7 word fragments
+    that are assembled into Sora-2 prompts. For AIDA framework, exactly 4 scenes
+    of 4 seconds each are required.
+    """
     scene_number: int = Field(..., ge=1)
-    scene_type: str = Field(..., description="Framework-specific type (e.g., 'Problem', 'Solution' for PAS)")
-    visual_prompt: str
+    scene_type: str = Field(..., description="Framework-specific type (e.g., 'Attention', 'Interest' for AIDA)")
+    visual_prompt: str = Field(..., description="Sora-2 prompt built from compact fragments (visual, action, camera, lighting, mood, product_usage)")
     text_overlay: Optional[TextOverlay] = None
-    duration: int = Field(..., ge=3, le=7, description="Duration in seconds")
+    duration: int = Field(..., ge=3, le=7, description="Duration in seconds (4 seconds for AIDA framework)")
+    sound_design: Optional[str] = Field(None, description="Sound design description for ambient SFX (e.g., 'gentle room tone, faint fabric movement')")
 
 
 class AdSpec(BaseModel):
@@ -194,12 +201,18 @@ class AdSpec(BaseModel):
 
 
 class AdSpecification(BaseModel):
-    """Complete LLM response schema for ad specification."""
+    """
+    Complete LLM response schema for ad specification.
+    
+    Note: With the new v2.0 compact format (AIDA framework), exactly 4 scenes
+    of 4 seconds each are generated. Each scene uses 3-7 word fragments for
+    visual descriptions, assembled into natural Sora-2 prompts.
+    """
     product_description: str
     brand_guidelines: BrandGuidelines
     ad_specifications: AdSpec
-    framework: str = Field(..., pattern="^(PAS|BAB|AIDA)$", description="Selected framework")
-    scenes: List[Scene] = Field(..., min_length=3, max_length=5)
+    framework: str = Field(..., pattern="^(PAS|BAB|AIDA)$", description="Selected framework (AIDA uses 4 scenes of 4s each)")
+    scenes: List[Scene] = Field(..., min_length=3, max_length=5, description="3-5 scenes (AIDA: exactly 4 scenes of 4s each)")
 
 
 class ScenePlan(BaseModel):

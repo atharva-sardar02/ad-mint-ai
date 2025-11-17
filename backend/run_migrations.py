@@ -31,6 +31,7 @@ MIGRATIONS = [
     "app.db.migrations.add_seed_value",
     "app.db.migrations.add_coherence_settings",
     "app.db.migrations.add_parent_generation_id",
+    "app.db.migrations.add_basic_settings_and_generation_time",
 ]
 
 

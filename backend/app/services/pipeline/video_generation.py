@@ -55,6 +55,10 @@ MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 1  # seconds
 MAX_RETRY_DELAY = 30  # seconds
 
+# Polling timeout configuration
+MAX_POLLING_TIME = 900  # 15 minutes maximum polling time for video generation
+POLL_INTERVAL = 2  # Poll every 2 seconds
+
 # Model seed parameter support mapping
 # Maps model name to (seed_parameter_name, verified_support)
 # Most models use "seed" as the parameter name
@@ -139,7 +143,9 @@ async def generate_video_clip_with_model(
             model_name=model_name,
             prompt=prompt,
             duration=duration,
-            cancellation_check=cancellation_check
+            cancellation_check=cancellation_check,
+            reference_image_path=None,
+            scene_number=clip_index,
         )
         
         # Download video clip
@@ -170,7 +176,8 @@ async def generate_video_clip(
     scene_number: int,
     cancellation_check: Optional[callable] = None,
     seed: Optional[int] = None,
-    preferred_model: Optional[str] = None
+    preferred_model: Optional[str] = None,
+    reference_image_path: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -257,7 +264,9 @@ async def generate_video_clip(
                 prompt=scene.visual_prompt,
                 duration=scene.duration,
                 cancellation_check=cancellation_check,
-                seed=seed
+                seed=seed,
+                reference_image_path=reference_image_path,
+                scene_number=scene_number,
             )
             
             # Download video clip
@@ -310,7 +319,9 @@ async def _generate_with_retry(
     prompt: str,
     duration: int,
     cancellation_check: Optional[callable] = None,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    reference_image_path: Optional[str] = None,
+    scene_number: Optional[int] = None,
 ) -> str:
     """
     Generate video with retry logic and exponential backoff.
@@ -343,6 +354,9 @@ async def _generate_with_retry(
                 f"Calling Replicate API (model: {model_name}, attempt {attempt}/{MAX_RETRIES})"
             )
             
+            # Track file handles that need to be closed (for reference images)
+            file_handles_to_close = []
+            
             # Prepare input parameters for Replicate
             # Note: Model-specific parameters may vary - adjust based on actual API
             if model_name == "openai/sora-2":
@@ -353,6 +367,67 @@ async def _generate_with_retry(
                     "aspect_ratio": "portrait",  # Vertical for MVP
                     "quality": "high",  # Request high quality output
                 }
+                # Log exact Sora-2 prompt being sent
+                scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
+                logger.info("=" * 80)
+                logger.info(f"🎬 EXACT SORA-2 PROMPT FOR {scene_info} (duration: {duration}s):")
+                logger.info("=" * 80)
+                logger.info("PROMPT TEXT:")
+                logger.info(prompt)
+                logger.info("=" * 80)
+                if reference_image_path:
+                    logger.info(f"📷 Reference image path: {reference_image_path}")
+                    image_path_obj = Path(reference_image_path)
+                    if image_path_obj.exists():
+                        logger.info(f"   Image size: {image_path_obj.stat().st_size} bytes")
+                        logger.info(f"   Image readable: {os.access(image_path_obj, os.R_OK)}")
+                logger.info("=" * 80)
+                # If a reference image is available, pass it as media so Sora can
+                # condition on the actual product visuals instead of inferred text.
+                if reference_image_path:
+                    try:
+                        # Verify file exists and is accessible
+                        image_path_obj = Path(reference_image_path)
+                        if not image_path_obj.exists():
+                            logger.error(
+                                f"Reference image file does not exist: {reference_image_path}"
+                            )
+                        else:
+                            # Replicate Python SDK: For Sora-2, try file object first (recommended)
+                            # The SDK can handle both file objects and file paths, but file objects are more reliable
+                            try:
+                                # Open file as binary for Replicate SDK
+                                image_file_handle = open(image_path_obj, "rb")
+                                
+                                # Try "input_reference" first (this is the documented parameter for Sora-2)
+                                # According to OpenAI docs, Sora-2 uses "input_reference" for reference images
+                                input_params["input_reference"] = image_file_handle
+                                logger.info(
+                                    f"✅ Attached reference image for Sora-2: {reference_image_path} "
+                                    f"(size: {image_path_obj.stat().st_size} bytes, "
+                                    f"readable: {os.access(image_path_obj, os.R_OK)}, parameter: input_reference as file object)"
+                                )
+                                # Track file handle for cleanup
+                                file_handles_to_close.append(image_file_handle)
+                            except Exception as file_open_error:
+                                logger.warning(
+                                    f"Failed to open image file as file object: {file_open_error}. "
+                                    f"Trying with file path string instead..."
+                                )
+                                # Fallback: try with file path string
+                                absolute_path = str(image_path_obj.absolute())
+                                input_params["input_reference"] = absolute_path
+                                logger.info(
+                                    f"Attached reference image for Sora-2: {reference_image_path} "
+                                    f"(size: {image_path_obj.stat().st_size} bytes, "
+                                    f"readable: {os.access(image_path_obj, os.R_OK)}, parameter: input_reference as path)"
+                                )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to attach reference image '{reference_image_path}' "
+                            f"for Sora-2: {e}",
+                            exc_info=True
+                        )
             elif model_name == "google/veo-3":
                 # Veo 3 only supports duration values: 4, 6, or 8 seconds
                 # Round to nearest valid duration
@@ -380,7 +455,13 @@ async def _generate_with_retry(
                     "duration": duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
-                # Don't add quality parameter for unknown models - let API handle defaults
+                # Log exact prompt for other models too
+                scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
+                logger.info("=" * 80)
+                logger.info(f"EXACT PROMPT FOR {model_name} - {scene_info} (duration: {duration}s):")
+                logger.info("=" * 80)
+                logger.info(prompt)
+                logger.info("=" * 80)
             
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
@@ -407,13 +488,62 @@ async def _generate_with_retry(
             # Create prediction
             # Note: If model doesn't support seed parameter, Replicate API will ignore it silently
             # or return an error. We handle errors in the exception handlers below.
-            prediction = client.predictions.create(
-                model=model_name,
-                input=input_params
-            )
+            # file_handles_to_close is initialized above and populated when opening image files
             
-            # Poll for completion
+            # Log complete input parameters being sent to Replicate (for debugging)
+            if model_name == "openai/sora-2":
+                scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
+                logger.info("=" * 80)
+                logger.info(f"📤 COMPLETE INPUT PARAMETERS FOR {scene_info}:")
+                logger.info("=" * 80)
+                # Log all parameters except file objects (which can't be serialized)
+                loggable_params = {}
+                for key, value in input_params.items():
+                    if hasattr(value, 'read'):
+                        # It's a file object - log metadata instead
+                        loggable_params[key] = f"<file object: {type(value).__name__}>"
+                    else:
+                        loggable_params[key] = value
+                import json
+                logger.info(json.dumps(loggable_params, indent=2, default=str))
+                logger.info("=" * 80)
+            
+            try:
+                prediction = client.predictions.create(
+                    model=model_name,
+                    input=input_params
+                )
+            finally:
+                # Close any file handles after API call (Replicate SDK reads them immediately)
+                for fh in file_handles_to_close:
+                    try:
+                        fh.close()
+                    except Exception:
+                        pass
+            
+            # Poll for completion with timeout
+            poll_start_time = time.time()
+            poll_attempts = 0
+            
             while prediction.status not in ["succeeded", "failed", "canceled"]:
+                # Check timeout - fail if polling takes too long
+                elapsed_time = time.time() - poll_start_time
+                if elapsed_time > MAX_POLLING_TIME:
+                    logger.error(
+                        f"Polling timeout after {elapsed_time:.0f}s for {model_name} "
+                        f"(prediction_id: {prediction.id}, scene: {scene_number}). "
+                        f"Attempting to cancel prediction..."
+                    )
+                    # Try to cancel the stuck prediction
+                    try:
+                        client.predictions.cancel(prediction.id)
+                    except Exception as cancel_error:
+                        logger.warning(f"Failed to cancel prediction {prediction.id}: {cancel_error}")
+                    raise RuntimeError(
+                        f"Video generation timeout: Prediction did not complete within {MAX_POLLING_TIME}s. "
+                        f"Prediction ID: {prediction.id}. This may indicate a stuck or slow API response."
+                    )
+                
                 # Check cancellation during polling
                 if cancellation_check and cancellation_check():
                     # Cancel the prediction if possible
@@ -423,8 +553,68 @@ async def _generate_with_retry(
                         pass
                     raise RuntimeError("Generation cancelled by user")
                 
-                await asyncio.sleep(2)  # Poll every 2 seconds
-                prediction = client.predictions.get(prediction.id)
+                poll_attempts += 1
+                # Log progress every 30 seconds (every 15 polls)
+                if poll_attempts % 15 == 0:
+                    logger.info(
+                        f"Polling {model_name} prediction (ID: {prediction.id}, scene: {scene_number}): "
+                        f"status={prediction.status}, elapsed={elapsed_time:.0f}s, attempts={poll_attempts}"
+                    )
+                
+                await asyncio.sleep(POLL_INTERVAL)
+                try:
+                    prediction = client.predictions.get(prediction.id)
+                except Exception as poll_error:
+                    poll_error_str = str(poll_error).lower()
+                    is_network_poll_error = (
+                        "nodename nor servname provided" in poll_error_str or
+                        "name or service not known" in poll_error_str or
+                        "errno 8" in poll_error_str or
+                        "network" in poll_error_str or
+                        "dns" in poll_error_str or
+                        "connection" in poll_error_str or
+                        isinstance(poll_error, (OSError, ConnectionError))
+                    )
+                    
+                    if is_network_poll_error:
+                        logger.error(
+                            f"Network error while polling prediction status (ID: {prediction.id}): {poll_error}. "
+                            f"This indicates a DNS resolution or network connectivity issue."
+                        )
+                    else:
+                        # If polling fails, log and continue (might be temporary network issue)
+                        logger.warning(
+                            f"Error polling prediction status (ID: {prediction.id}): {poll_error}. "
+                            f"Retrying in {POLL_INTERVAL}s..."
+                        )
+                    
+                    await asyncio.sleep(POLL_INTERVAL)
+                    # Try to get prediction again - if it fails multiple times, it will timeout
+                    try:
+                        prediction = client.predictions.get(prediction.id)
+                    except Exception as retry_error:
+                        retry_error_str = str(retry_error).lower()
+                        is_network_retry_error = (
+                            "nodename nor servname provided" in retry_error_str or
+                            "name or service not known" in retry_error_str or
+                            "errno 8" in retry_error_str or
+                            isinstance(retry_error, (OSError, ConnectionError))
+                        )
+                        
+                        # If we can't even get the prediction, it's likely stuck or network is down
+                        if elapsed_time > MAX_POLLING_TIME * 0.8:  # If we're near timeout
+                            if is_network_retry_error:
+                                raise RuntimeError(
+                                    f"Network connectivity error: Cannot poll prediction status. "
+                                    f"Please check your internet connection and DNS settings. "
+                                    f"Prediction ID: {prediction.id}"
+                                )
+                            raise RuntimeError(
+                                f"Cannot poll prediction status. Prediction may be stuck. "
+                                f"Prediction ID: {prediction.id}"
+                            )
+                        # Otherwise, continue trying
+                        continue
             
             # Handle result
             if prediction.status == "succeeded":
@@ -486,8 +676,107 @@ async def _generate_with_retry(
                     await asyncio.sleep(delay)
                     continue
             
-            # Don't retry on validation errors (422) - these are parameter issues
-            if "422" in str(e) or "validation" in error_str:
+            # Handle validation errors (422) - try alternative parameter names for reference image
+            if ("422" in str(e) or "validation" in error_str) and model_name == "openai/sora-2" and reference_image_path:
+                # Try alternative parameter names for reference image
+                image_path_obj = Path(reference_image_path)
+                
+                if ("input_reference" in input_params or "image" in input_params) and image_path_obj.exists():
+                    # If reference image parameter failed, try alternative parameter names
+                    failed_param = "input_reference" if "input_reference" in input_params else "image"
+                    logger.warning(
+                        f"Parameter '{failed_param}' failed for Sora-2 (error: {str(e)[:100]}), "
+                        f"trying alternative parameter names..."
+                    )
+                    
+                    # Try alternative parameter names in order
+                    # Track which parameters we've already tried
+                    tried_params = []
+                    if "input_reference" in input_params:
+                        tried_params.append("input_reference")
+                    if "image" in input_params:
+                        tried_params.append("image")
+                    
+                    alternative_params = ["image", "input_image", "reference_image", "image_url"]
+                    # Remove already tried params
+                    alternative_params = [p for p in alternative_params if p not in tried_params]
+                    retry_with_alt_param = False
+                    
+                    for alt_param in alternative_params:
+                        if alt_param in tried_params:
+                            continue
+                            
+                        try:
+                            # Remove previous failed parameter
+                            if "image" in input_params:
+                                del input_params["image"]
+                            if "input_reference" in input_params:
+                                if hasattr(input_params["input_reference"], 'close'):
+                                    try:
+                                        input_params["input_reference"].close()
+                                    except:
+                                        pass
+                                del input_params["input_reference"]
+                            if "input_image" in input_params:
+                                del input_params["input_image"]
+                            if "reference_image" in input_params:
+                                del input_params["reference_image"]
+                            
+                            # Try with file path string first
+                            if alt_param == "input_reference":
+                                # For input_reference, try file object
+                                image_file_handle = open(image_path_obj, "rb")
+                                input_params[alt_param] = image_file_handle
+                                logger.info(f"Retrying with {alt_param} parameter (file object)")
+                            else:
+                                # For others, try file path
+                                input_params[alt_param] = str(image_path_obj.absolute())
+                                logger.info(f"Retrying with {alt_param} parameter (file path)")
+                            
+                            tried_params.append(alt_param)
+                            retry_with_alt_param = True
+                            # Break out of inner loop to retry API call
+                            break
+                        except Exception as retry_error:
+                            logger.warning(f"Failed to set {alt_param} parameter: {retry_error}")
+                            if 'image_file_handle' in locals():
+                                try:
+                                    image_file_handle.close()
+                                except:
+                                    pass
+                            continue
+                    
+                    if retry_with_alt_param:
+                        # Retry the API call immediately (same attempt) with new parameter
+                        continue
+                    
+                    # If all parameter names failed, try without reference image (Sora-2 should still work)
+                    logger.warning(
+                        f"All reference image parameter names failed for Sora-2, trying without reference image..."
+                    )
+                    try:
+                        # Remove all reference image parameters
+                        for param in ["image", "input_image", "reference_image", "image_url", "input_reference"]:
+                            if param in input_params:
+                                if hasattr(input_params[param], 'close'):
+                                    try:
+                                        input_params[param].close()
+                                    except:
+                                        pass
+                                del input_params[param]
+                        logger.info(f"Retrying Sora-2 without reference image")
+                        continue
+                    except Exception as retry_error:
+                        logger.error(f"Failed to retry without reference image: {retry_error}")
+                
+                # If all parameter attempts failed, raise the error (will trigger fallback model)
+                logger.error(
+                    f"Sora-2 failed with reference image parameters. Error: {e}. "
+                    f"Will fall back to alternative model."
+                )
+                raise RuntimeError(f"Invalid parameters for model {model_name}: {e}")
+            elif "422" in str(e) or "validation" in error_str:
+                # For other models or non-image validation errors, fail immediately
                 raise RuntimeError(f"Invalid parameters for model {model_name}: {e}")
             
             if attempt < MAX_RETRIES:
@@ -504,6 +793,41 @@ async def _generate_with_retry(
         
         except Exception as e:
             last_error = e
+            error_str = str(e).lower()
+            
+            # Detect DNS/network connectivity errors
+            is_network_error = (
+                "nodename nor servname provided" in error_str or
+                "name or service not known" in error_str or
+                "errno 8" in error_str or
+                "errno -2" in error_str or
+                "name resolution" in error_str or
+                "dns" in error_str or
+                "network is unreachable" in error_str or
+                "connection refused" in error_str or
+                "timeout" in error_str or
+                isinstance(e, (OSError, ConnectionError))
+            )
+            
+            if is_network_error:
+                logger.error(
+                    f"Network connectivity error (attempt {attempt}/{MAX_RETRIES}): {e}. "
+                    f"This indicates a DNS resolution or network connectivity issue. "
+                    f"Please check your internet connection and DNS settings."
+                )
+                if attempt < MAX_RETRIES:
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+                    logger.warning(f"Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                # For network errors, provide more helpful error message
+                raise RuntimeError(
+                    f"Network connectivity error: Unable to reach Replicate API. "
+                    f"Error: {e}. "
+                    f"Please check your internet connection, DNS settings, and firewall configuration. "
+                    f"If the issue persists, the Replicate API may be temporarily unavailable."
+                )
+            
             if attempt < MAX_RETRIES:
                 delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
                 logger.warning(
@@ -515,6 +839,21 @@ async def _generate_with_retry(
             raise RuntimeError(f"Unexpected error after {MAX_RETRIES} attempts: {e}")
     
     # All retries failed
+    error_str = str(last_error).lower() if last_error else ""
+    is_network_error = (
+        "nodename nor servname provided" in error_str or
+        "name or service not known" in error_str or
+        "errno 8" in error_str or
+        "network" in error_str or
+        "dns" in error_str
+    )
+    
+    if is_network_error:
+        raise RuntimeError(
+            f"Video generation failed due to network connectivity issues: {last_error}. "
+            f"Please check your internet connection and DNS settings."
+        )
+    
     raise RuntimeError(
         f"Video generation failed after {MAX_RETRIES} attempts: {last_error}"
     )
