@@ -109,8 +109,8 @@ interface TechniqueInfo {
   timeImpact?: string;
   costImpact?: string;
   tooltip: string;
-  requires?: keyof CoherenceSettings[];
-  incompatibleWith?: keyof CoherenceSettings[];
+  requires?: (keyof CoherenceSettings)[];
+  incompatibleWith?: (keyof CoherenceSettings)[];
   implemented: boolean; // Whether this feature is actually implemented
   comingSoonMessage?: string; // Optional message for unimplemented features
 }

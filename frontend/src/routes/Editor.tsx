@@ -30,7 +30,7 @@ export const Editor: React.FC = () => {
   const [trimState, setTrimState] = useState<Record<string, { trimStart: number; trimEnd: number }>>({});
   const [trackAssignments, setTrackAssignments] = useState<Record<string, number>>({});
   const [clipPositionOverrides, setClipPositionOverrides] = useState<Record<string, number>>({}); // clipId -> startTime
-  const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
+  const [_draggedClipId, _setDraggedClipId] = useState<string | null>(null);
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [pendingSplitTime, setPendingSplitTime] = useState<number | null>(null);
@@ -43,7 +43,7 @@ export const Editor: React.FC = () => {
   const exportStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [qualityMetrics, setQualityMetrics] = useState<QualityMetricsResponse | null>(null);
-  const [loadingQualityMetrics, setLoadingQualityMetrics] = useState(false);
+  const [_loadingQualityMetrics, setLoadingQualityMetrics] = useState(false);
 
   // Load editor data if generationId is provided
   useEffect(() => {

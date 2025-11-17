@@ -38,7 +38,14 @@ describe("generationService", () => {
 
       expect(apiClient.post).toHaveBeenCalledWith(
         API_ENDPOINTS.GENERATIONS.CREATE,
-        { prompt: "Create a luxury watch ad for Instagram" }
+        { 
+          prompt: "Create a luxury watch ad for Instagram",
+          model: undefined,
+          num_clips: undefined,
+          use_llm: true,
+          coherence_settings: undefined,
+          title: undefined
+        }
       );
       expect(result).toEqual(mockResponse.data);
     });

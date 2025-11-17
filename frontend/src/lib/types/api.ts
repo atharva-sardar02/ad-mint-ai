@@ -197,3 +197,10 @@ export interface EditorData {
   trim_state?: Record<string, { trimStart: number; trimEnd: number }> | null;
 }
 
+/**
+ * Standard status response from the API.
+ */
+export interface StatusResponse {
+  message: string;
+}
+

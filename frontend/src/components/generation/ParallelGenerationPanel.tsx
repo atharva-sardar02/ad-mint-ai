@@ -11,7 +11,7 @@ import { ErrorMessage } from "../ui/ErrorMessage";
 import { CoherenceSettingsPanel, validateCoherenceSettings } from "../coherence";
 import type { CoherenceSettings as CoherenceSettingsType } from "../coherence";
 import type { GenerateRequest } from "../../lib/generationService";
-import { VIDEO_MODELS, DEFAULT_MODEL } from "../../lib/models/videoModels";
+import { VIDEO_MODELS } from "../../lib/models/videoModels";
 
 /**
  * Tooltip component for help text.
@@ -201,11 +201,13 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
         }
       });
 
-      // Validate single settings
-      const settingsErrors = validateCoherenceSettings(promptSettings);
-      if (Object.keys(settingsErrors).length > 0) {
-        newErrors.promptSettings = "Coherence settings are invalid";
-      }
+      // Validate settings for each prompt variation
+      promptSettings.forEach((settings, index) => {
+        const settingsErrors = validateCoherenceSettings(settings);
+        if (Object.keys(settingsErrors).length > 0) {
+          newErrors[`promptSettings_${index}`] = `Settings for prompt ${index + 1} are invalid`;
+        }
+      });
     }
 
     setErrors(newErrors);

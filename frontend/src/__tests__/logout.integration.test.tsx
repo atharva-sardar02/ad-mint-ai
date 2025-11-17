@@ -66,10 +66,9 @@ describe("Logout Integration Tests", () => {
       expect(screen.getByText(/Welcome, testuser/i)).toBeInTheDocument();
       expect(useAuthStore.getState().isAuthenticated).toBe(true);
 
-      // Click logout button (use getAllByText since there are two - one in Navbar, one in Dashboard)
-      const logoutButtons = screen.getAllByText("Logout");
-      // Click the first one (Navbar logout button)
-      logoutButtons[0].click();
+      // Click logout button from Navbar (Dashboard no longer has its own logout button)
+      const logoutButton = screen.getByText("Logout");
+      logoutButton.click();
 
       // Verify state is cleared
       await waitFor(() => {
@@ -125,10 +124,9 @@ describe("Logout Integration Tests", () => {
       // Verify user can access dashboard
       expect(screen.getByText(/Welcome, testuser/i)).toBeInTheDocument();
 
-      // Logout (use getAllByText since there are two - one in Navbar, one in Dashboard)
-      const logoutButtons = screen.getAllByText("Logout");
-      // Click the first one (Navbar logout button)
-      logoutButtons[0].click();
+      // Logout from Navbar (Dashboard no longer has its own logout button)
+      const logoutButton = screen.getByText("Logout");
+      logoutButton.click();
 
       // Wait for state to clear
       await waitFor(() => {
@@ -161,7 +159,7 @@ describe("Logout Integration Tests", () => {
   });
 
   describe("logout from different pages", () => {
-    it("should work from Dashboard page", async () => {
+    it("should work from Dashboard page (using Navbar logout)", async () => {
       const mockUser = {
         id: "1",
         username: "testuser",
@@ -194,10 +192,9 @@ describe("Logout Integration Tests", () => {
 
       render(<TestApp />);
 
-      // Logout from Dashboard (use getAllByText since there are two - one in Navbar, one in Dashboard)
-      const logoutButtons = screen.getAllByText("Logout");
-      // Click the Dashboard logout button (second one)
-      logoutButtons[1].click();
+      // Logout from Navbar (Dashboard no longer has its own logout button)
+      const logoutButton = screen.getByText("Logout");
+      logoutButton.click();
 
       await waitFor(() => {
         expect(useAuthStore.getState().isAuthenticated).toBe(false);

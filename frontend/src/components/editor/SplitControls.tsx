@@ -39,8 +39,8 @@ export const SplitControls: React.FC<SplitControlsProps> = ({
   totalDuration,
   currentTime,
   clipHeight,
-  onSplit,
-  onSplitCancel,
+  onSplit: _onSplit,
+  onSplitCancel: _onSplitCancel,
   isSplitMode = false,
 }) => {
   const [splitTime, setSplitTime] = useState<number | null>(null);
@@ -51,7 +51,6 @@ export const SplitControls: React.FC<SplitControlsProps> = ({
     if (isSplitMode && selectedClip && clipPosition) {
       // Calculate split time relative to clip start
       const clipStartTime = selectedClip.start_time;
-      const clipEndTime = selectedClip.end_time;
       const clipDuration = selectedClip.duration;
       
       // Ensure split time is within clip boundaries

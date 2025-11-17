@@ -3,7 +3,7 @@
  * Tests component rendering, expand/collapse, checkbox interactions, and validation.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { CoherenceSettingsPanel, validateCoherenceSettings, getCoherenceWarnings } from "../components/coherence";
 import type { CoherenceSettings } from "../components/coherence";
 
@@ -15,7 +15,9 @@ describe("CoherenceSettingsPanel", () => {
     lora: false,
     enhanced_planning: true,
     vbench_quality_control: true,
+    automatic_regeneration: false,
     post_processing_enhancement: true,
+    color_grading: false,
     controlnet: false,
     csfd_detection: false,
   };
@@ -232,7 +234,9 @@ describe("validateCoherenceSettings", () => {
       lora: false,
       enhanced_planning: true, // Required for IP-Adapter
       vbench_quality_control: true,
+      automatic_regeneration: false,
       post_processing_enhancement: true,
+      color_grading: false,
       controlnet: false,
       csfd_detection: false,
     };
@@ -249,7 +253,9 @@ describe("validateCoherenceSettings", () => {
       lora: false,
       enhanced_planning: false, // Missing requirement
       vbench_quality_control: true,
+      automatic_regeneration: false,
       post_processing_enhancement: true,
+      color_grading: false,
       controlnet: false,
       csfd_detection: false,
     };
@@ -267,7 +273,9 @@ describe("validateCoherenceSettings", () => {
       lora: false,
       enhanced_planning: true,
       vbench_quality_control: true,
+      automatic_regeneration: false,
       post_processing_enhancement: true,
+      color_grading: false,
       controlnet: false,
       csfd_detection: false,
     };
@@ -286,7 +294,9 @@ describe("getCoherenceWarnings", () => {
       lora: false,
       enhanced_planning: false, // Disabled recommended
       vbench_quality_control: true,
+      automatic_regeneration: false,
       post_processing_enhancement: true,
+      color_grading: false,
       controlnet: false,
       csfd_detection: false,
     };
@@ -304,7 +314,9 @@ describe("getCoherenceWarnings", () => {
       lora: true, // Advanced setting enabled
       enhanced_planning: true,
       vbench_quality_control: true,
+      automatic_regeneration: false,
       post_processing_enhancement: true,
+      color_grading: false,
       controlnet: true, // Advanced setting enabled
       csfd_detection: false,
     };
@@ -322,7 +334,9 @@ describe("getCoherenceWarnings", () => {
       lora: false,
       enhanced_planning: true,
       vbench_quality_control: true,
+      automatic_regeneration: false,
       post_processing_enhancement: true,
+      color_grading: false,
       controlnet: false,
       csfd_detection: false,
     };

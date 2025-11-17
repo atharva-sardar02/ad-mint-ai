@@ -2,7 +2,7 @@
  * Unit tests for Timeline component.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { Timeline } from "../components/editor/Timeline";
 import type { ClipInfo } from "../lib/types/api";
 

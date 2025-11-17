@@ -44,9 +44,10 @@ def run_migration():
     is_sqlite = db_url.startswith("sqlite")
     is_postgres = "postgresql" in db_url or "postgres" in db_url
     
-    with engine.connect() as conn:
-        try:
-            if is_sqlite:
+    try:
+        if is_sqlite:
+            # SQLite: use connect() and manual commit
+            with engine.connect() as conn:
                 # SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we'll catch errors
                 # Create generation_groups table
                 try:
@@ -120,9 +121,10 @@ def run_migration():
                     pass  # Index creation might fail if already exists, that's okay
                 
                 conn.commit()
-            
-            elif is_postgres:
-                # PostgreSQL supports IF NOT EXISTS
+        
+        elif is_postgres:
+            # PostgreSQL: use begin() for proper transaction handling (SQLAlchemy 2.0)
+            with engine.begin() as conn:
                 # Create generation_groups table
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS generation_groups (
@@ -177,21 +179,18 @@ def run_migration():
                         print("ℹ️  Foreign key constraint already exists, skipping")
                     else:
                         raise
-                
-                conn.commit()
-            
-            else:
-                print(f"⚠️  Unknown database type: {db_url}")
-                print("Please run migration manually for your database")
-                return False
-            
-            print("✅ Migration completed successfully")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Migration failed: {e}")
-            conn.rollback()
-            raise
+        
+        else:
+            print(f"⚠️  Unknown database type: {db_url}")
+            print("Please run migration manually for your database")
+            return False
+        
+        print("✅ Migration completed successfully")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Migration failed: {e}")
+        raise
 
 
 if __name__ == "__main__":
