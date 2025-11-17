@@ -26,8 +26,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS middleware - use specific origins when credentials are enabled
-# Cannot use allow_origins=["*"] with allow_credentials=True per CORS spec
+# CORS middleware - allow configured origins
+# Note: When allow_credentials=True, we cannot use allow_origins=["*"]
+# We must specify exact origins
+logger.info(f"CORS allowed origins: {settings.CORS_ALLOWED_ORIGINS}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ALLOWED_ORIGINS,  # Use configured origins

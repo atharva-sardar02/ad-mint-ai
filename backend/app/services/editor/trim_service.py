@@ -113,6 +113,11 @@ def apply_trim_to_editing_session(
     
     # Save to database
     editing_session.editing_state = editing_state
+    
+    # CRITICAL: Mark the JSON field as modified so SQLAlchemy knows to save it
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(editing_session, "editing_state")
+    
     db.commit()
     db.refresh(editing_session)
     
