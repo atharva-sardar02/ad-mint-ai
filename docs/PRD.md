@@ -39,6 +39,7 @@
 20. [Future Enhancements](#future-enhancements)
 21. [Risks & Mitigations](#risks--mitigations)
 22. [Appendices](#appendices)
+23. [Hero-Frame Iteration Plan & Timeline](#hero-frame-iteration-plan--timeline)
 
 ---
 
@@ -473,9 +474,9 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 ### 8.4 Video Editing
 
 **FR-024: Video Editor Access**
-- System shall provide an editor interface accessible from completed video detail page
-- Editor shall load video with all individual scene clips available for editing
-- Editor shall maintain original video as backup for restoration
+- System shall provide an editor interface accessible from completed video detail page and/or from any saved gallery item.
+- Editor shall load the underlying project with all individual scene clips available for editing (not just a flattened final video file).
+- Editor shall maintain original source media as backup for restoration and re-generation workflows.
 
 **FR-025: Timeline Interface**
 - System shall display a timeline showing all video clips in sequence
@@ -507,11 +508,20 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 - System shall update timeline to show merged clip as single entity
 
 **FR-029: Editor Save and Export**
-- System shall allow users to save editing changes without exporting
-- System shall create new video version when exporting edited video
-- System shall preserve original video for comparison
-- System shall track editing history for undo/redo functionality
-- System shall export edited video in same format and quality as original
+- System shall allow users to save editing changes without exporting.
+- System shall treat each manual save as a **versioned editor state** that can be reopened later from the gallery with full timeline and clip data intact.
+- System shall create a new video version when exporting from any saved editor state, without overwriting previous exports.
+- System shall preserve original generated media and prior versions for comparison.
+- System shall track editing history for undo/redo functionality within a given editor session.
+- System shall export edited video in the same format and quality as the underlying source clips.
+
+**FR-036 (New): Clip-Level Regeneration and Gap Filling**
+- System shall support **clip-level** AI regeneration rather than only regenerating entire final videos.
+- Given a timeline where the user trims or deletes part of a clip, the system shall allow the user to request generation of a **new clip** to fill the resulting gap:
+  - The new clip shall match the gap’s duration and aspect ratio.
+  - The user may provide a local prompt (or reuse scene-level/hero-frame prompts) to describe the replacement content.
+  - The system shall reuse applicable coherence settings (e.g., seed control, IP-Adapter) so the new clip fits visually with neighboring clips.
+- System shall track regenerated clips as distinct assets linked to the editor state and generation history, not as a brand new standalone video.
 
 ### 8.5 Video Quality Optimization
 
@@ -577,6 +587,110 @@ Our solution transforms a simple text prompt into a publication-ready video adve
 - System shall increment total_generations on video completion
 - System shall add generation cost to total_cost
 - System shall update last_login on each login
+
+### 8.7 Hero-Frame & Iterative Refinement Workflow
+
+The system shall support a professional, hero-frame-first workflow that mirrors how expert creators work in practice: starting from a single high-quality still frame, evolving into motion, and iterating with both automated and human-in-the-loop feedback.
+
+**FR-036: Hero Frame Generation (Text → Photo)**
+- System shall provide a dedicated hero-frame generation flow separate from full video generation.
+- System shall accept a cinematography-focused text prompt (subject, lighting, mood, lens, composition, film stock, aspect ratio).
+- System shall call a text-to-image model (e.g., Stable Diffusion / SDXL on Replicate) and generate **4–8 hero frame candidates** per request.
+- System shall expose a gallery UI where the user can:
+  - View all hero frame candidates in a grid
+  - Zoom into a candidate
+  - Mark one hero frame as the **primary hero frame** for downstream video generation
+- System shall store generated hero frames with metadata (prompt, model, seed, aspect ratio) linked to the user and generation request.
+
+**FR-037: Cinematographer-Level Prompt Enhancement for Images**
+- System shall offer an optional LLM-powered “cinematographer enhancement” step for hero-frame prompts.
+- System shall accept a basic user prompt and return an enriched prompt that includes:
+  - Camera body and lens details
+  - Lighting direction and quality
+  - Composition notes (framing, depth, rule of thirds)
+  - Film stock/color science references
+  - Mood and atmosphere descriptors
+  - Aspect ratio and stylization hints
+- System shall display the enhanced prompt side-by-side with the original, with a clear explanation of what was improved.
+- System shall allow the user to accept as-is, edit, or revert to the original prompt before generating hero frames.
+
+**FR-038: Hero Frame Iteration & Selection**
+- System shall allow the user to:
+  - Regenerate hero frames with the same prompt (slot-machine style iteration)
+  - Slightly mutate prompts (e.g., adjust lighting, composition, mood) and regenerate
+  - Save multiple “favorite” hero frames for later experiments
+- System shall clearly indicate which hero frame is currently selected as the canonical anchor for video generation.
+- System shall track the iteration history for hero frame generation (prompt variants, model settings, seeds) for analytics and debugging.
+
+**FR-039: Image-to-Video Generation (Photo → Video) from Hero Frame**
+- System shall support an image-to-video flow that takes a selected hero frame as the primary visual input.
+- System shall call one or more image-to-video models (e.g., Kling, Wan, PixVerse, or equivalent) via a backend service.
+- System shall accept a **motion prompt** describing camera movement and temporal behavior, including:
+  - Camera movement (dolly, push-in, handheld, static)
+  - Frame rate and playback speed (slow motion vs. real-time)
+  - Motion intensity and direction
+- System shall support **negative prompts** to suppress undesirable artifacts (e.g., “fast movements”, “disfigurements”, “low quality”, “dust particles”, “distortions”).
+- System shall generate at least one video attempt from the hero frame with the provided motion + negative prompts.
+
+**FR-040: Automated Multi-Attempt Generation with VBench-Based Selection**
+- System shall support an **automated 3-attempt mode** for image-to-video generation:
+  - Given a hero frame and motion/negative prompts, the system **automatically generates 3 video attempts** without additional user input.
+  - All 3 attempts shall be stored and linked to the same “generation group”.
+- After generation completes, the system shall:
+  - Run VBench (or equivalent) quality evaluation on each attempt.
+  - Compute per-attempt scores (e.g., temporal consistency, aesthetics, prompt alignment) and an overall quality score.
+  - Automatically select the **highest-scoring attempt** as the “system-selected best” and mark it explicitly in the UI.
+- System shall expose an API and UI to retrieve:
+  - All attempts for a given generation group
+  - VBench metrics per attempt
+  - Which attempt was auto-selected as best and why (score breakdown).
+
+**FR-041: Iteration Workspace & Human-in-the-Loop Refinement**
+- System shall provide a dedicated **Iteration Workspace** UI for refining video attempts that includes:
+  - Side-by-side comparison of the 3 auto-generated attempts
+  - Visual indication of the VBench score for each attempt
+  - Ability to play videos in sync for direct comparison
+- System shall allow users to:
+  - Manually override the auto-selected best attempt (choose a different “winner”)
+  - Trigger manual regenerations with updated motion and/or negative prompts
+  - Edit the hero-frame or motion prompts using an inline editor.
+- System shall offer LLM-powered **prompt improvement suggestions** based on:
+  - VBench feedback (e.g., low temporal consistency → suggest stronger motion constraints)
+  - User feedback (e.g., “too chaotic”, “not cinematic enough”)
+- System shall log each manual regeneration as a new attempt in the generation group, preserving full history.
+
+**FR-042: Iterative Refinement Workflow & Versioning**
+- System shall treat each cycle of “prompt update → new attempts → evaluation → selection” as a **refinement iteration**.
+- System shall maintain a **generation history timeline** that shows:
+  - Iteration number
+  - Chosen attempt for that iteration
+  - Key prompt changes
+  - VBench score trends over time
+- System shall support version comparison:
+  - Compare any two selected versions side-by-side (player + metrics)
+  - Clearly label which version is the current “final” version.
+- System shall maintain a `final_version` pointer for each ad that is used for export, download, and reporting.
+
+**FR-043: Quality Dashboard & Benchmarks**
+- System shall provide a **Quality Dashboard** that summarizes:
+  - VBench score distribution across attempts and final videos
+  - Average number of iterations per final video
+  - Auto-selected vs. user-selected “best” agreement rate
+- For each video, the dashboard shall visualize:
+  - Per-attempt VBench scores (bar/line chart)
+  - How quality changed across iterations (trend line)
+  - Which iteration produced the final accepted version.
+- System shall allow filtering and aggregation by:
+  - Date range
+  - Campaign or tag (future)
+  - Model used (Kling/Wan/PixVerse/etc.)
+
+**FR-044: Integration with Existing Pipeline & Epics**
+- The hero-frame and iterative refinement workflow shall **build on** existing epics rather than replacing them:
+  - Reuse the existing generation pipeline (LLM enhancement → scene planning → video generation → stitching → audio) when generating from hero frames.
+  - Reuse Epic 7 capabilities (seed control, VBench, enhanced planning) to power automated quality scoring and consistency.
+  - Reuse Epic 6 editing tools (timeline, trim/split/merge, editor export) as post-generation refinement options on top of the final selected version.
+- No existing epics or PRD requirements shall be removed; this workflow is an additive, professional-mode layer on top of the current system.
 
 ---
 
@@ -2486,12 +2600,196 @@ VITE_API_URL=http://your-ec2-ip
 
 ---
 
+## 23. Hero-Frame Iteration Plan & Timeline
+
+This section describes how the new hero-frame-first, iterative refinement workflow will be rolled out over time. It is designed as an additive “professional mode” that builds on top of the existing MVP pipeline and Epic 7 quality/coherence capabilities.
+
+### 23.1 Phase Overview (Hero Frame → Video → Iteration)
+
+The hero-frame workflow is organized into **five phases**:
+
+1. **Phase 1: Hero Frame Generation (TEXT → PHOTO)**
+   - Implement the hero-frame generation service using text-to-image models (Replicate / SDXL).
+   - Build a hero-frame gallery UI that displays **4–8 variations** per prompt and supports hero-frame selection.
+   - Integrate LLM-based cinematographer prompt enhancement (FR-037), exposed as an optional step before generation.
+   - Persist hero frames and their metadata for reuse in downstream video generations and experiments.
+
+2. **Phase 2: Image-to-Video Workflow (PHOTO → VIDEO)**
+   - Implement image-to-video generation from a selected hero frame using models such as Kling, Wan, or PixVerse.
+   - Extend the generation request schema to include motion prompts (camera movement, frame rate, motion intensity).
+   - Add negative prompt support to suppress artifacts and stabilize motion.
+   - Integrate with the existing video pipeline so that audio, stitching, and post-processing still apply.
+
+3. **Phase 3: Automated Feedback (3 Auto-Attempts)**
+   - Enable **automated 3-attempt generation** for each image-to-video request (FR-040).
+   - Run VBench (or equivalent) on all attempts and compute per-attempt and overall quality scores.
+   - Auto-select the top-scoring attempt as the “system-selected best”, while retaining all attempts for user review.
+   - Persist attempt-level quality metrics for use in dashboards and future feedback loops.
+
+4. **Phase 4: Human-in-the-Loop Refinement**
+   - Deliver the **Iteration Workspace** UI (FR-041) with side-by-side comparison of video attempts.
+   - Support manual prompt editing for both hero-frame and motion prompts.
+   - Integrate LLM-powered prompt improvement suggestions driven by VBench feedback and user comments.
+   - Allow manual override of the auto-selected best attempt; track overrides for quality analysis.
+
+5. **Phase 5: Iterative Refinement Workflow & Quality Dashboard**
+   - Implement generation history and versioning (FR-042), showing iterations and selected versions.
+   - Provide a quality dashboard (FR-043) that visualizes VBench metrics, iteration counts, and selection patterns.
+   - Add comparison views between versions and make the final version pointer explicit for export, analytics, and reporting.
+
+### 23.2 Workflow Sequence (End-to-End)
+
+The end-to-end hero-frame iterative workflow shall operate as:
+
+1. User enters a high-level ad prompt.
+2. System offers LLM-based cinematographer enhancement and generates 4–8 hero frames (TEXT → PHOTO).
+3. User selects a hero frame as the anchor.
+4. System generates 3 image-to-video attempts from that hero frame (PHOTO → VIDEO) using motion + negative prompts.
+5. VBench evaluates all attempts; system auto-selects the best-scoring attempt and surfaces it in the UI.
+6. User opens the Iteration Workspace, reviews all attempts (side-by-side, with metrics), and may:
+   - Accept the auto-selected best
+   - Choose a different attempt as best
+   - Edit prompts and regenerate additional attempts
+7. System tracks each iteration as a version; the user iterates until satisfied.
+8. Final selected version flows into the existing editor (Epic 6), export, and gallery paths.
+
+### 23.3 Implementation Timeline (Hero-Frame Workflow)
+
+This timeline focuses specifically on delivering the hero-frame and iterative refinement capabilities, assuming the core MVP pipeline and most epics are already in place.
+
+**Phase 1–2 (Weeks 1–4) – Foundation**
+- Week 1:
+  - Backend: Hero-frame generation API (text-to-image via Replicate).
+  - Frontend: Hero-frame gallery UI and selection flow.
+  - Data: Hero frame storage and linkage to users/generations.
+- Week 2:
+  - LLM cinematographer prompt enhancement service (FR-037) and UI.
+  - Backend: Image-to-video service wrapper for Kling/Wan/PixVerse.
+  - Schema updates for motion and negative prompts.
+- Week 3–4:
+  - Integration of hero-frame-first path into existing generation flow.
+  - QA across a variety of prompts and aspect ratios.
+
+**Phase 3–4 (Weeks 5–6) – Automation & Human-in-the-Loop**
+- Week 5:
+  - Automated 3-attempt mode and VBench evaluation integration (FR-040).
+  - Auto-selection logic and persistence of attempt-level metrics.
+- Week 6:
+  - Iteration Workspace UI (FR-041) with side-by-side comparison and prompt editing.
+  - LLM-based prompt improvement suggestions and override logging.
+
+**Phase 5 (Weeks 7–8) – Iterative Refinement & Dashboard**
+- Week 7:
+  - Versioning and generation history (FR-042).
+  - Final-version pointer and integration with gallery, editor, and export.
+- Week 8:
+  - Quality Dashboard (FR-043) with VBench visualization and iteration analytics.
+  - Polishing UX for professional workflows; final validation and documentation.
+
+### 23.4 Success Metrics (Hero-Frame Workflow)
+
+In addition to existing product KPIs, success for this workflow is measured by:
+- ≥70% agreement between auto-selected “best” attempt and user-selected final version.
+- ≥50% of professional users adopting hero-frame mode for complex campaigns.
+- Median iterations per final video ≤ 3 (user reaches satisfaction quickly).
+- Observable upward trend in VBench scores across iterations within the same project.
+
+### 23.5 Risks & Mitigations (Incremental)
+
+**Risk: Excessive Computational Cost from Auto-Attempts**
+- **Mitigations:**
+  - Limit auto-attempts to 3 by default, configurable per workspace.
+  - Gate hero-frame iterative mode behind a “pro” flag or environment toggle initially.
+  - Track cost per attempt set and alert when thresholds are exceeded.
+
+**Risk: User Overwhelm from Too Many Options**
+- **Mitigations:**
+  - Default to simple prompt-to-video flow; expose hero-frame mode as an advanced option.
+  - Provide clear visual hierarchy: “Recommended best” vs. alternatives.
+  - Offer opinionated defaults (e.g., motion prompt templates, recommended negative prompts).
+
+**Risk: Misalignment Between VBench Scores and Human Judgement**
+- **Mitigations:**
+  - Track disagreements between auto-selected best and user-selected best over time.
+  - Use disagreements as input to improve VBench thresholds and prompt suggestions.
+  - Allow users to disable auto-selection and rely solely on human choice if desired.
+
+### 23.6 API Endpoints (Hero-Frame Workflow)
+
+The following endpoints extend the existing API to support the hero-frame workflow (high-level spec; detailed request/response schemas will follow the patterns in section 14):
+
+- **POST `/api/hero-frames`**
+  - Description: Generate 4–8 hero frame candidates from a text prompt.
+  - Body: `{ "prompt": string, "enhance_with_llm": boolean }`
+  - Response: List of hero frame objects with IDs, URLs, and metadata.
+
+- **GET `/api/hero-frames/{id}`**
+  - Description: Retrieve a specific hero frame and its metadata.
+
+- **POST `/api/hero-frames/{id}/select`**
+  - Description: Mark a hero frame as the primary anchor for a new generation.
+
+- **POST `/api/image-to-video`**
+  - Description: Start image-to-video generation from a selected hero frame.
+  - Body includes: `hero_frame_id`, `motion_prompt`, `negative_prompt`, `auto_attempts` (default: 3).
+  - Response: Returns a generation group ID and initial status.
+
+- **GET `/api/generation-groups/{group_id}`**
+  - Description: Retrieve all attempts for a generation group, including VBench scores and selection flags.
+
+- **POST `/api/generation-groups/{group_id}/select`**
+  - Description: Mark a specific attempt as the user-selected best and update the final version pointer.
+
+### 23.7 Data Model Changes (High-Level)
+
+The hero-frame workflow introduces new entities and relationships; exact schema will be refined in the technical spec, but at PRD level:
+
+- **HeroFrame**
+  - Fields (conceptual): `id`, `user_id`, `prompt`, `enhanced_prompt`, `image_path`, `thumbnail_path`, `model`, `seed`, `aspect_ratio`, `created_at`.
+  - Relationships: Belongs to a user; may be linked to one or more generation groups.
+
+- **GenerationGroup**
+  - Fields: `id`, `user_id`, `hero_frame_id`, `comparison_type` (settings vs prompt), `created_at`.
+  - Relationships: Has many `VideoAttempt` records; links a set of related generations.
+
+- **VideoAttempt**
+  - Fields: `id`, `group_id`, `generation_id`, `iteration_index`, `is_system_selected_best`, `is_user_selected_best`, `vbench_score_overall`, `status`, `created_at`.
+  - Relationships: Belongs to a `GenerationGroup` and to a `Generation`.
+
+- **QualityMetric / VBenchScore**
+  - Fields: `id`, `attempt_id`, `metric_name`, `metric_value`, `created_at`.
+  - Purpose: Store detailed per-dimension VBench metrics to power dashboards and feedback loops.
+
+### 23.8 Component Breakdown (Hero-Frame Workflow)
+
+At a high level, the hero-frame workflow adds the following components, building on existing architecture:
+
+- **Backend Services**
+  - `hero_frame_service`: Orchestrates text-to-image generation, stores hero frames and metadata.
+  - `image_to_video_service`: Wraps Kling/Wan/PixVerse APIs, including motion and negative prompts.
+  - `quality_evaluation_service`: Runs VBench on attempts and stores scores.
+  - `iteration_service`: Manages generation groups, attempts, versioning, and final-version pointers.
+
+- **Frontend Components**
+  - `HeroFrameGenerator` (Dashboard extension): Prompt input, LLM enhancement, and hero-frame gallery.
+  - `HeroFrameGallery`: Grid view with zoom and selection, tied to user history.
+  - `IterationWorkspace`: Side-by-side comparison view with metrics, prompt editing, and regeneration controls.
+  - `QualityDashboard`: Aggregated view of VBench metrics, iteration counts, and adoption statistics.
+
+- **Integration Points**
+  - Existing `/api/generate` flow remains unchanged for simple users.
+  - Hero-frame flow plugs into the same `generations` and gallery mechanisms once a final version is selected.
+  - Epic 6 editor can be launched from any final version produced by this workflow.
+
+---
+
 ## Document Change Log
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | Nov 14, 2025 | Dev Team | Initial PRD creation |
 | 1.1 | Nov 14, 2025 | PM Agent | Added video editing user stories (timeline, trim, split, merge) and video quality optimization features (coherence enhancement, LLM prompt optimization) |
+| 1.2 | Nov 17, 2025 | PM Agent | Added hero-frame-first iterative workflow (FR-036–FR-044) and Hero-Frame Iteration Plan & Timeline section for professional, image-driven iteration with automated VBench feedback and human-in-the-loop refinement |
 
 ---
 

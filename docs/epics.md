@@ -52,6 +52,15 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 - **FR-033:** Quality Feedback Loop - System shall track quality metrics and learn from user preferences
 - **FR-034:** Profile Display - System shall show user statistics (total videos, cost, dates) ✅
 - **FR-035:** User Stats Update - System shall increment total_generations and update total_cost ✅
+ - **FR-036:** Hero Frame Generation (Text → Photo) - System shall provide a dedicated hero-frame generation flow, using text-to-image models to generate 4–8 hero frame candidates per request and persist them with metadata.
+ - **FR-037:** Cinematographer-Level Prompt Enhancement for Images - System shall offer an optional LLM-powered “cinematographer enhancement” step for hero-frame prompts, returning enriched prompts with detailed cinematography guidance.
+ - **FR-038:** Hero Frame Iteration & Selection - System shall allow users to regenerate, mutate, favorite, and clearly select a canonical hero frame as the anchor for downstream generations.
+ - **FR-039:** Image-to-Video Generation (Photo → Video) from Hero Frame - System shall support image-to-video generation from a selected hero frame, including motion and negative prompts, and produce at least one video attempt.
+ - **FR-040:** Automated Multi-Attempt Generation with VBench-Based Selection - System shall support a 3-attempt auto mode, evaluate attempts with VBench, and auto-select the top-scoring attempt within a generation group.
+ - **FR-041:** Iteration Workspace & Human-in-the-Loop Refinement - System shall provide an Iteration Workspace UI for side-by-side comparison of attempts, manual overrides, prompt edits, and LLM-based improvement suggestions.
+ - **FR-042:** Iterative Refinement Workflow & Versioning - System shall treat each cycle of “prompt update → attempts → evaluation → selection” as an iteration, maintain a generation history timeline, and track a final_version per ad.
+ - **FR-043:** Quality Dashboard & Benchmarks - System shall provide a quality dashboard visualizing VBench scores, iterations, and acceptance trends with filtering and aggregation options.
+ - **FR-044:** Integration with Existing Pipeline & Epics - The hero-frame workflow shall reuse the existing generation pipeline, Epic 7 coherence capabilities, and Epic 6 editor as an additive professional-mode layer on top of the current system.
 
 ---
 
@@ -64,6 +73,8 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 - **Epic 5 (User Profile):** ✅ COMPLETED - FR-022, FR-023, FR-034, FR-035
 - **Epic 6 (Video Editing):** FR-024, FR-025, FR-026, FR-027, FR-028, FR-029
 - **Epic 7 (Video Quality Optimization):** FR-030, FR-031, FR-032, FR-033
+ - **Epic 8 (Hero-Frame Generation):** FR-036, FR-037, FR-038
+ - **Epic 9 (Hero-Frame Iteration & Image-to-Video Workflow):** FR-039, FR-040, FR-041, FR-042, FR-043, FR-044
 
 ---
 
@@ -1881,6 +1892,325 @@ So that the system continuously improves prompt optimization and consistency tec
 
 ---
 
+## Epic 8: Hero-Frame Generation (Text → Photo)
+
+**Goal:** Provide a professional, hero-frame-first entry point where users (especially power users) can generate and curate cinematic still frames that become the visual anchor for downstream video ads.
+
+**Status:** Not started.
+
+### Story 8.1: Cinematographer Prompt Enhancement Service (FR-037)
+
+As a **user who cares about visual quality**,  
+I want an optional “cinematographer enhancement” for my hero-frame prompt,  
+So that I can quickly get a film-grade prompt without needing cinematography expertise.
+
+**Acceptance Criteria:**
+
+**Given** I enter a basic hero-frame prompt  
+**When** I click “Enhance Prompt (Cinematographer Mode)”  
+**Then** the system calls an LLM and returns an enriched prompt including:
+- Camera body and lens details
+- Lighting direction and quality
+- Composition notes (framing, depth, rule of thirds)
+- Film stock/color science references
+- Mood and atmosphere descriptors
+- Aspect ratio and stylization hints
+
+**And** the UI displays:
+- Original prompt and enhanced prompt side-by-side
+- A short explanation of what changed and why
+- Buttons: **Use Enhanced**, **Edit Enhanced**, **Revert to Original**
+
+**And** if the LLM call fails, the system:
+- Shows a user-friendly error message
+- Falls back to the original prompt without blocking hero-frame generation.
+
+**Prerequisites:** Story 3.1 (Prompt Processing).
+
+**Technical Notes:** Reuse existing LLM client; add a dedicated prompt template for cinematographer-style enrichment; schema-align output so it can feed directly into hero-frame generation.
+
+---
+
+### Story 8.2: Hero-Frame Generation Backend & Storage (FR-036)
+
+As a **user**,  
+I want to generate multiple hero-frame candidates from a cinematography-focused prompt,  
+So that I can pick the best frame to anchor my video.
+
+**Acceptance Criteria:**
+
+**Given** I submit a hero-frame generation request  
+**When** the backend processes it  
+**Then** it calls a text-to-image model (e.g., SDXL on Replicate) and generates **4–8 hero frames**:
+- All share the specified aspect ratio
+- All follow the enriched (or original) prompt
+
+**And** the system:
+- Stores each hero frame image in a persistent location (e.g., `/output/hero_frames/…`)
+- Persists metadata: prompt, enhanced_prompt (if used), model, seed, aspect_ratio, user_id, created_at
+- Links hero frames to a logical “hero-frame request” or group ID.
+
+**And** the API returns:
+- List of hero frame IDs
+- URLs for thumbnails/full-size images
+- Associated metadata.
+
+**Prerequisites:** Story 8.1 (for enriched prompt path), Story 1.2 (database), Story 3.2 (generation infra).
+
+**Technical Notes:** Add `hero_frames` table and storage conventions; ensure seeds are stored to support later reuse (e.g., for consistency experiments).
+
+---
+
+### Story 8.3: Hero-Frame Gallery UI & Selection (FR-036, FR-038)
+
+As a **user**,  
+I want a gallery UI for hero-frame candidates where I can inspect, favorite, and select one as the primary hero frame,  
+So that I can confidently choose the frame that best represents my ad.
+
+**Acceptance Criteria:**
+
+**Given** hero frames exist for a request  
+**When** I open the Hero Frame gallery  
+**Then** I see:
+- A grid of hero-frame thumbnails (4–8 items)
+- Ability to click a thumbnail to open a zoomed view
+- Basic metadata (created time, aspect ratio, prompt snippet)
+
+**And** I can:
+- Mark one hero frame as **Primary Hero Frame**
+- Mark multiple hero frames as **Favorites**
+- Clear or change the primary selection at any time before moving forward.
+
+**And** once a primary hero frame is selected:
+- The selection is clearly highlighted in the UI
+- The backend stores `is_primary` flag on that hero frame
+- The selected hero frame ID becomes required input for the image-to-video workflow (Epic 9).
+
+**Prerequisites:** Story 8.2, Story 4.1 (Gallery patterns).
+
+**Technical Notes:** Add simple state machine to ensure exactly one primary hero frame per hero-frame request; reuse existing card/grid components where possible.
+
+---
+
+### Story 8.4: Hero-Frame Iteration & Mutation Controls (FR-038)
+
+As a **power user**,  
+I want “slot-machine” style iteration and light prompt mutation controls for hero frames,  
+So that I can quickly explore variations around a promising idea.
+
+**Acceptance Criteria:**
+
+**Given** I have hero-frame results visible  
+**When** I click “Regenerate Set”  
+**Then** the system regenerates a new batch of 4–8 hero frames with the **same prompt** and updates the gallery with a new “generation round” (preserving previous rounds).
+
+**Given** I click “Mutate Prompt” for a hero frame  
+**When** I tweak a small set of controls (e.g., lighting, composition, mood dropdowns)  
+**Then** the system:
+- Generates a slightly modified prompt (via LLM or templating)
+- Regenerates a new hero-frame batch based on that mutated prompt
+
+**And** the UI:
+- Shows all rounds in a timeline or grouped list
+- Allows me to favorite frames across rounds
+- Clearly indicates which hero frame is **currently** selected as the canonical anchor.
+
+**Prerequisites:** Story 8.3.
+
+**Technical Notes:** Keep round history lightweight; store round index and mutated prompt; avoid exploding storage by setting a max number of rounds or retention policy.
+
+---
+
+## Epic 9: Hero-Frame Iteration & Image-to-Video Workflow
+
+**Goal:** Turn a selected hero frame into high-quality motion through automated multi-attempt generation, VBench-based selection, and a professional Iteration Workspace with history, versioning, and quality dashboards.
+
+**Status:** Not started.
+
+### Story 9.1: Image-to-Video Service & Motion/Negative Prompt Schema (FR-039)
+
+As a **user**,  
+I want to generate motion from my selected hero frame using motion and negative prompts,  
+So that I can see my hero frame come alive as a video.
+
+**Acceptance Criteria:**
+
+**Given** I have selected a primary hero frame  
+**When** I configure a motion prompt (camera movement, motion intensity, frame rate) and optional negative prompt  
+**Then** I can start an image-to-video generation request.
+
+**And** the backend:
+- Accepts `hero_frame_id`, `motion_prompt`, `negative_prompt`, and duration
+- Calls an image-to-video model (e.g., Kling/Wan/PixVerse) via a dedicated service
+- Produces at least one video attempt stored with a `generation_group_id`
+- Links attempts back to the hero frame and user.
+
+**And** errors are surfaced via standard JSON error schema.
+
+**Prerequisites:** Story 8.3, Story 3.2 (video generation infra).
+
+**Technical Notes:** Introduce `generation_groups` and `video_attempts` (or reuse Epic 7 parallel structures) to group attempts; ensure hero-frame image is passed correctly to the chosen model.
+
+---
+
+### Story 9.2: Automated 3-Attempt Generation & VBench Evaluation (FR-040)
+
+As a **pro user**,  
+I want a “3-attempt automatic mode” that generates and scores multiple attempts from a hero frame,  
+So that the system can pre-rank candidates for me using objective quality metrics.
+
+**Acceptance Criteria:**
+
+**Given** I enable “Auto 3-Attempt Mode”  
+**When** I submit an image-to-video request  
+**Then** the system:
+- Automatically generates exactly 3 attempts in the background
+- Stores them under a shared `generation_group_id`
+- Tracks per-attempt metadata (duration, model, settings, cost).
+
+**And** after all attempts finish, the system:
+- Runs VBench (or equivalent) on each attempt
+- Computes per-attempt metrics (temporal consistency, aesthetics, prompt alignment, etc.)
+- Computes an overall score and selects the **system-selected best** attempt
+- Marks that attempt with a flag (e.g., `is_system_selected_best = true`).
+
+**And** the API and UI expose:
+- List of attempts for a group
+- Per-attempt VBench metrics
+- Which attempt was auto-selected and why (score breakdown).
+
+**Prerequisites:** Story 9.1, Story 7.6 (VBench integration).
+
+**Technical Notes:** Reuse VBench infra from Epic 7; add group-level endpoints `/api/generation-groups/{group_id}`; store metrics in a normalized `quality_metrics` table.
+
+---
+
+### Story 9.3: Iteration Workspace UI (FR-041)
+
+As a **professional user**,  
+I want a dedicated Iteration Workspace to compare attempts side-by-side with metrics,  
+So that I can choose, override, and refine the best motion version.
+
+**Acceptance Criteria:**
+
+**Given** a generation group with ≥1 attempts  
+**When** I open the Iteration Workspace for that group  
+**Then** I see:
+- All attempts in a grid or side-by-side layout
+- Inline video players (play/pause, scrub) for each attempt
+- Key metrics (overall score + a few key dimensions)
+- A clear highlight on the system-selected best attempt.
+
+**And** I can:
+- Manually mark a different attempt as the **user-selected best**
+- Trigger a fresh set of attempts from updated motion/negative prompts
+- View a short LLM-suggested “prompt improvement” snippet based on low-scoring metrics or my feedback (“too chaotic”, etc.).
+
+**And** the backend:
+- Stores `is_user_selected_best` per attempt
+- Logs each regeneration as a new attempt in the same group
+- Preserves full history.
+
+**Prerequisites:** Story 9.2.
+
+**Technical Notes:** Reuse comparison concepts from Epic 7 (Parallel Generation Tool); ensure UX clearly distinguishes auto vs user selection and iteration numbers.
+
+---
+
+### Story 9.4: Iteration History & Final Version Pointer (FR-042)
+
+As a **user**,  
+I want a clear iteration history and a final version pointer,  
+So that I understand how my video evolved and which version is used downstream.
+
+**Acceptance Criteria:**
+
+**Given** multiple iterations of a generation group exist  
+**When** I open the iteration history view  
+**Then** I see a timeline listing for each iteration:
+- Iteration index (1, 2, 3, …)
+- Which attempt was selected that round (system vs user)
+- Key prompt changes and settings deltas
+- VBench score trend (delta vs previous iteration).
+
+**And** the system:
+- Maintains a `final_version` pointer per ad (points to a specific attempt)
+- Uses `final_version` for:
+  - Export & download
+  - Editor entry (Epic 6)
+  - Analytics and dashboards.
+
+**And** I can:
+- Change which attempt is marked as final (with a confirmation)
+- Compare any two versions side-by-side (player + metrics).
+
+**Prerequisites:** Story 9.3.
+
+**Technical Notes:** Add `generation_groups.final_attempt_id` or equivalent; be careful with referential integrity when attempts are deleted; add basic diff representation for prompt/settings between iterations.
+
+---
+
+### Story 9.5: Quality Dashboard & Benchmarks (FR-043)
+
+As a **product owner or advanced user**,  
+I want a Quality Dashboard summarizing VBench and iteration behavior across videos,  
+So that I can see how quality is trending and where the hero-frame workflow is paying off.
+
+**Acceptance Criteria:**
+
+**Given** VBench and iteration data exist  
+**When** I open the Quality Dashboard  
+**Then** I see:
+- Distribution of VBench scores across attempts and final videos
+- Average number of iterations per final video
+- Agreement rate between auto-selected best and user-selected final
+- Trends in quality over time.
+
+**And** I can filter by:
+- Date range
+- Model used (Kling/Wan/PixVerse/etc.)
+- (Future) Campaign/tag.
+
+**And** for an individual video, the dashboard shows:
+- Per-attempt scores (bar/line chart)
+- Iteration timeline and which iteration produced the final version.
+
+**Prerequisites:** Story 9.2, Story 9.4, Story 7.10 (Quality Feedback Loop).
+
+**Technical Notes:** Start with backend aggregation endpoints and simple charts; use existing quality_metrics; keep v1 read-only/observational.
+
+---
+
+### Story 9.6: Pipeline Integration with Existing Epics (FR-044)
+
+As a **system architect**,  
+I want the hero-frame and iteration workflow to integrate cleanly with the existing pipeline,  
+So that we reuse Epic 3, 6, and 7 capabilities instead of creating a parallel system.
+
+**Acceptance Criteria:**
+
+**Given** a final hero-frame-based video version is selected  
+**When** it is marked as `final_version`  
+**Then**:
+- The existing generation pipeline (Epic 3) still provides stitching, audio, and export capabilities as usual (or is re-used where appropriate in the image-to-video path).
+- Epic 7 coherence techniques (seed control, IP-Adapter, VBench, etc.) are available and configurable for hero-frame flows.
+- Epic 6 editor can be launched from any final version produced by this workflow.
+
+**And** the hero-frame flow:
+- Does **not** remove or break the simple prompt-to-video path
+- Is exposed as an “Advanced / Pro Mode” entry point in the UI
+- Reuses data models where possible (no unnecessary duplication of concepts).
+
+**And** documentation makes clear:
+- Where the hero-frame path plugs into the existing pipeline
+- Which epics and services it depends on.
+
+**Prerequisites:** Story 9.4, Epic 3, Epic 6, Epic 7 core stories.
+
+**Technical Notes:** This is mostly glue/config and documentation: update architecture docs, confirm routing flows, and ensure all generation paths share consistent cost tracking, status, and storage patterns.
+
+---
+
 ## FR Coverage Matrix
 
 - **FR-001:** User Registration → Epic 2, Story 2.1
@@ -1918,6 +2248,15 @@ So that the system continuously improves prompt optimization and consistency tec
 - **FR-033:** Quality Feedback Loop → Epic 7, Story 7.10
 - **FR-034:** Profile Display → Epic 5, Story 5.1 (duplicate of FR-022)
 - **FR-035:** User Stats Update → Epic 5, Story 5.2 (duplicate of FR-023)
+ - **FR-036:** Hero Frame Generation (Text → Photo) → Epic 8, Stories 8.2, 8.3
+ - **FR-037:** Cinematographer-Level Prompt Enhancement for Images → Epic 8, Story 8.1
+ - **FR-038:** Hero Frame Iteration & Selection → Epic 8, Stories 8.3, 8.4
+ - **FR-039:** Image-to-Video Generation (Photo → Video) from Hero Frame → Epic 9, Story 9.1
+ - **FR-040:** Automated Multi-Attempt Generation with VBench-Based Selection → Epic 9, Story 9.2
+ - **FR-041:** Iteration Workspace & Human-in-the-Loop Refinement → Epic 9, Story 9.3
+ - **FR-042:** Iterative Refinement Workflow & Versioning → Epic 9, Story 9.4
+ - **FR-043:** Quality Dashboard & Benchmarks → Epic 9, Story 9.5
+ - **FR-044:** Integration with Existing Pipeline & Epics → Epic 9, Story 9.6
 
 ---
 

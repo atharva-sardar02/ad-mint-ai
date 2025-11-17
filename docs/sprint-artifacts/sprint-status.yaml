@@ -92,3 +92,19 @@ development_status:
   7-9-controlnet-integration-for-compositional-consistency: backlog
   7-10-quality-feedback-loop-with-research-metrics: backlog
   epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-cinematographer-prompt-enhancement-service: backlog
+  8-2-hero-frame-generation-backend-storage: backlog
+  8-3-hero-frame-gallery-ui-selection: backlog
+  8-4-hero-frame-iteration-mutation-controls: backlog
+  epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-image-to-video-service-motion-negative-prompt-schema: backlog
+  9-2-automated-3-attempt-generation-vbench-evaluation: backlog
+  9-3-iteration-workspace-ui: backlog
+  9-4-iteration-history-final-version-pointer: backlog
+  9-5-quality-dashboard-benchmarks: backlog
+  9-6-pipeline-integration-with-existing-epics: backlog
+  epic-9-retrospective: optional
