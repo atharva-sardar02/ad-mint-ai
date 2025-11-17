@@ -103,7 +103,9 @@ async def generate_video_clip_with_model(
             model_name=model_name,
             prompt=prompt,
             duration=duration,
-            cancellation_check=cancellation_check
+            cancellation_check=cancellation_check,
+            reference_image_path=None,
+            scene_number=clip_index,
         )
         
         # Download video clip
@@ -134,7 +136,8 @@ async def generate_video_clip(
     scene_number: int,
     cancellation_check: Optional[callable] = None,
     seed: Optional[int] = None,
-    preferred_model: Optional[str] = None
+    preferred_model: Optional[str] = None,
+    reference_image_path: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -210,7 +213,9 @@ async def generate_video_clip(
                 prompt=scene.visual_prompt,
                 duration=scene.duration,
                 cancellation_check=cancellation_check,
-                seed=seed
+                seed=seed,
+                reference_image_path=reference_image_path,
+                scene_number=scene_number,
             )
             
             # Download video clip
@@ -263,7 +268,9 @@ async def _generate_with_retry(
     prompt: str,
     duration: int,
     cancellation_check: Optional[callable] = None,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    reference_image_path: Optional[str] = None,
+    scene_number: Optional[int] = None,
 ) -> str:
     """
     Generate video with retry logic and exponential backoff.
@@ -305,6 +312,49 @@ async def _generate_with_retry(
                     "duration": duration,
                     "aspect_ratio": "portrait",  # Vertical for MVP
                 }
+                # Log exact Sora-2 prompt being sent
+                scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
+                logger.info("=" * 80)
+                logger.info(f"EXACT SORA-2 PROMPT FOR {scene_info} (duration: {duration}s):")
+                logger.info("=" * 80)
+                logger.info(prompt)
+                logger.info("=" * 80)
+                if reference_image_path:
+                    logger.info(f"Reference image path: {reference_image_path}")
+                logger.info("=" * 80)
+                # If a reference image is available, pass it as media so Sora can
+                # condition on the actual product visuals instead of inferred text.
+                if reference_image_path:
+                    try:
+                        # Verify file exists and is accessible
+                        image_path_obj = Path(reference_image_path)
+                        if not image_path_obj.exists():
+                            logger.error(
+                                f"Reference image file does not exist: {reference_image_path}"
+                            )
+                        else:
+                            # Replicate Python SDK: For Sora-2, try "image" parameter first
+                            # The SDK should handle file upload automatically
+                            # If that doesn't work, we'll try input_reference with file object
+                            absolute_path = str(image_path_obj.absolute())
+                            
+                            # Try "image" parameter (common Replicate parameter name)
+                            # The SDK will automatically upload local files
+                            input_params["image"] = absolute_path
+                            logger.info(
+                                f"Attached reference image for Sora-2: {reference_image_path} "
+                                f"(size: {image_path_obj.stat().st_size} bytes, "
+                                f"readable: {os.access(image_path_obj, os.R_OK)}, parameter: image)"
+                            )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to attach reference image '{reference_image_path}' "
+                            f"for Sora-2: {e}",
+                            exc_info=True
+                        )
+                        if image_file_handle:
+                            image_file_handle.close()
+                            image_file_handle = None
             else:
                 # Other models use aspect ratio as ratio string
                 input_params = {
@@ -312,6 +362,13 @@ async def _generate_with_retry(
                     "duration": duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
+                # Log exact prompt for other models too
+                scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
+                logger.info("=" * 80)
+                logger.info(f"EXACT PROMPT FOR {model_name} - {scene_info} (duration: {duration}s):")
+                logger.info("=" * 80)
+                logger.info(prompt)
+                logger.info("=" * 80)
             
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
@@ -335,10 +392,23 @@ async def _generate_with_retry(
             # Create prediction
             # Note: If model doesn't support seed parameter, Replicate API will ignore it silently
             # or return an error. We handle errors in the exception handlers below.
-            prediction = client.predictions.create(
-                model=model_name,
-                input=input_params
-            )
+            # Track file handles that need to be closed
+            file_handles_to_close = []
+            if "input_reference" in input_params and hasattr(input_params["input_reference"], "read"):
+                file_handles_to_close.append(input_params["input_reference"])
+            
+            try:
+                prediction = client.predictions.create(
+                    model=model_name,
+                    input=input_params
+                )
+            finally:
+                # Close any file handles after API call (Replicate SDK reads them immediately)
+                for fh in file_handles_to_close:
+                    try:
+                        fh.close()
+                    except Exception:
+                        pass
             
             # Poll for completion
             while prediction.status not in ["succeeded", "failed", "canceled"]:
@@ -405,8 +475,55 @@ async def _generate_with_retry(
                     await asyncio.sleep(delay)
                     continue
             
-            # Don't retry on validation errors (422) - these are parameter issues
-            if "422" in str(e) or "validation" in error_str:
+            # Handle validation errors (422) - try alternative parameter names for reference image
+            if ("422" in str(e) or "validation" in error_str) and model_name == "openai/sora-2" and reference_image_path:
+                # Try alternative parameter names for reference image
+                image_path_obj = Path(reference_image_path)
+                
+                if "image" in input_params and image_path_obj.exists():
+                    # If "image" parameter failed, try "input_reference" with file object
+                    logger.warning(
+                        f"Parameter 'image' failed for Sora-2 (error: {str(e)[:100]}), "
+                        f"trying 'input_reference' with file object..."
+                    )
+                    try:
+                        # Remove failed "image" parameter
+                        del input_params["image"]
+                        # Try with opened file object - keep it open for the API call
+                        image_file_handle = open(image_path_obj, "rb")
+                        input_params["input_reference"] = image_file_handle
+                        logger.info(f"Retrying with input_reference parameter (file object)")
+                        # Retry the API call immediately (same attempt)
+                        continue
+                    except Exception as retry_error:
+                        logger.error(f"Failed to retry with input_reference: {retry_error}")
+                        if 'image_file_handle' in locals():
+                            image_file_handle.close()
+                
+                elif "input_reference" in str(e).lower() and image_path_obj.exists():
+                    # If input_reference failed, try without reference image (Sora-2 should still work)
+                    logger.warning(
+                        f"Reference image parameter failed for Sora-2, trying without reference image..."
+                    )
+                    try:
+                        # Remove reference image parameter and retry
+                        if "image" in input_params:
+                            del input_params["image"]
+                        if "input_reference" in input_params:
+                            del input_params["input_reference"]
+                        logger.info(f"Retrying Sora-2 without reference image")
+                        continue
+                    except Exception as retry_error:
+                        logger.error(f"Failed to retry without reference image: {retry_error}")
+                
+                # If all parameter attempts failed, raise the error (will trigger fallback model)
+                logger.error(
+                    f"Sora-2 failed with reference image parameters. Error: {e}. "
+                    f"Will fall back to alternative model."
+                )
+                raise RuntimeError(f"Invalid parameters for model {model_name}: {e}")
+            elif "422" in str(e) or "validation" in error_str:
+                # For other models or non-image validation errors, fail immediately
                 raise RuntimeError(f"Invalid parameters for model {model_name}: {e}")
             
             if attempt < MAX_RETRIES:

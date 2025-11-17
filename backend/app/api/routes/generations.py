@@ -8,7 +8,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -66,11 +77,12 @@ TEXT_OVERLAYS_ENABLED = True
 
 
 async def process_generation(
-    generation_id: str, 
+    generation_id: str,
     prompt: str,
     preferred_model: Optional[str] = None,
     num_clips: Optional[int] = None,
-    use_llm: bool = True
+    use_llm: bool = True,
+    image_path: Optional[str] = None,
 ):
     """
     Background task to process video generation.
@@ -100,13 +112,14 @@ async def process_generation(
                     status="processing"
                 )
                 logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
-                
-                # Call LLM enhancement service
-                logger.info(f"[{generation_id}] Calling LLM enhancement service...")
-                ad_spec = await enhance_prompt_with_llm(prompt)
+
+                # Call LLM enhancement service (optionally with reference image)
+                # Uses v2.0 compact format: 3-7 word fragments assembled into Sora-2 prompts
+                logger.info(f"[{generation_id}] Calling LLM enhancement service (v2.0 compact format)...")
+                ad_spec = await enhance_prompt_with_llm(prompt, image_path=image_path)
                 logger.info(f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}")
                 
-                # Store LLM specification
+                # Store LLM specification (contains compact fragments that will be assembled into Sora prompts)
                 generation.llm_specification = ad_spec.model_dump()
                 generation.framework = ad_spec.framework
                 db.commit()
@@ -257,7 +270,9 @@ async def process_generation(
                             scene_number=scene_number,
                             cancellation_check=check_cancellation,
                             seed=seed,  # Pass seed for visual consistency (None if seed_control disabled)
-                            preferred_model=preferred_model  # Pass preferred model if specified
+                            preferred_model=preferred_model,  # Pass preferred model if specified
+                            # Pass reference image through when available (used by Sora-2).
+                            reference_image_path=image_path,
                         )
                         logger.info(f"[{generation_id}] Clip {scene_number} generated successfully: {clip_path} (model: {model_used})")
                         
@@ -444,12 +459,16 @@ async def process_generation(
                 # Pass scene plan for transition detection
                 scene_plan_obj = ScenePlan(**generation.scene_plan) if generation.scene_plan else None
                 
+                # Pass LLM specification to audio layer for sound_design extraction
+                llm_spec = generation.llm_specification if generation.llm_specification else None
+                
                 video_with_audio = add_audio_layer(
                     video_path=stitched_video_path,
                     music_style=music_style,
                     output_path=audio_output_path,
                     scene_plan=scene_plan_obj,
-                    cancellation_check=check_cancellation
+                    cancellation_check=check_cancellation,
+                    llm_specification=llm_spec,  # Pass LLM spec for sound_design
                 )
                 logger.info(f"[{generation_id}] Audio layer added successfully: {video_with_audio}")
                 
@@ -649,12 +668,12 @@ async def create_generation(
     # Add background task to process the generation
     # Pass model, num_clips, and use_llm if specified
     background_tasks.add_task(
-        process_generation, 
-        generation_id, 
+        process_generation,
+        generation_id,
         request.prompt,
         request.model,
         request.num_clips,
-        request.use_llm if request.use_llm is not None else True
+        request.use_llm if request.use_llm is not None else True,
     )
     
     return GenerateResponse(

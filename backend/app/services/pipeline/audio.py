@@ -40,7 +40,8 @@ def add_audio_layer(
     music_style: str,
     output_path: str,
     scene_plan: Optional["ScenePlan"] = None,
-    cancellation_check: Optional[callable] = None
+    cancellation_check: Optional[callable] = None,
+    llm_specification: Optional[dict] = None,
 ) -> str:
     """
     Add background music and sound effects to a video.
@@ -68,9 +69,20 @@ def add_audio_layer(
         if cancellation_check and cancellation_check():
             raise RuntimeError("Audio layer processing cancelled by user")
         
-        # Load video
+        # Load video (preserve original audio from Sora-2 if present)
         video = VideoFileClip(video_path)
         video_duration = video.duration
+        
+        # Check if video already has audio (from Sora-2 generation)
+        original_audio = None
+        if video.audio is not None:
+            original_audio = video.audio
+            logger.info(
+                f"Video contains original audio from Sora-2 (duration: {original_audio.duration:.2f}s). "
+                f"This will be preserved and mixed with background music."
+            )
+        else:
+            logger.debug("Video has no original audio - will add background music only")
         
         # Select music file based on style (graceful fallback if not found)
         logger.info(f"Selecting music file for style: '{music_style}'")
@@ -117,8 +129,60 @@ def add_audio_layer(
                 music_clip.close()
             raise RuntimeError("Audio layer processing cancelled by user")
         
-        # Add sound effects at scene transitions
+        # Add sound effects: ambient SFX from LLM sound_design + transition SFX
         sfx_clips = []
+        
+        # First, add ambient sound effects based on LLM sound_design for each scene
+        if llm_specification and scene_plan and scene_plan.scenes:
+            scenes_data = llm_specification.get("scenes", [])
+            current_time = 0.0
+            
+            for i, scene in enumerate(scene_plan.scenes):
+                # Find matching scene in LLM specification by scene_number
+                scene_spec = None
+                for spec_scene in scenes_data:
+                    if spec_scene.get("scene_number") == scene.scene_number:
+                        scene_spec = spec_scene
+                        break
+                
+                if scene_spec:
+                    sound_design = scene_spec.get("sound_design")
+                    if sound_design:
+                        # Map sound_design description to appropriate ambient SFX
+                        ambient_sfx_file = _select_ambient_sfx(sound_design)
+                        if ambient_sfx_file and ambient_sfx_file.exists():
+                            try:
+                                ambient_clip = AudioFileClip(str(ambient_sfx_file))
+                                # Trim to scene duration
+                                scene_duration = scene.duration
+                                if ambient_clip.duration > scene_duration:
+                                    ambient_clip = ambient_clip.subclipped(0, scene_duration)
+                                elif ambient_clip.duration < scene_duration:
+                                    # Loop ambient SFX to match scene duration
+                                    loops_needed = int(scene_duration / ambient_clip.duration) + 1
+                                    ambient_clips = [ambient_clip] * loops_needed
+                                    ambient_clip = CompositeAudioClip(ambient_clips).subclipped(0, scene_duration)
+                                
+                                # Position at scene start time
+                                ambient_clip = ambient_clip.with_start(current_time)
+                                # Lower volume for ambient (20% - subtle background)
+                                ambient_clip = ambient_clip.with_effects([MultiplyVolume(0.2)])
+                                sfx_clips.append(ambient_clip)
+                                logger.info(
+                                    f"Added ambient SFX for scene {scene.scene_number} "
+                                    f"({sound_design[:50]}...) at {current_time:.2f}s"
+                                )
+                            except Exception as e:
+                                logger.warning(f"Could not add ambient SFX for scene {scene.scene_number}: {e}")
+                        else:
+                            logger.debug(
+                                f"No ambient SFX file found for sound_design '{sound_design[:50]}...' "
+                                f"in scene {scene.scene_number}. Check {SFX_LIBRARY_DIR} for available SFX files."
+                            )
+                
+                current_time += scene.duration
+        
+        # Add transition sound effects at scene boundaries
         if scene_plan and scene_plan.scenes:
             # Calculate transition points based on scene durations
             transition_times = []
@@ -132,7 +196,7 @@ def add_audio_layer(
             try:
                 sfx_file = _select_sfx_file("transition")
                 if sfx_file and sfx_file.exists():
-                    logger.debug(f"Adding sound effects at {len(transition_times)} scene transitions")
+                    logger.info(f"Adding sound effects at {len(transition_times)} scene transitions")
                     base_sfx = AudioFileClip(str(sfx_file))
                     # Trim SFX to 0.5s (transition duration)
                     if base_sfx.duration > 0.5:
@@ -145,7 +209,12 @@ def add_audio_layer(
                             sfx_clips.append(sfx_at_transition)
                             logger.debug(f"Added SFX at transition: {transition_time:.2f}s")
                 else:
-                    logger.debug("Sound effect file not found, skipping SFX")
+                    logger.warning(
+                        f"Sound effect file not found in {SFX_LIBRARY_DIR}. "
+                        f"Expected: transition.mp3 or transition.wav. "
+                        f"Skipping transition sound effects. "
+                        f"To enable SFX, add sound effect files to {SFX_LIBRARY_DIR}"
+                    )
             except Exception as e:
                 # SFX is optional - log warning but continue
                 logger.warning(f"Could not add sound effects: {e}")
@@ -163,18 +232,39 @@ def add_audio_layer(
             except Exception as e:
                 logger.debug(f"Could not add sound effect at start: {e}")
         
-        # Composite audio tracks (music + all SFX clips)
+        # Composite audio tracks: original Sora-2 audio + music + SFX clips
         audio_tracks = []
+        
+        # Preserve original audio from Sora-2 (ambient sounds, sound effects generated by AI)
+        if original_audio:
+            # Lower volume of original audio to 60% so it doesn't overpower background music
+            # This allows Sora-2's ambient sounds to be heard but not dominate
+            original_audio_adjusted = original_audio.with_effects([MultiplyVolume(0.6)])
+            audio_tracks.append(original_audio_adjusted)
+            logger.info("Preserving Sora-2 generated audio (ambient sounds, SFX) at 60% volume")
+        
+        # Add background music
         if music_clip:
             audio_tracks.append(music_clip)
+        
+        # Add manual SFX clips (if files exist - optional)
         if sfx_clips:
             audio_tracks.extend(sfx_clips)
         
+        # Composite all audio tracks
         if len(audio_tracks) > 1:
-            logger.debug(f"Compositing {len(audio_tracks)} audio track(s): music + {len(sfx_clips)} sound effect(s)")
+            track_names = []
+            if original_audio:
+                track_names.append("Sora-2 audio")
+            if music_clip:
+                track_names.append("background music")
+            if sfx_clips:
+                track_names.append(f"{len(sfx_clips)} SFX clip(s)")
+            logger.info(f"Compositing {len(audio_tracks)} audio track(s): {', '.join(track_names)}")
             final_audio = CompositeAudioClip(audio_tracks)
         elif len(audio_tracks) == 1:
-            logger.debug("Using single audio track")
+            track_name = "Sora-2 audio" if original_audio else ("background music" if music_clip else "SFX")
+            logger.info(f"Using single audio track: {track_name}")
             final_audio = audio_tracks[0]
         else:
             # No audio - video will be silent
@@ -216,6 +306,8 @@ def add_audio_layer(
         
         # Clean up
         video.close()
+        if original_audio:
+            original_audio.close()
         if music_clip:
             music_clip.close()
         for sfx in sfx_clips:
@@ -349,4 +441,64 @@ def _select_sfx_file(sfx_type: str) -> Optional[Path]:
         return None
     
     return sfx_file
+
+
+def _select_ambient_sfx(sound_design: str) -> Optional[Path]:
+    """
+    Select ambient sound effect file based on sound_design description from LLM.
+    
+    Maps natural language descriptions like "gentle room tone" or "soft fabric movement"
+    to appropriate ambient SFX files.
+    
+    Args:
+        sound_design: Sound design description from LLM (e.g., "gentle room tone, faint fabric movement")
+    
+    Returns:
+        Optional[Path]: Path to ambient sound effect file, or None if not found
+    """
+    if not sound_design:
+        return None
+    
+    sound_design_lower = sound_design.lower()
+    
+    # Map keywords to SFX files
+    # Priority order: more specific matches first
+    ambient_mappings = [
+        ("room tone", "room_tone"),
+        ("ambient", "room_tone"),
+        ("fabric", "fabric_movement"),
+        ("cloth", "fabric_movement"),
+        ("movement", "fabric_movement"),
+        ("footsteps", "footsteps"),
+        ("footstep", "footsteps"),
+        ("paper", "paper_rustle"),
+        ("rustle", "paper_rustle"),
+        ("breeze", "breeze"),
+        ("wind", "breeze"),
+        ("nature", "nature_ambient"),
+        ("outdoor", "nature_ambient"),
+    ]
+    
+    # Find first matching keyword
+    for keyword, sfx_name in ambient_mappings:
+        if keyword in sound_design_lower:
+            sfx_file = SFX_LIBRARY_DIR / f"{sfx_name}.mp3"
+            if not sfx_file.exists():
+                sfx_file = SFX_LIBRARY_DIR / f"{sfx_name}.wav"
+            if sfx_file.exists():
+                logger.debug(f"Mapped sound_design '{sound_design[:50]}...' to {sfx_name}")
+                return sfx_file
+    
+    # Fallback: try generic "ambient" or "room_tone"
+    fallback_files = ["room_tone", "ambient", "background"]
+    for fallback_name in fallback_files:
+        fallback_file = SFX_LIBRARY_DIR / f"{fallback_name}.mp3"
+        if not fallback_file.exists():
+            fallback_file = SFX_LIBRARY_DIR / f"{fallback_name}.wav"
+        if fallback_file.exists():
+            logger.debug(f"Using fallback ambient SFX: {fallback_name} for '{sound_design[:50]}...'")
+            return fallback_file
+    
+    logger.debug(f"No ambient SFX found for sound_design: '{sound_design[:50]}...'")
+    return None
 
