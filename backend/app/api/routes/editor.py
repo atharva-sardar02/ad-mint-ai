@@ -74,48 +74,88 @@ async def get_editor_data(
         HTTPException: 404 if generation not found
         HTTPException: 403 if user doesn't own the generation
     """
-    logger.info(f"User {current_user.id} requesting editor data for generation {generation_id}")
+    logger.debug(f"User {current_user.id} requesting editor data for generation {generation_id}")
     
-    # Load generation record
-    generation = db.query(Generation).filter(Generation.id == generation_id).first()
-    
-    if not generation:
-        logger.warning(f"Generation {generation_id} not found")
+    try:
+        # Load generation record
+        generation = db.query(Generation).filter(Generation.id == generation_id).first()
+        
+        if not generation:
+            logger.warning(f"Generation {generation_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "GENERATION_NOT_FOUND",
+                        "message": "Generation not found"
+                    }
+                }
+            )
+        
+        # Verify user ownership
+        if generation.user_id != current_user.id:
+            logger.warning(
+                f"User {current_user.id} attempted to access generation {generation_id} "
+                f"owned by {generation.user_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": {
+                        "code": "FORBIDDEN",
+                        "message": "You don't have permission to edit this generation"
+                    }
+                }
+            )
+        
+        # Extract original scene clips from generation
+        try:
+            original_clips = extract_clips_from_generation(generation, db)
+        except Exception as e:
+            logger.error(f"Error extracting clips from generation {generation_id}: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": {
+                        "code": "CLIP_EXTRACTION_ERROR",
+                        "message": "Failed to extract clips from generation"
+                    }
+                }
+            )
+        
+        # Create or load editing session
+        try:
+            editing_session = get_or_create_editing_session(
+                generation=generation,
+                user_id=current_user.id,
+                db=db
+            )
+        except Exception as e:
+            logger.error(f"Error creating/loading editing session for generation {generation_id}: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": {
+                        "code": "EDITING_SESSION_ERROR",
+                        "message": "Failed to create or load editing session"
+                    }
+                }
+            )
+    except HTTPException:
+        # Re-raise HTTP exceptions (404, 403, etc.)
+        raise
+    except Exception as e:
+        # Catch any other unexpected errors
+        logger.error(f"Unexpected error in get_editor_data for generation {generation_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": {
-                    "code": "GENERATION_NOT_FOUND",
-                    "message": "Generation not found"
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "An error occurred while loading editor data"
                 }
             }
         )
-    
-    # Verify user ownership
-    if generation.user_id != current_user.id:
-        logger.warning(
-            f"User {current_user.id} attempted to access generation {generation_id} "
-            f"owned by {generation.user_id}"
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error": {
-                    "code": "FORBIDDEN",
-                    "message": "You don't have permission to edit this generation"
-                }
-            }
-        )
-    
-    # Extract original scene clips from generation
-    original_clips = extract_clips_from_generation(generation, db)
-    
-    # Create or load editing session
-    editing_session = get_or_create_editing_session(
-        generation=generation,
-        user_id=current_user.id,
-        db=db
-    )
     
     # Reconstruct clips from editing_state if it exists and has been modified
     clips = original_clips
@@ -211,7 +251,7 @@ async def get_editor_data(
     original_video_url = get_full_url(generation.video_url) or ""
     original_video_path = generation.video_path or ""
     
-    logger.info(
+    logger.debug(
         f"Returning editor data for generation {generation_id}: "
         f"{len(clips)} clips, total duration {total_duration}s, "
         f"{len(trim_state)} clips with trim state"

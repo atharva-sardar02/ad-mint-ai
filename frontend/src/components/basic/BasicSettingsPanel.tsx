@@ -4,6 +4,8 @@
  */
 import React, { useState } from "react";
 import { Select } from "../ui/Select";
+import { ModelSelect } from "../ui/ModelSelect";
+import { VIDEO_MODELS, DEFAULT_MODEL } from "../../lib/models/videoModels";
 
 export interface BasicSettings {
   useSingleClip: boolean;
@@ -177,35 +179,15 @@ export const BasicSettingsPanel: React.FC<BasicSettingsPanelProps> = ({
 
           {/* Model Selection */}
           <div>
-            <Select
+            <ModelSelect
               label="Video Model"
               id="basic-model"
+              models={VIDEO_MODELS}
               value={settings.model || ""}
               onChange={(e) => handleModelChange(e.target.value)}
               disabled={disabled}
               required={settings.useSingleClip}
-              options={[
-                {
-                  value: "",
-                  label: settings.useSingleClip
-                    ? "Select a model (required)"
-                    : "Auto (use default)",
-                },
-                {
-                  value: "bytedance/seedance-1-lite",
-                  label: "Seedance-1-Lite (Primary)",
-                },
-                {
-                  value: "minimax-ai/minimax-video-01",
-                  label: "Minimax Video-01",
-                },
-                { value: "klingai/kling-video", label: "Kling 1.5" },
-                {
-                  value: "runway/gen3-alpha-turbo",
-                  label: "Runway Gen-3 Alpha Turbo",
-                },
-                { value: "openai/sora-2", label: "Sora-2" },
-              ]}
+              placeholder={settings.useSingleClip ? "Select a model (required)" : "Auto (use default)"}
             />
           </div>
 

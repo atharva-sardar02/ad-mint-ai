@@ -16,9 +16,16 @@ from app.schemas.generation import Scene, ScenePlan
 logger = logging.getLogger(__name__)
 
 # Replicate model configurations
-# Primary model: Seedance-1-Lite (ByteDance)
-# Fallback models: Minimax Video-01, Kling 1.5, Runway Gen-3 Alpha Turbo, Sora-2
+# Default model: Sora 2 (OpenAI) - State-of-the-art realism with exceptional physics
+# Top models ranked by quality: Sora 2, Veo 3, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
+    "default": "openai/sora-2",  # Sora 2 - Recommended default
+    "veo_3": "google/veo-3",
+    "pixverse_v5": "pixverse/pixverse-v5",
+    "kling_2_5": "klingai/kling-2.5-turbo",
+    "hailuo_02": "minimax-ai/hailuo-02",
+    "seedance_1": "bytedance/seedance-1",
+    # Legacy models (kept for backward compatibility)
     "primary": "bytedance/seedance-1-lite",
     "fallback_1": "minimax-ai/minimax-video-01",
     "fallback_2": "klingai/kling-video",
@@ -27,13 +34,20 @@ REPLICATE_MODELS = {
 }
 
 # Cost per second of video (approximate, varies by model)
-# Seedance-1-Lite: ~$0.04/sec (estimated), Minimax: ~$0.05/sec, Kling: ~$0.06/sec, Runway: ~$0.08/sec, Sora-2: ~$0.10/sec (estimated)
+# Updated costs for 2025 models
 MODEL_COSTS = {
+    # Top-tier models
+    "openai/sora-2": 0.10,  # Default - state-of-the-art
+    "google/veo-3": 0.12,  # Premium cinematic quality
+    "pixverse/pixverse-v5": 0.06,  # Balanced quality & cost
+    "klingai/kling-2.5-turbo": 0.07,  # Fast cinematic
+    "minimax-ai/hailuo-02": 0.09,  # Physics proficiency
+    "bytedance/seedance-1": 0.05,  # Multi-shot specialist
+    # Legacy models
     "bytedance/seedance-1-lite": 0.04,
     "minimax-ai/minimax-video-01": 0.05,
     "klingai/kling-video": 0.06,
     "runway/gen3-alpha-turbo": 0.08,
-    "openai/sora-2": 0.10
 }
 
 # Retry configuration
@@ -176,18 +190,29 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: preferred_model (if specified) -> primary -> fallback_1 -> fallback_2 -> fallback_3
+    # Try models in order: preferred_model (if specified) -> default (Sora 2) -> fallback chain
     models_to_try = []
     if preferred_model and preferred_model in MODEL_COSTS:
         models_to_try.append(preferred_model)
         logger.info(f"Using preferred model: {preferred_model}")
+    else:
+        # Use Sora 2 as default when no model is specified
+        models_to_try.append(REPLICATE_MODELS["default"])
+        logger.info(f"Using default model: {REPLICATE_MODELS['default']}")
     
-    # Add default fallback chain
+    # Add fallback chain (only models that exist and work)
+    # Removed models that return 404: 
+    # - klingai/kling-2.5-turbo (404)
+    # - klingai/kling-video (404)
+    # - runway/gen3-alpha-turbo (404)
+    # - bytedance/seedance-1 (404)
+    # - minimax-ai/hailuo-02 (404)
     models_to_try.extend([
-        REPLICATE_MODELS["primary"],
-        REPLICATE_MODELS["fallback_1"],
-        REPLICATE_MODELS["fallback_2"],
-        REPLICATE_MODELS["fallback_3"]
+        REPLICATE_MODELS["veo_3"],  # May have rate limits but exists
+        REPLICATE_MODELS["pixverse_v5"],  # Reliable fallback
+        # Legacy fallbacks (verified to exist)
+        REPLICATE_MODELS["primary"],  # bytedance/seedance-1-lite
+        REPLICATE_MODELS["fallback_1"],  # minimax-ai/minimax-video-01
     ])
     
     # Remove duplicates while preserving order
@@ -304,6 +329,27 @@ async def _generate_with_retry(
                     "prompt": prompt,
                     "duration": duration,
                     "aspect_ratio": "portrait",  # Vertical for MVP
+                    "quality": "high",  # Request high quality output
+                }
+            elif model_name == "google/veo-3":
+                # Veo 3 only supports duration values: 4, 6, or 8 seconds
+                # Round to nearest valid duration
+                valid_durations = [4, 6, 8]
+                veo_duration = min(valid_durations, key=lambda x: abs(x - duration))
+                if veo_duration != duration:
+                    logger.debug(f"Veo-3: Rounding duration from {duration}s to {veo_duration}s (valid values: 4, 6, 8)")
+                input_params = {
+                    "prompt": prompt,
+                    "duration": veo_duration,
+                    "aspect_ratio": "9:16",  # Vertical for MVP
+                }
+            elif model_name == "pixverse/pixverse-v5":
+                # PixVerse requires quality as resolution string: "360p", "540p", "720p", "1080p"
+                input_params = {
+                    "prompt": prompt,
+                    "duration": duration,
+                    "aspect_ratio": "9:16",  # Vertical for MVP
+                    "quality": "1080p",  # Use resolution string instead of "high"
                 }
             else:
                 # Other models use aspect ratio as ratio string
@@ -312,6 +358,7 @@ async def _generate_with_retry(
                     "duration": duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
+                # Don't add quality parameter for unknown models - let API handle defaults
             
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported

@@ -77,7 +77,7 @@ describe("Dashboard Prompt Validation", () => {
     expect(submitButton).toBeDisabled();
   });
 
-  it("should show error for prompt longer than 500 characters", async () => {
+  it("should accept prompt longer than 500 characters", async () => {
     render(
       <MemoryRouter>
         <Dashboard />
@@ -90,11 +90,12 @@ describe("Dashboard Prompt Validation", () => {
     fireEvent.change(textarea, { target: { value: longPrompt } });
 
     await waitFor(() => {
-      expect(screen.getByText(/must be no more than 500 characters/i)).toBeInTheDocument();
+      const submitButton = screen.getByRole("button", { name: /generate video/i });
+      expect(submitButton).not.toBeDisabled();
     });
 
-    const submitButton = screen.getByRole("button", { name: /generate video/i });
-    expect(submitButton).toBeDisabled();
+    // Should not show error for long prompts
+    expect(screen.queryByText(/must be no more than/i)).not.toBeInTheDocument();
   });
 
   it("should accept valid prompt (10 characters)", async () => {
@@ -119,7 +120,7 @@ describe("Dashboard Prompt Validation", () => {
     expect(screen.queryByText(/must be no more than/i)).not.toBeInTheDocument();
   });
 
-  it("should accept valid prompt (500 characters)", async () => {
+  it("should accept valid prompt (1000 characters)", async () => {
     render(
       <MemoryRouter>
         <Dashboard />
@@ -127,7 +128,7 @@ describe("Dashboard Prompt Validation", () => {
     );
 
     const textarea = screen.getByLabelText(/video prompt/i);
-    const validPrompt = "a".repeat(500);
+    const validPrompt = "a".repeat(1000);
 
     fireEvent.change(textarea, { target: { value: validPrompt } });
 
@@ -147,7 +148,7 @@ describe("Dashboard Prompt Validation", () => {
     const textarea = screen.getByLabelText(/video prompt/i);
     fireEvent.change(textarea, { target: { value: "test prompt" } });
 
-    expect(screen.getByText(/11\/500 characters/i)).toBeInTheDocument();
+    expect(screen.getByText(/11 characters \(minimum 10\)/i)).toBeInTheDocument();
   });
 
   it("should clear error when valid prompt is entered", async () => {

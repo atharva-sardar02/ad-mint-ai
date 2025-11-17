@@ -32,10 +32,11 @@ def export_final_video(
     brand_style: str,
     output_dir: str,
     generation_id: str,
-    cancellation_check: Optional[callable] = None
+    cancellation_check: Optional[callable] = None,
+    apply_color_grading: bool = False
 ) -> Tuple[str, str]:
     """
-    Apply color grading, export final video, and generate thumbnail.
+    Export final video (with optional color grading) and generate thumbnail.
     
     Args:
         video_path: Path to input video file (with audio)
@@ -43,6 +44,7 @@ def export_final_video(
         output_dir: Base output directory for videos and thumbnails
         generation_id: Generation ID for filename
         cancellation_check: Optional function to check if processing should be cancelled
+        apply_color_grading: Whether to apply color grading (default: False)
     
     Returns:
         Tuple[str, str]: (video_url, thumbnail_url) paths relative to output directory
@@ -53,7 +55,7 @@ def export_final_video(
     if cancellation_check and cancellation_check():
         raise RuntimeError("Export processing cancelled by user")
     
-    logger.info(f"Exporting final video: {video_path} (style: {brand_style})")
+    logger.info(f"Exporting final video: {video_path} (style: {brand_style}, color_grading: {apply_color_grading})")
     
     try:
         # Check cancellation before loading video
@@ -63,14 +65,21 @@ def export_final_video(
         # Load video
         video = VideoFileClip(video_path)
         
-        # Apply color grading based on brand style
-        logger.debug(f"Applying color grading (style: {brand_style})")
-        graded_video = _apply_color_grading(video, brand_style)
+        # Apply color grading only if enabled
+        if apply_color_grading:
+            logger.debug(f"Applying color grading (style: {brand_style})")
+            processed_video = _apply_color_grading(video, brand_style)
+            color_grading_applied = True
+        else:
+            logger.debug("Skipping color grading (disabled)")
+            processed_video = video
+            color_grading_applied = False
         
         # Check cancellation before export
         if cancellation_check and cancellation_check():
             video.close()
-            graded_video.close()
+            if color_grading_applied:
+                processed_video.close()
             raise RuntimeError("Export processing cancelled by user")
         
         # Ensure output directories exist
@@ -86,44 +95,70 @@ def export_final_video(
         video_output_path = videos_dir / video_filename
         thumbnail_output_path = thumbnails_dir / thumbnail_filename
         
-        # Ensure video is 1080p resolution (1920x1080)
-        # Resize if needed to enforce minimum 1080p resolution
-        current_size = graded_video.size
-        target_resolution = (1920, 1080)
+        # Preserve original aspect ratio - only upscale if resolution is very low
+        # Don't force aspect ratio change (e.g., don't stretch 9:16 to 16:9)
+        current_size = processed_video.size
+        current_width, current_height = current_size
         
-        if current_size[0] < 1920 or current_size[1] < 1080:
-            logger.info(f"Resizing video from {current_size} to {target_resolution} for 1080p minimum")
-            graded_video = graded_video.resized(target_resolution)
-        elif current_size != target_resolution:
-            # If larger than 1080p, resize to exactly 1080p for consistency
-            logger.debug(f"Resizing video from {current_size} to {target_resolution} for consistency")
-            graded_video = graded_video.resized(target_resolution)
+        # Calculate bitrate based on resolution (higher resolution = higher bitrate)
+        # Base bitrate for 1080p is 8000k, scale proportionally
+        if current_width > 0 and current_height > 0:
+            # Only upscale if resolution is very low (below 720p)
+            min_resolution = 720
+            if current_width < min_resolution or current_height < min_resolution:
+                # Calculate scale factor to reach minimum resolution while preserving aspect ratio
+                scale_w = min_resolution / current_width if current_width < min_resolution else 1.0
+                scale_h = min_resolution / current_height if current_height < min_resolution else 1.0
+                scale = max(scale_w, scale_h)
+                new_width = int(current_width * scale)
+                new_height = int(current_height * scale)
+                logger.info(f"Upscaling video from {current_size} to ({new_width}, {new_height}) to meet minimum resolution")
+                processed_video = processed_video.resized((new_width, new_height))
+                # Recalculate for bitrate
+                current_width, current_height = new_width, new_height
+            
+            # Calculate bitrate based on resolution (pixels)
+            pixels = current_width * current_height
+            # 1920x1080 = 2,073,600 pixels, bitrate = 8000k
+            # Scale bitrate proportionally
+            base_pixels = 1920 * 1080
+            base_bitrate = 8000
+            bitrate_k = int((pixels / base_pixels) * base_bitrate)
+            # Clamp between reasonable values
+            bitrate_k = max(2000, min(bitrate_k, 20000))  # 2Mbps to 20Mbps
+            bitrate = f"{bitrate_k}k"
+        else:
+            # Fallback if size is unknown
+            bitrate = "8000k"
+            logger.warning(f"Could not determine video size, using default bitrate {bitrate}")
         
-        # Export video as 1080p MP4 with H.264 codec
-        logger.info(f"Exporting video to {video_output_path} (1080p, H.264)")
-        graded_video.write_videofile(
+        # Export video preserving aspect ratio with H.264 codec
+        logger.info(f"Exporting video to {video_output_path} (resolution: {processed_video.size}, bitrate: {bitrate})")
+        processed_video.write_videofile(
             str(video_output_path),
             codec='libx264',
             audio_codec='aac',
             fps=24,  # Consistent frame rate
             preset='medium',
-            bitrate='8000k',  # High quality for 1080p
+            bitrate=bitrate,
             logger=None  # Suppress MoviePy progress logs
         )
         
         # Check cancellation before thumbnail generation
         if cancellation_check and cancellation_check():
             video.close()
-            graded_video.close()
+            if color_grading_applied:
+                processed_video.close()
             raise RuntimeError("Export processing cancelled by user")
         
         # Generate thumbnail from first frame
         logger.info(f"Generating thumbnail: {thumbnail_output_path}")
-        _generate_thumbnail(graded_video, str(thumbnail_output_path))
+        _generate_thumbnail(processed_video, str(thumbnail_output_path))
         
         # Clean up
         video.close()
-        graded_video.close()
+        if color_grading_applied:
+            processed_video.close()
         
         # Upload to S3 if storage mode is S3
         if settings.STORAGE_MODE == "s3":
