@@ -24,7 +24,7 @@ FRAMEWORK_TEMPLATES: Dict[str, List[Dict[str, any]]] = {
         {"type": "Attention", "duration": 4, "description": "Grab attention with compelling visuals"},
         {"type": "Interest", "duration": 4, "description": "Build interest with product features"},
         {"type": "Desire", "duration": 4, "description": "Create desire through benefits"},
-        {"type": "Action", "duration": 3, "description": "Prompt action with clear CTA"}
+        {"type": "Action", "duration": 4, "description": "Prompt action with clear CTA"}
     ]
 }
 

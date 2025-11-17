@@ -1,5 +1,8 @@
 """
 LLM enhancement service for processing user prompts into structured ad specifications.
+Now includes a SECOND LLM STAGE:
+  Stage 1 → JSON blueprint generator (AIDA)
+  Stage 2 → Scene Assembler → Sora cinematic paragraph generation
 """
 import asyncio
 import json
@@ -18,6 +21,9 @@ from app.schemas.generation import (
     TextOverlay,
 )
 
+# NEW IMPORT — the new LLM scene assembler
+from app.services.pipeline.scene_assembler import _assemble_scene_prompt
+
 logger = logging.getLogger(__name__)
 
 # Retry configuration for rate limits
@@ -25,56 +31,183 @@ INITIAL_RETRY_DELAY = 2  # seconds
 MAX_RETRY_DELAY = 60  # seconds
 
 # System prompt for LLM enhancement - Sora-optimized
-SYSTEM_PROMPT = """ 
-SYSTEM: SORA AIDA BLUEPRINT GENERATOR v3.0
-ROLE: 
-You expand a short user prompt (1–3 sentences) into a valid JSON blueprint 
-for a 4-scene AIDA advertisement.
+SYSTEM_PROMPT = """SYSTEM: SORA AIDA BLUEPRINT GENERATOR — v4.0 (RICH DETAIL EDITION)
 
-OUTPUT RULES:
-• Output ONLY valid JSON.
-• No commentary, no sentences outside JSON.
-• EXACTLY 4 scenes.
-• Each scene MUST be exactly 4 seconds.
-• total_duration_seconds MUST equal 16.
+ROLE:
+You are a professional video creative director.  
+You expand a short user prompt (1–3 sentences) into a rich, expressive, cinematic  
+**4-scene AIDA blueprint**.
 
-REFERENCE IMAGE:
-• Output literal string "{{REFERENCE_IMAGE_PATH}}".
-• You NEVER see the image. 
-• Do NOT describe or infer product appearance.
-• Only describe how the product is *used*, not how it looks.
+You do NOT produce Sora prose.  
+You produce the **semantic blueprint** that another LLM will later format into the final Sora prompt.
 
-SCENE DESCRIPTION FORMAT (STRICT):
-Each field MUST be a 3–7 word fragment (no sentences):
-  "visual":        3–7 words
-  "action":        1 action verb phrase
-  "camera":        simple motion ("static", "glide", "push-in")
-  "lighting":      1 phrase ("soft daylight", "warm indoor")
-  "mood":          1 emotional word
-  "product_usage": 1 behavioral phrase (no appearance)
+Your output is consumed by a second LLM, so it must be:
+- high-quality
+- detailed
+- well-structured
+- varied by scene
+- semantically rich
+- behavior-focused
+- production-friendly
 
-VOICEOVER:
-• 1–2 short sentences.
-• AIDA emotional beats:
-    Scene 1: curiosity
-    Scene 2: clarity
-    Scene 3: aspiration
-    Scene 4: urgency
+---
 
-OVERLAY TEXT:
-• 1–6 punchy words.
+## 🔒 GLOBAL OUTPUT RULES
 
-SOUND DESIGN:
-• 3–6 word ambient fragment only.
-• Allowed: “quiet office hum”, “city street murmur”.
-• Not allowed: whooshes, impacts, music, transitions.
+- Output **ONLY valid JSON**.
+- No commentary or explanations outside JSON.
+- Produce **exactly 4 scenes**.
+- Each scene MUST be **exactly 4 seconds**.
+- `total_duration_seconds` MUST equal **16**.
+- Never describe or infer the product’s **appearance**, **color**, **shape**, **materials**, **screen/UI**, or **branding**.
+- Describe only **behavior**, **usage**, and **contextual interaction**.
 
-MUSIC (POST-PRODUCTION):
-style: short phrase
-energy: low | medium | high
-notes: short emotional purpose
+---
 
-JSON SCHEMA:
+## 🖼 REFERENCE IMAGE RULES (STRICT)
+
+Output this literal value:
+
+You NEVER see the image.  
+You MUST NOT describe it.  
+You MUST NOT guess visual features.
+
+Allowed:
+- “glances at the product”
+- “interacts with the product naturally”
+- “checks an update”
+- “uses during their activity”
+
+Not allowed:
+- any appearance description
+- any UI guess
+- any logo or material guess
+
+When a reference image is provided:
+- prefer **static**, **push-in**, or **slow glide** camera motion  
+- avoid excessive movement to reduce flicker
+
+---
+
+## 🎥 SCENE DESCRIPTION FORMAT (UPGRADED — RICH DETAIL)
+
+Each field must be a **semantic fragment**, not a sentence.  
+**3–7 words** each (except action & product_usage, which are short phrases).
+
+Your job is to provide *meaningful, precise, varied* scene materials.
+
+### **scene_description fields**
+
+**visual:**  
+- environment with strong contextual cues  
+- examples of detail level (not to be used literally):  
+  - “sunlit office with glass walls”  
+  - “cozy apartment with warm evening lamps”  
+  - “busy café with soft morning light”  
+
+**action:**  
+- one physical action, behavior-based  
+- e.g., “checking notifications”, “glancing mid-conversation”, “navigating features mid-jog”
+
+**camera:**  
+- one filmable movement:  
+  - “static”  
+  - “push-in”  
+  - “glide”  
+  - “slow pan”
+
+**lighting:**  
+- lighting tone + source (“morning window light”, “warm evening lamp light”)
+
+**mood:**  
+- one emotional word (“focused”, “optimistic”, “energized”, “calm”, “motivated”)
+
+**product_usage:**  
+- behavior ONLY (no appearance)  
+- e.g., “quick glance for updates”, “checking progress while jogging”
+
+---
+
+## 🎧 SOUND DESIGN (UPGRADED)
+
+A short 3–6 word ambient fragment, naturalistic only:
+
+- “quiet office hum”
+- “soft city ambience”
+- “light café chatter”
+- “park footsteps and breeze”
+
+Never include:
+- music  
+- whooshes  
+- impacts  
+- transitions  
+- stylized or cinematic SFX  
+
+Ambient only.
+
+---
+
+## 🎙 VOICEOVER (AIDA UPGRADE)
+
+Write **1–2 natural sentences** for each scene.
+
+Follow the AIDA emotional arc:
+
+**Scene 1: Curiosity**  
+- spark interest, raise a question, tease possibility  
+
+**Scene 2: Clarity**  
+- explain benefit simply and confidently  
+
+**Scene 3: Aspiration**  
+- elevate emotion, show what could improve  
+
+**Scene 4: Urgency**  
+- motivate decision; soft CTA tone  
+
+Examples of tone (NOT templates):
+- Curiosity: “Ever feel like you need a moment of clarity?”  
+- Clarity: “Stay aware of what matters most.”  
+- Aspiration: “See your day take shape with ease.”  
+- Urgency: “Now’s the time—step into what’s next.”
+
+---
+
+## 📝 OVERLAY TEXT (UPGRADED)
+
+1–6 words.  
+Short, visual, bold.  
+Readable at mobile ad scale.
+
+Examples of tone:
+- “Stay Ready”
+- “Health at a Glance”
+- “Move With Purpose”
+- “Take Control Now”
+
+(Do NOT output these; generate your own.)
+
+---
+
+## 🎵 MUSIC GUIDANCE (RICHER)
+
+Provide:
+- a short style/genre phrase  
+- `low | medium | high` energy  
+- a short emotional purpose phrase  
+
+Example tonal categories (not literal examples):
+- “warm ambient electronic, low energy, supportive”
+- “minimal modern beat, medium energy, confident”
+- “soft atmospheric pads, low energy, reflective”
+
+---
+
+## 🎬 OUTPUT JSON FORMAT (UNCHANGED)
+
+Use this exact schema (same as before):
+
 {
   "ad_framework": "AIDA",
   "total_duration_seconds": 16,
@@ -156,55 +289,27 @@ JSON SCHEMA:
     "notes": "string"
   }
 }
+
+---
+
+## 📌 FINAL NOTE
+Your job is to create the **deeply detailed semantic blueprint**.  
+Another LLM will convert this into the final Sora 2 prompt.
+
 """
 
-
-def _build_sora_scene_prompt(
-    scene_description: dict,
-    sound_design: Optional[str],
-    fallback_prompt: str,
-) -> str:
+async def _convert_sora_blueprint_to_ad_spec(
+    blueprint: dict,
+    user_prompt: str,
+    client: openai.OpenAI,
+    has_reference_image: bool = False,
+) -> AdSpecification:
     """
-    Build a compact Sora-optimized scene prompt.
-    Fields are 3–7 word fragments.
-    No punctuation, no sentences, no labels.
-    Just newline-separated fragments.
-    """
-
-    if not scene_description:
-        return fallback_prompt
-
-    lines: list[str] = []
-
-    order = ["visual", "action", "camera", "lighting", "mood", "product_usage"]
-
-    for key in order:
-        value = scene_description.get(key)
-        if value:
-            fragment = str(value).strip()
-            # No punctuation allowed
-            fragment = fragment.replace(".", "").replace(",", "")
-            if fragment:
-                lines.append(fragment)
-
-    # Ambient sound fragment (3–6 words)
-    if sound_design:
-        sd = str(sound_design).strip()
-        sd = sd.replace(".", "").replace(",", "")
-        if sd:
-            lines.append(f"Ambient sound: {sd}")
-
-    # If nothing valid, fallback to entire user prompt
-    if not lines:
-        return fallback_prompt
-
-    # Join fragments line-by-line for Sora
-    return "\n".join(lines)
-
-def _convert_sora_blueprint_to_ad_spec(blueprint: dict, user_prompt: str) -> AdSpecification:
-    """
-    Convert a Sora-3.0 AIDA compact-fragment blueprint into
-    the internal AdSpecification format.
+    Convert Sora AIDA JSON into AdSpecification.
+    Now:
+      • Calls the Scene Assembler LLM (_assemble_scene_prompt)
+      • Builds full cinematic text per scene
+      • Passes sound_design downstream
     """
 
     scenes_data = blueprint.get("scenes", []) or []
@@ -216,17 +321,29 @@ def _convert_sora_blueprint_to_ad_spec(blueprint: dict, user_prompt: str) -> AdS
     for idx, scene_data in enumerate(scenes_data, start=1):
 
         desc = scene_data.get("scene_description") or {}
-        sound_design = scene_data.get("sound_design")
+        sound_design = scene_data.get("sound_design") or ""
 
-        # Build compact Sora-friendly text block
-        visual_prompt = _build_sora_scene_prompt(
-            scene_description=desc,
-            sound_design=sound_design,
+        # --- Prepare fragments cleanly ---
+        fragment_input = {
+            "visual": desc.get("visual", "").strip(),
+            "action": desc.get("action", "").strip(),
+            "camera": desc.get("camera", "").strip(),
+            "lighting": desc.get("lighting", "").strip(),
+            "mood": desc.get("mood", "").strip(),
+            "product_usage": desc.get("product_usage", "").strip(),
+            "sound_design": sound_design.strip() if sound_design else "",
+            "has_reference_image": bool(has_reference_image),
+        }
+
+        # --- SCENE ASSEMBLER LLM CALL ---
+        visual_prompt = await _assemble_scene_prompt(
+            fragment=fragment_input,
+            client=client,
             fallback_prompt=user_prompt,
         )
 
-        # Overlay text extraction (1–6 words)
-        overlay_text_value = scene_data.get("overlay_text") or ""
+        # --- Overlay Text ---
+        overlay_text_value = (scene_data.get("overlay_text") or "").strip()
         text_overlay = TextOverlay(
             text=overlay_text_value,
             position="center",
@@ -242,6 +359,7 @@ def _convert_sora_blueprint_to_ad_spec(blueprint: dict, user_prompt: str) -> AdS
                 visual_prompt=visual_prompt,
                 text_overlay=text_overlay,
                 duration=int(scene_data.get("duration_seconds") or 4),
+                sound_design=sound_design,
             )
         )
 
@@ -265,114 +383,100 @@ def _convert_sora_blueprint_to_ad_spec(blueprint: dict, user_prompt: str) -> AdS
     )
 
 
+# =====================================================================
+# MAIN ENTRY POINT — same, but calls new converter
+# =====================================================================
+
 async def enhance_prompt_with_llm(
     user_prompt: str,
     max_retries: int = 3,
     image_path: Optional[str] = None,
 ) -> AdSpecification:
     """
-    Generate a Sora-3.0 AIDA blueprint using GPT-4-Turbo (compact fragment style),
-    then convert it into AdSpecification for the video pipeline.
-    
-    Args:
-        user_prompt: User's text prompt (10-2000 characters)
-        max_retries: Maximum number of retry attempts (default: 3)
-        image_path: Optional path to reference image for Sora-2 generation
-    
-    Returns:
-        AdSpecification: Validated Pydantic model with ad specification
-    
-    Raises:
-        ValueError: If API key is missing or invalid
-        openai.APIError: If API call fails after retries
-        ValidationError: If LLM response doesn't match schema
+    Stage 1: LLM expands short user prompt → AIDA JSON blueprint.
+    Stage 2: Blueprint converted → AdSpecification with full SORA prose.
     """
 
     if not settings.OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY not configured.")
 
-    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+    # Use AsyncOpenAI for async operations
+    async_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-    # ----------- Build user content (non-visual reference image metadata) ------------
+    # --- Build user content with safe, non-visual reference metadata ---
     if image_path:
         user_content = (
             "REFERENCE IMAGE CONTEXT:\n"
-            "- A reference image will be provided directly to Sora.\n"
-            "- You NEVER see the image.\n"
-            "- Do NOT describe its appearance.\n"
-            "- Only describe how the product is USED, not how it looks.\n\n"
+            "- You will NOT see the image.\n"
+            "- DO NOT describe appearance.\n"
+            "- Only describe usage behavior.\n\n"
             + user_prompt
         )
     else:
         user_content = user_prompt
 
-    # -------------------------- Retry Loop -----------------------------------------
     last_error = None
     current_prompt = user_content
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"[LLM] Attempt {attempt}/{max_retries}")
-
-            response = client.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": current_prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.5,
-                max_tokens=1600,
-            )
-
-            content = response.choices[0].message.content
-            logger.info("[LLM RAW JSON OUTPUT]")
-            logger.info(content)
-
-            # Parse JSON
+    try:
+        for attempt in range(1, max_retries + 1):
             try:
-                data = json.loads(content)
-            except json.JSONDecodeError as e:
-                logger.warning(f"Invalid JSON: {e}")
-                if attempt < max_retries:
-                    current_prompt = (
-                        user_content
-                        + "\n\nYour previous output was INVALID JSON. Output ONLY valid JSON."
-                    )
-                    continue
-                raise
+                logger.info(f"[Stage 1 LLM] Attempt {attempt}/{max_retries}")
 
-            # Validate scene count
-            scenes = data.get("scenes", [])
-            if len(scenes) != 4:
-                logger.warning(f"Expected 4 scenes, got {len(scenes)}")
-                if attempt < max_retries:
-                    current_prompt = (
-                        user_content
-                        + "\n\nERROR: You must output EXACTLY 4 scenes."
-                    )
-                    continue
-                raise ValueError("LLM did not output exactly 4 scenes.")
+                response = await async_client.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": current_prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.5,
+                    max_tokens=2000,
+                )
 
-            # Validate scene durations
-            bad = [s for s in scenes if s.get("duration_seconds") != 4]
-            if bad:
-                if attempt < max_retries:
-                    current_prompt = (
-                        user_content
-                        + "\n\nERROR: Each scene MUST have exactly 4 seconds."
-                    )
-                    continue
-                raise ValueError("Incorrect scene durations.")
+                content = response.choices[0].message.content
 
-            # Convert blueprint → AdSpecification
-            return _convert_sora_blueprint_to_ad_spec(data, user_prompt)
+                # --- Parse JSON from LLM ---
+                try:
+                    blueprint = json.loads(content)
+                except json.JSONDecodeError:
+                    if attempt < max_retries:
+                        current_prompt += (
+                            "\n\nYour previous output was invalid JSON. "
+                            "Output ONLY valid JSON matching the schema."
+                        )
+                        continue
+                    raise
 
-        except Exception as e:
-            last_error = e
-            logger.warning(f"LLM error: {e}")
-            await asyncio.sleep(min(2 ** attempt, 20))
-            continue
+                # --- Validate scene count ---
+                scenes = blueprint.get("scenes", [])
+                if len(scenes) != 4:
+                    if attempt < max_retries:
+                        current_prompt += (
+                            "\n\nERROR: You MUST output exactly 4 scenes."
+                        )
+                        continue
+                    raise ValueError("Blueprint did not contain exactly 4 scenes.")
 
-    raise RuntimeError(f"LLM failed after {max_retries} attempts: {last_error}")
+                # --- Convert to AdSpecification (calls Scene Assembler LLM) ---
+                # Create a sync client for the scene assembler (it will create its own async client)
+                sync_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+                result = await _convert_sora_blueprint_to_ad_spec(
+                    blueprint,
+                    user_prompt=user_prompt,
+                    client=sync_client,
+                    has_reference_image=(image_path is not None),
+                )
+                return result
+
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[Stage 1 LLM Error] {e}")
+                await asyncio.sleep(min(2 ** attempt, 20))
+                continue
+
+        raise RuntimeError(f"LLM failed after retries: {last_error}")
+    finally:
+        # Clean up async client
+        await async_client.close()
 
