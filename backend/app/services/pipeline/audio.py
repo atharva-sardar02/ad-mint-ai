@@ -113,14 +113,22 @@ def add_audio_layer(
         
         # Check if video already has audio (from Sora-2 generation)
         original_audio = None
-        if video.audio is not None:
-            original_audio = video.audio
-            logger.info(
-                f"Video contains original audio from Sora-2 (duration: {original_audio.duration:.2f}s). "
-                f"This will be preserved and mixed with background music."
-            )
-        else:
-            logger.debug("Video has no original audio - will add background music only")
+        try:
+            if video.audio is not None:
+                original_audio = video.audio
+                audio_duration = original_audio.duration if hasattr(original_audio, 'duration') else 'unknown'
+                logger.info(
+                    f"✅ Video contains original audio from Sora-2 (duration: {audio_duration}s). "
+                    f"This will be preserved and mixed with background music."
+                )
+                # Log audio properties for debugging
+                if hasattr(original_audio, 'fps'):
+                    logger.debug(f"Sora-2 audio: fps={original_audio.fps}, duration={audio_duration}s")
+            else:
+                logger.warning("⚠️ Video has no original audio from Sora-2 - will add background music only")
+        except Exception as audio_check_error:
+            logger.warning(f"Error checking for Sora-2 audio: {audio_check_error}. Assuming no audio.")
+            original_audio = None
         
         # Select music file based on style (graceful fallback if not found)
         logger.info(f"Selecting music file for style: '{music_style}'")
@@ -176,7 +184,8 @@ def add_audio_layer(
             current_time = 0.0
             
             for i, scene in enumerate(scene_plan.scenes):
-                # Find matching scene in LLM specification by scene_number
+                # Try to get sound_design from LLM specification first, then fallback to scene object
+                sound_design = None
                 scene_spec = None
                 for spec_scene in scenes_data:
                     if spec_scene.get("scene_number") == scene.scene_number:
@@ -185,38 +194,43 @@ def add_audio_layer(
                 
                 if scene_spec:
                     sound_design = scene_spec.get("sound_design")
-                    if sound_design:
-                        # Map sound_design description to appropriate ambient SFX
-                        ambient_sfx_file = _select_ambient_sfx(sound_design)
-                        if ambient_sfx_file and ambient_sfx_file.exists():
-                            try:
-                                ambient_clip = AudioFileClip(str(ambient_sfx_file))
-                                # Trim to scene duration
-                                scene_duration = scene.duration
-                                if ambient_clip.duration > scene_duration:
-                                    ambient_clip = ambient_clip.subclipped(0, scene_duration)
-                                elif ambient_clip.duration < scene_duration:
-                                    # Loop ambient SFX to match scene duration
-                                    loops_needed = int(scene_duration / ambient_clip.duration) + 1
-                                    ambient_clips = [ambient_clip] * loops_needed
-                                    ambient_clip = CompositeAudioClip(ambient_clips).subclipped(0, scene_duration)
-                                
-                                # Position at scene start time
-                                ambient_clip = ambient_clip.with_start(current_time)
-                                # Lower volume for ambient (20% - subtle background)
-                                ambient_clip = ambient_clip.with_effects([MultiplyVolume(0.2)])
-                                sfx_clips.append(ambient_clip)
-                                logger.info(
-                                    f"Added ambient SFX for scene {scene.scene_number} "
-                                    f"({sound_design[:50]}...) at {current_time:.2f}s"
-                                )
-                            except Exception as e:
-                                logger.warning(f"Could not add ambient SFX for scene {scene.scene_number}: {e}")
-                        else:
-                            logger.debug(
-                                f"No ambient SFX file found for sound_design '{sound_design[:50]}...' "
-                                f"in scene {scene.scene_number}. Check {SFX_LIBRARY_DIR} for available SFX files."
+                
+                # Fallback: get sound_design directly from scene object (Scene model now includes sound_design)
+                if not sound_design and hasattr(scene, 'sound_design'):
+                    sound_design = scene.sound_design
+                
+                if sound_design:
+                    # Map sound_design description to appropriate ambient SFX
+                    ambient_sfx_file = _select_ambient_sfx(sound_design)
+                    if ambient_sfx_file and ambient_sfx_file.exists():
+                        try:
+                            ambient_clip = AudioFileClip(str(ambient_sfx_file))
+                            # Trim to scene duration
+                            scene_duration = scene.duration
+                            if ambient_clip.duration > scene_duration:
+                                ambient_clip = ambient_clip.subclipped(0, scene_duration)
+                            elif ambient_clip.duration < scene_duration:
+                                # Loop ambient SFX to match scene duration
+                                loops_needed = int(scene_duration / ambient_clip.duration) + 1
+                                ambient_clips = [ambient_clip] * loops_needed
+                                ambient_clip = CompositeAudioClip(ambient_clips).subclipped(0, scene_duration)
+                            
+                            # Position at scene start time
+                            ambient_clip = ambient_clip.with_start(current_time)
+                            # Lower volume for ambient (20% - subtle background)
+                            ambient_clip = ambient_clip.with_effects([MultiplyVolume(0.2)])
+                            sfx_clips.append(ambient_clip)
+                            logger.info(
+                                f"Added ambient SFX for scene {scene.scene_number} "
+                                f"({sound_design[:50]}...) at {current_time:.2f}s"
                             )
+                        except Exception as e:
+                            logger.warning(f"Could not add ambient SFX for scene {scene.scene_number}: {e}")
+                    else:
+                        logger.debug(
+                            f"No ambient SFX file found for sound_design '{sound_design[:50]}...' "
+                            f"in scene {scene.scene_number}. Check {SFX_LIBRARY_DIR} for available SFX files."
+                        )
                 
                 current_time += scene.duration
         

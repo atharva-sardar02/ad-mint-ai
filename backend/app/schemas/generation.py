@@ -190,6 +190,7 @@ class Scene(BaseModel):
     visual_prompt: str = Field(..., description="Sora-2 prompt built from compact fragments (visual, action, camera, lighting, mood, product_usage)")
     text_overlay: Optional[TextOverlay] = None
     duration: int = Field(..., ge=3, le=7, description="Duration in seconds (4 seconds for AIDA framework)")
+    sound_design: Optional[str] = Field(None, description="Sound design description for ambient SFX (e.g., 'gentle room tone, faint fabric movement')")
 
 
 class AdSpec(BaseModel):

@@ -394,6 +394,12 @@ async def process_generation(
                                     )
                         except Exception as e:
                             logger.error(f"[{generation_id}] Quality evaluation failed for clip {scene_number}: {e}", exc_info=True)
+                            # Rollback the session if quality evaluation failed (e.g., missing table)
+                            # This ensures subsequent database operations can proceed
+                            try:
+                                db.rollback()
+                            except Exception as rollback_error:
+                                logger.warning(f"[{generation_id}] Error rolling back session after quality evaluation failure: {rollback_error}")
                             # Graceful degradation: continue even if quality assessment fails
                             quality_passed = True
                         
