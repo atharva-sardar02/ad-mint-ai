@@ -24,9 +24,10 @@ router = APIRouter(prefix="/api", tags=["generations"])
 @router.post("/generate-with-image", status_code=status.HTTP_202_ACCEPTED)
 async def create_generation_with_image(
     request: Request,
-    prompt: str = Form(..., min_length=10, max_length=500),
+    prompt: str = Form(..., min_length=10, max_length=2000),  # Match /api/generate endpoint
     image: UploadFile = File(...),
     model: Optional[str] = Form(None),
+    num_clips: Optional[int] = Form(None, ge=1, le=10),  # Number of scenes/clips to generate (1-10)
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -105,7 +106,7 @@ async def create_generation_with_image(
         generation_id,
         prompt,
         model,  # Pass the selected model (e.g., "openai/sora-2")
-        None,   # num_clips (use scene plan)
+        num_clips,  # Pass num_clips if specified
         True,   # use_llm
         str(image_path),
     )

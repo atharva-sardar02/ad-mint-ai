@@ -64,6 +64,7 @@ class StatusResponse(BaseModel):
     num_scenes: Optional[int] = None  # Total number of scenes planned
     available_clips: int = 0  # Number of clips currently available for download
     seed_value: Optional[int] = None  # Seed value used for visual consistency across scenes
+    storyboard_plan: Optional[dict] = None  # Storyboard plan with scenes and images
 
 
 class GenerateResponse(BaseModel):
@@ -179,15 +180,25 @@ class TextOverlay(BaseModel):
 
 class Scene(BaseModel):
     """
-    Scene specification from LLM response.
+    Scene specification from storyboard.
     
-    Note: With the new v2.0 compact format, scenes use 3-7 word fragments
-    that are assembled into Sora-2 prompts. For AIDA framework, exactly 4 scenes
-    of 4 seconds each are required.
+    Each scene includes:
+    - Reference image path (from storyboard)
+    - Start image path (first frame for Kling 2.5 Turbo)
+    - End image path (last frame for Kling 2.5 Turbo)
+    - Model-specific optimized prompts (different for each video model)
+    - Standard scene metadata
     """
+    model_config = {"protected_namespaces": ()}  # Allow model_prompts field
+    
     scene_number: int = Field(..., ge=1)
     scene_type: str = Field(..., description="Framework-specific type (e.g., 'Attention', 'Interest' for AIDA)")
-    visual_prompt: str = Field(..., description="Sora-2 prompt built from compact fragments (visual, action, camera, lighting, mood, product_usage)")
+    visual_prompt: str = Field(..., description="Base visual prompt from storyboard")
+    # Model-specific prompts (optimized for each video generation model)
+    model_prompts: dict[str, str] = Field(default_factory=dict, description="Model-specific optimized prompts: {'openai/sora-2': '...', 'google/veo-3': '...', etc.}")
+    reference_image_path: Optional[str] = Field(None, description="Path to reference image for this scene (from storyboard)")
+    start_image_path: Optional[str] = Field(None, description="Path to start image (first frame) for Kling 2.5 Turbo")
+    end_image_path: Optional[str] = Field(None, description="Path to end image (last frame) for Kling 2.5 Turbo")
     text_overlay: Optional[TextOverlay] = None
     duration: int = Field(..., ge=3, le=7, description="Duration in seconds (4 seconds for AIDA framework)")
     sound_design: Optional[str] = Field(None, description="Sound design description for ambient SFX (e.g., 'gentle room tone, faint fabric movement')")

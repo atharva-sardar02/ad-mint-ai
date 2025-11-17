@@ -458,6 +458,16 @@ export const VideoDetail: React.FC = () => {
                 )}
               </div>
               <div className="flex gap-2">
+                {/* Storyboard button - show if LLM was used (likely has storyboard) */}
+                {generation.use_llm && (
+                  <Button
+                    onClick={() => navigate(`/storyboard/${generation.id}`)}
+                    variant="secondary"
+                    disabled={deleting}
+                  >
+                    View Storyboard
+                  </Button>
+                )}
                 {generation.status === "completed" && (
                   <Button
                     onClick={() => navigate(`/editor/${generation.id}`)}
