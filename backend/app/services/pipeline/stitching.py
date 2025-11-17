@@ -2,6 +2,8 @@
 Video stitching service for concatenating video clips with transitions.
 """
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -131,27 +133,61 @@ def stitch_video_clips(
             logger.debug(f"Setting final video frame rate to 24 fps (was {final_video.fps})")
             final_video = final_video.with_fps(24)
         
+        # Set temp directory for MoviePy to use (ensures temp files are created in writable location)
+        # Get original working directory BEFORE changing directories
+        original_cwd = os.getcwd()
+        
+        # Convert output_path to absolute BEFORE changing directory
+        if not Path(output_path).is_absolute():
+            output_path_abs = str(Path(original_cwd) / output_path)
+        else:
+            output_path_abs = output_path
+        output_path_abs = str(Path(output_path_abs).resolve())
+        
+        # Set temp directory
+        temp_dir = os.environ.get('TMPDIR', '/tmp')
+        temp_dir_path = Path(temp_dir)
+        if not temp_dir_path.exists():
+            temp_dir_path.mkdir(parents=True, exist_ok=True)
+        # Set tempfile's tempdir to ensure MoviePy uses it
+        tempfile.tempdir = str(temp_dir_path.absolute())
+        # Also set TMPDIR in environment for FFmpeg and other subprocesses
+        os.environ['TMPDIR'] = str(temp_dir_path.absolute())
+        
+        # Change to temp directory so MoviePy creates temp files there
+        try:
+            os.chdir(str(temp_dir_path.absolute()))
+        except OSError as e:
+            logger.warning(f"Could not change to temp directory {temp_dir_path}: {e}. Continuing with current directory.")
+        
         # Write output video
-        output_path_obj = Path(output_path)
+        output_path_obj = Path(output_path_abs)
         output_path_obj.parent.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Writing stitched video to {output_path}")
-        final_video.write_videofile(
-            output_path,
-            codec='libx264',
-            audio_codec='aac',
-            fps=24,
-            preset='medium',
-            logger=None  # Suppress MoviePy progress logs
-        )
+        logger.info(f"Writing stitched video to {output_path_abs}")
+        try:
+            final_video.write_videofile(
+                output_path_abs,
+                codec='libx264',
+                audio_codec='aac',
+                fps=24,
+                preset='medium',
+                logger=None  # Suppress MoviePy progress logs
+            )
+        finally:
+            # Restore original working directory
+            try:
+                os.chdir(original_cwd)
+            except OSError:
+                pass  # Ignore errors when restoring directory
         
         # Clean up
         for clip in clips:
             clip.close()
         final_video.close()
         
-        logger.info(f"Video stitching completed: {output_path}")
-        return output_path
+        logger.info(f"Video stitching completed: {output_path_abs}")
+        return output_path_abs
         
     except RuntimeError as e:
         if "cancelled" in str(e).lower():
