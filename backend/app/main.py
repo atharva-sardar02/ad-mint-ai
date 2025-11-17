@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, editor, generations, users
+from app.api.routes import auth, editor, generations, generations_with_image, users
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -26,13 +26,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS middleware - allow configured origins
-# Note: When allow_credentials=True, we cannot use allow_origins=["*"]
-# We must specify exact origins
+# CORS middleware - allow frontend origins
+# Note: Cannot use allow_origins=["*"] with allow_credentials=True
+# Must explicitly list allowed origins
+# IMPORTANT: CORS middleware must be added BEFORE exception handlers
 logger.info(f"CORS allowed origins: {settings.CORS_ALLOWED_ORIGINS}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ALLOWED_ORIGINS,  # Use configured origins
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,6 +105,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Include routers (after CORS middleware)
 app.include_router(auth.router)
 app.include_router(generations.router)
+app.include_router(generations_with_image.router)
 app.include_router(users.router)
 app.include_router(editor.router)
 
