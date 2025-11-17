@@ -2,7 +2,7 @@
  * Unit tests for SplitControls component.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { SplitControls } from "../SplitControls";
 import type { ClipInfo } from "../../../lib/types/api";
 

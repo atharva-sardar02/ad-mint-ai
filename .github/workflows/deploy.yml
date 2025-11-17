@@ -10,152 +10,466 @@ env:
   AWS_REGION: us-east-1
   S3_FRONTEND_BUCKET: ad-mint-ai-frontend
   EC2_DEPLOYMENT_PATH: /var/www/ad-mint-ai
+  EC2_HOST: 44.210.144.149
+  API_BASE_URL: http://44.210.144.149
 
 jobs:
-  test:
-    name: Run Tests
+  deploy:
+    name: Deploy to Production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          python-version: '3.11'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install backend dependencies
-        working-directory: ./backend
+      - name: Setup SSH key
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H ${{ env.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Run backend tests
-        working-directory: ./backend
-        run: |
-          pytest tests/ -v || echo "No tests found or tests failed"
-
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run frontend tests
-        working-directory: ./frontend
-        run: |
-          npm run test || echo "No tests found or tests failed"
-
-  security-scan:
-    name: Security Scanning
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-  deploy-staging:
-    name: Deploy to Staging
-    needs: [test, security-scan]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Build frontend
         working-directory: ./frontend
+        env:
+          VITE_API_URL: ${{ env.API_BASE_URL }}
         run: |
           npm ci
           npm run build
 
-      - name: Deploy frontend to S3 (staging)
-        run: |
-          aws s3 sync frontend/dist/ s3://${{ env.S3_FRONTEND_BUCKET }}-staging/ --delete
-
-      - name: Deploy backend to EC2 (staging)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_STAGING_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ${{ env.EC2_DEPLOYMENT_PATH }}
-            git pull origin main
-            cd backend
-            source venv/bin/activate
-            pip install -r requirements.txt
-            sudo systemctl restart fastapi
-
-  deploy-production:
-    name: Deploy to Production
-    needs: [deploy-staging]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: https://your-frontend-domain.com
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Build frontend
-        working-directory: ./frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Deploy frontend to S3 (production)
+      - name: Deploy frontend to S3
         run: |
           aws s3 sync frontend/dist/ s3://${{ env.S3_FRONTEND_BUCKET }}/ --delete
+          echo "✅ Frontend deployed to S3"
 
-      - name: Deploy backend to EC2 (production)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_PRODUCTION_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ${{ env.EC2_DEPLOYMENT_PATH }}
-            git pull origin main
+      - name: Verify frontend deployment
+        run: |
+          # Check if index.html exists in S3
+          if aws s3 ls s3://${{ env.S3_FRONTEND_BUCKET }}/index.html > /dev/null 2>&1; then
+            echo "✅ Frontend deployment verified"
+          else
+            echo "❌ Frontend deployment verification failed"
+            exit 1
+          fi
+
+      - name: Cleanup old backups and free disk space
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            DEPLOYMENT_DIR=$(dirname "$DEPLOYMENT_PATH")
+            
+            echo "🧹 Cleaning up old backups and freeing disk space..."
+            
+            # Remove old backup directories (keep the most recent .backup and .old-*)
+            if [ -d "$DEPLOYMENT_DIR" ]; then
+              # Find all .old-* directories, keep only the most recent one
+              OLD_BACKUPS=$(sudo find "$DEPLOYMENT_DIR" -maxdepth 1 -type d -name "${DEPLOYMENT_PATH##*/}.old-*" -printf '%T@ %p\n' 2>/dev/null | sort -rn || true)
+              
+              if [ -n "$OLD_BACKUPS" ]; then
+                BACKUP_COUNT=$(echo "$OLD_BACKUPS" | wc -l)
+                if [ "$BACKUP_COUNT" -gt 1 ]; then
+                  echo "🗑️  Found $BACKUP_COUNT old .old-* directories, keeping most recent, removing others..."
+                  KEEP_FIRST=true
+                  echo "$OLD_BACKUPS" | while read -r timestamp dir; do
+                    if [ "$KEEP_FIRST" = "true" ]; then
+                      echo "  ✅ Keeping most recent: $dir"
+                      KEEP_FIRST=false
+                    else
+                      echo "  🗑️  Removing: $dir"
+                      sudo rm -rf "$dir" 2>/dev/null || true
+                    fi
+                  done
+                else
+                  KEPT_DIR=$(echo "$OLD_BACKUPS" | awk '{print $2}')
+                  echo "✅ Keeping only .old-* backup: $KEPT_DIR"
+                fi
+              fi
+              
+              # Remove old .backup directory only if we're about to create a new one
+              # (We'll create a fresh backup in the next step)
+              if [ -d "${DEPLOYMENT_PATH}.backup" ]; then
+                echo "🗑️  Removing old .backup directory (will create fresh one)..."
+                sudo rm -rf "${DEPLOYMENT_PATH}.backup"
+              fi
+            fi
+            
+            # Clean up pip cache
+            echo "🧹 Cleaning pip cache..."
+            pip cache purge 2>/dev/null || true
+            sudo -H pip cache purge 2>/dev/null || true
+            
+            # Clean up apt cache
+            echo "🧹 Cleaning apt cache..."
+            sudo apt-get clean 2>/dev/null || true
+            sudo apt-get autoclean 2>/dev/null || true
+            
+            # Clean up temporary files
+            echo "🧹 Cleaning temporary files..."
+            sudo rm -rf /tmp/* 2>/dev/null || true
+            sudo rm -rf /var/tmp/* 2>/dev/null || true
+            
+            # Clean up old journal logs
+            echo "🧹 Cleaning old journal logs..."
+            sudo journalctl --vacuum-time=7d 2>/dev/null || true
+            
+            # Show disk usage
+            echo "💾 Current disk usage:"
+            df -h / | tail -1
+          EOF
+
+      - name: Backup current backend deployment
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            BACKUP_PATH="${DEPLOYMENT_PATH}.backup"
+            
+            echo "💾 Creating backup of current deployment..."
+            
+            # Create backup (with sudo for directory creation, then fix ownership)
+            # Use rsync to exclude unnecessary files for faster backup
+            if [ -d "$DEPLOYMENT_PATH" ]; then
+              echo "📦 Copying deployment to backup (excluding large directories)..."
+              sudo mkdir -p "$BACKUP_PATH"
+              sudo rsync -a --exclude='node_modules' --exclude='venv' --exclude='__pycache__' --exclude='.git' --exclude='*.pyc' --exclude='.pytest_cache' --exclude='dist' --exclude='build' "$DEPLOYMENT_PATH/" "$BACKUP_PATH/"
+              sudo chown -R ubuntu:ubuntu "$BACKUP_PATH"
+              echo "✅ Backup created at: $BACKUP_PATH"
+            else
+              echo "⚠️  Deployment directory not found, skipping backup"
+            fi
+          EOF
+
+      - name: Deploy backend to EC2
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            
+            echo "🚀 Starting backend deployment..."
+            
+            # Navigate to deployment directory or create it
+            if [ ! -d "$DEPLOYMENT_PATH" ]; then
+              echo "📁 Creating deployment directory..."
+              sudo mkdir -p "$DEPLOYMENT_PATH"
+              sudo chown ubuntu:ubuntu "$DEPLOYMENT_PATH"
+            fi
+            
+            cd "$DEPLOYMENT_PATH"
+            
+            # Check if it's a git repository, if not clone it
+            if [ ! -d ".git" ]; then
+              echo "📥 Cloning repository (first time deployment or not a git repo)..."
+              # Backup .env file if it exists
+              ENV_BACKUP="/tmp/ad-mint-ai-env-backup"
+              if [ -f "$DEPLOYMENT_PATH/backend/.env" ]; then
+                echo "💾 Backing up .env file..."
+                sudo cp "$DEPLOYMENT_PATH/backend/.env" "$ENV_BACKUP" 2>/dev/null || true
+              fi
+              
+              # Remove old deployment directory (but keep venv if it exists to save space)
+              if [ -d "$DEPLOYMENT_PATH" ]; then
+                echo "🗑️  Removing old deployment directory..."
+                # Remove everything except venv to save space
+                sudo find "$DEPLOYMENT_PATH" -mindepth 1 -maxdepth 1 ! -name "venv" -exec sudo rm -rf {} + 2>/dev/null || true
+              fi
+              
+              # Clone fresh
+              git clone https://github.com/atharva-sardar02/ad-mint-ai.git "$DEPLOYMENT_PATH"
+              cd "$DEPLOYMENT_PATH"
+              sudo chown -R ubuntu:ubuntu "$DEPLOYMENT_PATH"
+              
+              # Restore .env file if we backed it up
+              if [ -f "$ENV_BACKUP" ]; then
+                echo "📝 Restoring .env file..."
+                sudo cp "$ENV_BACKUP" "$DEPLOYMENT_PATH/backend/.env"
+                sudo rm "$ENV_BACKUP"
+                sudo chmod 640 "$DEPLOYMENT_PATH/backend/.env"
+                sudo chown ubuntu:www-data "$DEPLOYMENT_PATH/backend/.env"
+              fi
+            else
+              # Pull latest code
+              echo "📥 Pulling latest code from GitHub..."
+              # Fix permissions on output directory before git reset (files may be owned by www-data)
+              if [ -d "backend/output" ]; then
+                echo "🔐 Fixing permissions on output directory for git operations..."
+                sudo chown -R ubuntu:ubuntu backend/output 2>/dev/null || true
+              fi
+              git fetch origin
+              git reset --hard origin/main
+              # Restore output directory permissions after git reset
+              if [ -d "backend/output" ]; then
+                echo "🔐 Restoring output directory permissions..."
+                sudo chown -R www-data:www-data backend/output 2>/dev/null || true
+              fi
+            fi
+            
+            # Update dependencies
+            echo "📦 Updating Python dependencies..."
             cd backend
+            
+            # Check disk space before creating venv
+            AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
+            echo "💾 Available disk space: ${AVAILABLE_SPACE}KB"
+            
+            # Remove old venv if disk space is low (less than 500MB)
+            if [ "$AVAILABLE_SPACE" -lt 512000 ] && [ -d "venv" ]; then
+              echo "⚠️  Low disk space, removing old venv..."
+              rm -rf venv
+            fi
+            
+            # Create venv if it doesn't exist
+            if [ ! -d "venv" ]; then
+              echo "🐍 Creating Python virtual environment..."
+              python3 -m venv venv
+            fi
+            
             source venv/bin/activate
-            pip install -r requirements.txt
+            pip install --upgrade pip --no-cache-dir
+            pip install -r requirements.txt --no-cache-dir
+            
+            # Initialize database (create tables if they don't exist)
+            echo "🗄️  Initializing database (creating tables if needed)..."
+            python -m app.db.init_db
+            if [ $? -ne 0 ]; then
+              echo "❌ Database initialization failed"
+              exit 1
+            fi
+            echo "✅ Database initialized"
+            
+            # Run database migrations
+            echo "🔄 Running database migrations..."
+            python -m app.db.migrations.run_all
+            if [ $? -ne 0 ]; then
+              echo "❌ Database migrations failed"
+              exit 1
+            fi
+            echo "✅ Database migrations completed"
+            
+            # Ensure .env file has correct permissions
+            if [ -f ".env" ]; then
+              echo "🔐 Setting .env file permissions..."
+              sudo chmod 640 .env
+              sudo chown ubuntu:www-data .env
+            fi
+            
+            # Create output directories with proper permissions
+            echo "📁 Creating output directories..."
+            sudo mkdir -p output/cache output/videos output/thumbnails
+            sudo chown -R www-data:www-data output
+            sudo chmod -R 755 output
+            
+            # Restart FastAPI service
+            echo "🔄 Restarting FastAPI service..."
             sudo systemctl restart fastapi
+            
+            # Wait for service to start and check status
+            echo "⏳ Waiting for service to start..."
+            sleep 5
+            
+            # Check service status
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ FastAPI service is running"
+            else
+              echo "⚠️  FastAPI service may not be running, checking logs..."
+              sudo journalctl -u fastapi -n 20 --no-pager || true
+            fi
+            
+            echo "✅ Backend deployment completed"
+            
+            # Show final disk usage
+            echo "💾 Final disk usage:"
+            df -h / | tail -1
+          EOF
 
-      - name: Send deployment notification
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: 'Deployment to production completed'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Health check
+        run: |
+          echo "🔍 Starting health check..."
+          MAX_ATTEMPTS=20
+          WAIT_SECONDS=5
+          API_URL="${{ env.API_BASE_URL }}/api/health"
+          
+          # First check if service is running on the server
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'SERVICE_CHECK'
+            echo "🔍 Checking FastAPI service status..."
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ FastAPI service is active"
+              sudo systemctl status fastapi --no-pager -l | head -10
+            else
+              echo "❌ FastAPI service is not active"
+              echo "📋 Recent service logs:"
+              sudo journalctl -u fastapi -n 30 --no-pager || true
+            fi
+          SERVICE_CHECK
+          
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "📡 Health check attempt $i/$MAX_ATTEMPTS..."
+            
+            if response=$(curl -s -f "$API_URL" 2>/dev/null); then
+              if echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
+                echo "✅ Health check passed!"
+                echo "Response: $response"
+                exit 0
+              else
+                echo "⚠️  Service responding but not healthy yet"
+                echo "Response: $response"
+              fi
+            else
+              echo "⏳ Service not responding yet (attempt $i/$MAX_ATTEMPTS)"
+            fi
+            
+            if [ $i -lt $MAX_ATTEMPTS ]; then
+              sleep $WAIT_SECONDS
+            fi
+          done
+          
+          echo "❌ Health check failed after $MAX_ATTEMPTS attempts"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "🔄 Deployment failed, initiating rollback..."
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ env.EC2_HOST }} << 'EOF'
+            set -e
+            DEPLOYMENT_PATH="${{ env.EC2_DEPLOYMENT_PATH }}"
+            BACKUP_PATH="${DEPLOYMENT_PATH}.backup"
+            
+            echo "🔄 Starting rollback process..."
+            
+            # Check if backup exists
+            if [ ! -d "$BACKUP_PATH" ]; then
+              echo "❌ Backup directory not found: $BACKUP_PATH"
+              echo "⚠️  Cannot perform rollback"
+              exit 1
+            fi
+            
+            echo "✅ Backup found, proceeding with rollback..."
+            
+            # Stop FastAPI service
+            echo "🛑 Stopping FastAPI service..."
+            sudo systemctl stop fastapi || echo "⚠️  Service may already be stopped"
+            
+            # Remove current deployment (preserve .env file)
+            ENV_BACKUP="/tmp/ad-mint-ai-env-backup"
+            if [ -d "$DEPLOYMENT_PATH" ]; then
+              echo "🗑️  Removing current deployment..."
+              # Backup .env if it exists (to temp location before removing directory)
+              if [ -f "$DEPLOYMENT_PATH/backend/.env" ]; then
+                echo "💾 Backing up current .env file..."
+                sudo cp "$DEPLOYMENT_PATH/backend/.env" "$ENV_BACKUP"
+              fi
+              
+              # Remove deployment directory
+              sudo rm -rf "$DEPLOYMENT_PATH"
+            fi
+            
+            # Restore from backup
+            echo "📦 Restoring from backup..."
+            sudo rsync -a "$BACKUP_PATH/" "$DEPLOYMENT_PATH/"
+            
+            # Restore .env file if we backed it up (from temp location)
+            if [ -f "$ENV_BACKUP" ]; then
+              echo "📝 Restoring .env file..."
+              sudo cp "$ENV_BACKUP" "$DEPLOYMENT_PATH/backend/.env"
+              sudo rm "$ENV_BACKUP"
+              sudo chmod 600 "$DEPLOYMENT_PATH/backend/.env"
+            fi
+            
+            # Ensure proper permissions
+            echo "🔐 Setting permissions..."
+            sudo chown -R ubuntu:ubuntu "$DEPLOYMENT_PATH"
+            
+            # Recreate virtual environment if it doesn't exist (since we excluded it from backup)
+            if [ ! -d "$DEPLOYMENT_PATH/backend/venv" ]; then
+              echo "🐍 Recreating Python virtual environment..."
+              cd "$DEPLOYMENT_PATH/backend"
+              
+              # Ensure backend directory exists and has correct permissions
+              if [ ! -d "$DEPLOYMENT_PATH/backend" ]; then
+                echo "❌ Backend directory not found: $DEPLOYMENT_PATH/backend"
+                exit 1
+              fi
+              
+              python3 -m venv venv
+              source venv/bin/activate
+              pip install --upgrade pip --no-cache-dir
+              pip install -r requirements.txt --no-cache-dir
+              deactivate
+            else
+              echo "✅ Virtual environment already exists, skipping recreation"
+            fi
+            
+            # Create output directories with proper permissions
+            echo "📁 Creating output directories..."
+            cd "$DEPLOYMENT_PATH/backend"
+            sudo mkdir -p output/cache output/videos output/thumbnails
+            sudo chown -R www-data:www-data output
+            sudo chmod -R 755 output
+            
+            # Ensure .env file has correct permissions
+            if [ -f ".env" ]; then
+              echo "🔐 Setting .env file permissions..."
+              sudo chmod 640 .env
+              sudo chown ubuntu:www-data .env
+            fi
+            
+            # Restart FastAPI service
+            echo "🚀 Restarting FastAPI service..."
+            sudo systemctl start fastapi
+            
+            # Wait a moment for service to start
+            sleep 5
+            
+            # Check service status
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ FastAPI service is running"
+            else
+              echo "⚠️  FastAPI service may not be running properly"
+            fi
+            
+            echo "✅ Rollback completed successfully"
+            
+            # Clean up old backup directories after successful rollback
+            echo "🧹 Cleaning up old backup directories..."
+            DEPLOYMENT_DIR=$(dirname "$DEPLOYMENT_PATH")
+            if [ -d "$DEPLOYMENT_DIR" ]; then
+              # Remove old .old-* directories
+              sudo find "$DEPLOYMENT_DIR" -maxdepth 1 -type d -name "${DEPLOYMENT_PATH##*/}.old-*" -exec sudo rm -rf {} + 2>/dev/null || true
+            fi
+            
+            # Show disk usage after cleanup
+            echo "💾 Disk usage after cleanup:"
+            df -h / | tail -1
+          EOF
+
+      - name: Cleanup SSH key
         if: always()
+        run: |
+          rm -f ~/.ssh/ec2_key.pem
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment completed successfully!"
+            echo "🌐 Frontend: http://${{ env.S3_FRONTEND_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
+            echo "🔗 Backend API: ${{ env.API_BASE_URL }}/api/"
+            echo "❤️  Health Check: ${{ env.API_BASE_URL }}/api/health"
+          else
+            echo "❌ Deployment failed"
+            echo "🔄 Rollback was attempted if backup was available"
+          fi

@@ -108,7 +108,7 @@ async def enhance_prompt_with_llm(
     Send user prompt to OpenAI GPT-4 Turbo API and return structured AdSpecification.
     
     Args:
-        user_prompt: User's text prompt (10-500 characters)
+        user_prompt: User's text prompt (10-2000 characters)
         max_retries: Maximum number of retry attempts (default: 3)
     
     Returns:

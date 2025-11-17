@@ -69,7 +69,7 @@ export const VideoDetail: React.FC = () => {
     original?: GenerationListItem;
     edited?: GenerationListItem[];
   }>({});
-  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [_loadingVersions, setLoadingVersions] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -78,7 +78,6 @@ export const VideoDetail: React.FC = () => {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<QualityMetricsResponse | null>(null);
   const [loadingQualityMetrics, setLoadingQualityMetrics] = useState(false);
-  const [showQualityMetrics, setShowQualityMetrics] = useState(false);
 
   // Fetch generation details
   useEffect(() => {
@@ -489,7 +488,7 @@ export const VideoDetail: React.FC = () => {
                   {/* View Original button (if viewing edited version) */}
                   {relatedVersions.original && (
                     <Button
-                      onClick={() => navigate(`/gallery/${relatedVersions.original.id}`)}
+                      onClick={() => navigate(`/gallery/${relatedVersions.original!.id}`)}
                       variant="secondary"
                       className="text-sm"
                     >

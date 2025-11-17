@@ -6,7 +6,7 @@
  * consider adding Playwright or Cypress in a future sprint.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { Editor } from "../routes/Editor";
 import { loadEditorData, splitClip } from "../lib/editorApi";
@@ -126,7 +126,7 @@ describe("Split E2E Workflow", () => {
     // In a real E2E test, we'd interact with the Timeline component
 
     // Mock that clip is selected and split button appears
-    const splitButton = screen.queryByText(/Split Clip/i);
+    // const splitButton = screen.queryByText(/Split Clip/i);
     
     // If split button is not visible, it means no clip is selected
     // In a real scenario, we'd click on the timeline to select a clip first

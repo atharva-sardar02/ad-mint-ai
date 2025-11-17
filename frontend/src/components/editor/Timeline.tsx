@@ -90,7 +90,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onClipPositionChange,
 }) => {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const [scrollPosition, setScrollPosition] = useState(0);
+  const [_scrollPosition, setScrollPosition] = useState(0);
   const [localSelectedClipIds, setLocalSelectedClipIds] = useState<string[]>([]);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [isDraggingTimeline, setIsDraggingTimeline] = useState(false);
@@ -326,8 +326,8 @@ export const Timeline: React.FC<TimelineProps> = ({
         clipPositions.forEach(pos => {
           const clipLeft = pos.x;
           const clipRight = pos.x + pos.width;
-          const clipTop = TIMELINE_HEIGHT / 2 - CLIP_HEIGHT / 2;
-          const clipBottom = TIMELINE_HEIGHT / 2 + CLIP_HEIGHT / 2;
+          const clipTop = timelineHeight / 2 - CLIP_HEIGHT / 2;
+          const clipBottom = timelineHeight / 2 + CLIP_HEIGHT / 2;
           
           // Check if clip overlaps with selection box
           if (!(clipRight < boxLeft || clipLeft > boxRight || clipBottom < boxTop || clipTop > boxBottom)) {

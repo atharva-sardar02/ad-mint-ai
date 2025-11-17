@@ -12,7 +12,14 @@ logger = logging.getLogger(__name__)
 
 # Cache directory
 CACHE_DIR = Path("output/cache")
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Create cache directory with error handling
+try:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except (PermissionError, OSError) as e:
+    logger.warning(f"Could not create cache directory {CACHE_DIR}: {e}. Caching will be disabled.")
+    # Set to None to indicate caching is disabled
+    CACHE_DIR = None
 
 # Default prompt for caching (exact match required)
 DEFAULT_PROMPT = "Create a 10 second ad for a Gauntlet water bottle"
@@ -44,6 +51,9 @@ def get_cached_clip(prompt: str, scene_index: int) -> Optional[str]:
     Returns:
         Optional[str]: Path to cached clip if exists, None otherwise
     """
+    if CACHE_DIR is None:
+        return None
+    
     cache_key = get_cache_key(prompt, scene_index)
     cache_file = CACHE_DIR / f"{cache_key}.mp4"
     
@@ -67,6 +77,9 @@ def cache_clip(prompt: str, scene_index: int, clip_path: str) -> str:
     Returns:
         str: Path to cached clip
     """
+    if CACHE_DIR is None:
+        return clip_path
+    
     cache_key = get_cache_key(prompt, scene_index)
     cache_file = CACHE_DIR / f"{cache_key}.mp4"
     
@@ -116,6 +129,9 @@ def get_all_cached_clips(prompt: str) -> Dict[int, str]:
     Returns:
         Dict[int, str]: Dictionary mapping scene index to clip path
     """
+    if CACHE_DIR is None:
+        return {}
+    
     cached_clips = {}
     
     # Check metadata files to find all clips for this prompt

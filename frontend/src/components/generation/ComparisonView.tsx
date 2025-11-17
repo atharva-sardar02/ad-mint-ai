@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/Button";
-import { VideoCard } from "../ui/VideoCard";
+// import { VideoCard } from "../ui/VideoCard"; // Reserved for future use
 import type { ComparisonGroupResponse, VariationDetail } from "../../lib/generationService";
 import { generationService } from "../../lib/generationService";
 
@@ -21,7 +21,7 @@ export interface ComparisonViewProps {
 export const ComparisonView: React.FC<ComparisonViewProps> = ({
   groupId,
   initialData,
-  onRefresh,
+  onRefresh: _onRefresh,
 }) => {
   const navigate = useNavigate();
   const [comparisonData, setComparisonData] = useState<ComparisonGroupResponse | null>(initialData || null);
@@ -251,7 +251,7 @@ interface VariationCardProps {
 const VariationCard: React.FC<VariationCardProps> = ({
   variation,
   index,
-  comparisonType,
+  comparisonType: _comparisonType,
   onViewVideo,
 }) => {
   const {

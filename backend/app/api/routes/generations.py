@@ -730,7 +730,7 @@ async def create_generation(
     Start a new video generation from a user prompt.
     
     Args:
-        request: GenerateRequest with prompt (minimum 10 characters)
+        request: GenerateRequest with prompt (10-2000 characters)
         current_user: Authenticated user (from JWT)
         db: Database session
     
@@ -836,13 +836,13 @@ async def create_parallel_generation(
     
     # Validate all prompts
     for i, variation in enumerate(request.variations):
-        if len(variation.prompt) < 10:
+        if len(variation.prompt) < 10 or len(variation.prompt) > 2000:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={
                     "error": {
                         "code": "INVALID_PROMPT_LENGTH",
-                        "message": f"Variation {i+1}: Prompt must be at least 10 characters"
+                        "message": f"Variation {i+1}: Prompt must be between 10 and 2000 characters"
                     }
                 }
             )

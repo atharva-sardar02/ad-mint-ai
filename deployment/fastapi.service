@@ -25,6 +25,9 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/ad-mint-ai/backend
 Environment="PATH=/var/www/ad-mint-ai/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
+# Set TMPDIR for MoviePy and other libraries that create temporary files
+# This directory must exist and be writable by www-data user
+Environment="TMPDIR=/var/www/ad-mint-ai/backend/tmp"
 # Load environment variables from .env file if it exists
 # Production: .env file at /var/www/ad-mint-ai/backend/.env with proper permissions (chmod 600)
 EnvironmentFile=-/var/www/ad-mint-ai/backend/.env

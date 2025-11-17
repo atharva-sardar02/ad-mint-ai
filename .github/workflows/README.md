@@ -1,133 +1,172 @@
 # GitHub Actions CI/CD Setup
 
-This directory contains GitHub Actions workflows for automated testing and deployment.
+This directory contains GitHub Actions workflows for automated deployment.
 
 ## Workflows
 
 ### `deploy.yml` - Production Deployment
 
-Automatically deploys to production when code is pushed to the `main` branch.
+Automatically deploys both frontend and backend to production when code is pushed to the `main` branch.
 
 **What it does:**
-1. ✅ Runs backend and frontend tests
-2. ✅ Builds the frontend production bundle
-3. ✅ Deploys backend to EC2 via SSH
-4. ✅ Deploys frontend to S3 (optional)
-5. ✅ Sends deployment notifications (optional)
+1. ✅ Builds frontend with production API URL
+2. ✅ Deploys frontend to S3 bucket
+3. ✅ Creates backup of current backend deployment
+4. ✅ Deploys backend to EC2 via SSH
+5. ✅ Performs health check (polls `/api/health` for 60 seconds)
+6. ✅ Automatically rolls back if health check fails
+
+**Key Features:**
+- Zero-downtime deployment with health checks
+- Automatic rollback on failure
+- Backup preservation for manual recovery
+- No tests (deploys directly as configured)
 
 ## Setup Instructions
 
 ### 1. Configure GitHub Secrets
 
-Go to your repository → Settings → Secrets and variables → Actions, and add:
+Go to your repository → **Settings** → **Secrets and variables** → **Actions**, and add:
 
-#### Required Secrets (Backend Deployment)
+#### Required Secrets
 
-- `EC2_HOST` - Your EC2 instance IP or hostname (e.g., `ec2-xx-xx-xx-xx.compute-1.amazonaws.com`)
-- `EC2_USER` - SSH username (usually `ubuntu` for Ubuntu instances)
-- `EC2_SSH_KEY` - Your private SSH key for EC2 access (full key including `-----BEGIN RSA PRIVATE KEY-----`)
-- `EC2_DEPLOYMENT_PATH` - Path where app is deployed (default: `/var/www/ad-mint-ai`)
-- `EC2_SSH_PORT` - SSH port (default: `22`)
+| Secret Name | Description | Example |
+|------------|-------------|---------|
+| `AWS_ACCESS_KEY_ID` | AWS access key for S3 deployment | `AKIAIOSFODNN7EXAMPLE` |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key for S3 deployment | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `EC2_USERNAME` | SSH username for EC2 instance | `ubuntu` |
+| `EC2_SSH_KEY` | **Complete private key content** from `.pem` file | Copy entire contents of `ad-mint-ai-key.pem` |
 
-#### Optional Secrets (Frontend S3 Deployment)
+**Important:**
+- `EC2_SSH_KEY` should contain the **entire private key file content** (including `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`)
+- Open your `.pem` file and copy everything, then paste into the GitHub Secret
 
-- `AWS_ACCESS_KEY_ID` - AWS access key with S3 permissions
-- `AWS_SECRET_ACCESS_KEY` - AWS secret access key
-- `AWS_REGION` - AWS region (default: `us-east-1`)
-- `S3_FRONTEND_BUCKET` - S3 bucket name for frontend (e.g., `ad-mint-ai-frontend`)
-- `CLOUDFRONT_DISTRIBUTION_ID` - CloudFront distribution ID (if using CDN)
+### 2. EC2 Instance Requirements
 
-#### Optional Secrets (Notifications & Configuration)
+Your EC2 instance must have:
 
-- `SLACK_WEBHOOK_URL` - Slack webhook for deployment notifications
-- `VITE_API_URL` - Frontend API URL (default: `https://api.yourdomain.com`)
-- `EC2_API_URL` - Backend API URL (default: `https://api.yourdomain.com`)
-- `S3_FRONTEND_URL` - Frontend URL (default: `https://yourdomain.com`)
-
-### 2. Set Up EC2 SSH Access
-
-**Option A: Use SSH Key Pair (Recommended)**
-
-1. Generate an SSH key pair if you don't have one:
-   ```bash
-   ssh-keygen -t rsa -b 4096 -C "github-actions"
-   ```
-
-2. Copy the public key to your EC2 instance:
-   ```bash
-   ssh-copy-id -i ~/.ssh/github_actions.pub ubuntu@your-ec2-host
-   ```
-
-3. Copy the private key content to GitHub Secrets as `EC2_SSH_KEY`:
-   ```bash
-   cat ~/.ssh/github_actions
-   ```
-
-**Option B: Use Existing EC2 Key Pair**
-
-1. Convert your `.pem` file to the format needed:
-   ```bash
-   cat your-key.pem
-   ```
-
-2. Copy the entire output (including `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----`) to GitHub Secrets as `EC2_SSH_KEY`
-
-### 3. Configure EC2 Instance
-
-Ensure your EC2 instance has:
-
-1. **Git repository access:**
+1. **Git repository cloned:**
    ```bash
    # On EC2 instance
    cd /var/www/ad-mint-ai
-   git remote set-url origin https://github.com/your-username/ad-mint-ai.git
-   # Or use SSH if you prefer
+   git remote -v  # Should show your GitHub repo
    ```
 
-2. **Deployment script permissions:**
+2. **Git configured for pull:**
    ```bash
-   chmod +x deployment/deploy.sh
+   # Ensure git can pull without credentials (or use SSH)
+   git config --global credential.helper store
    ```
 
-3. **Sudo access for deployment user:**
-   The deployment script needs sudo to install packages and configure services. Ensure your SSH user has sudo privileges.
+3. **Deployment directory permissions:**
+   ```bash
+   sudo chown -R ubuntu:ubuntu /var/www/ad-mint-ai
+   ```
 
-### 4. Test the Workflow
+4. **FastAPI service running:**
+   ```bash
+   sudo systemctl status fastapi  # Should be active
+   ```
+
+### 3. Test the Workflow
 
 1. Push a commit to the `main` branch
-2. Go to Actions tab in GitHub to see the workflow run
+2. Go to **Actions** tab in GitHub to see the workflow run
 3. Check deployment logs for any issues
+4. Verify health endpoint: `http://44.210.144.149/api/health`
 
 ## Workflow Triggers
 
 - **Automatic:** Pushes to `main` branch
-- **Manual:** Go to Actions → Deploy to Production → Run workflow
+- **Manual:** Go to **Actions** → **Deploy to Production** → **Run workflow**
+
+## Deployment Process
+
+### Frontend Deployment
+
+1. Builds frontend with `VITE_API_URL=http://44.210.144.149`
+2. Syncs `frontend/dist/` to S3 bucket `ad-mint-ai-frontend`
+3. Verifies `index.html` exists in S3
+
+### Backend Deployment
+
+1. **Backup:** Creates `/var/www/ad-mint-ai.backup` directory
+2. **Pull Code:** `git reset --hard origin/main`
+3. **Update Dependencies:** `pip install -r requirements.txt`
+4. **Run Migrations:** `python -m app.db.migrations.run_all` (runs all migrations automatically)
+5. **Restart Service:** `sudo systemctl restart fastapi`
+6. **Health Check:** Polls `/api/health` every 5 seconds for up to 60 seconds
+7. **Rollback (if needed):** Restores from backup and restarts service
+
+## Health Check
+
+The workflow performs a health check after backend deployment:
+
+- **Endpoint:** `http://44.210.144.149/api/health`
+- **Expected Response:** `{"status": "healthy", ...}`
+- **Polling:** Every 5 seconds for up to 60 seconds (12 attempts)
+- **Failure:** Triggers automatic rollback
+
+## Rollback
+
+If health check fails:
+
+1. **Automatic Rollback:**
+   - Stops FastAPI service
+   - Restores `/var/www/ad-mint-ai` from backup
+   - Preserves `.env` file
+   - Restarts service
+   - Fails workflow with error message
+
+2. **Manual Rollback:**
+   ```bash
+   ssh -i ad-mint-ai-key.pem ubuntu@44.210.144.149
+   cd /var/www/ad-mint-ai.backup
+   # Use deployment/scripts/rollback.sh
+   ```
 
 ## Troubleshooting
 
 ### SSH Connection Fails
 
-- Verify `EC2_HOST`, `EC2_USER`, and `EC2_SSH_KEY` are correct
-- Check EC2 Security Group allows SSH from GitHub Actions IPs
-- Test SSH connection manually: `ssh -i key.pem user@host`
+- Verify `EC2_USERNAME` and `EC2_SSH_KEY` are correct
+- Check EC2 Security Group allows SSH (port 22) from GitHub Actions IPs
+- Test SSH connection manually: `ssh -i key.pem ubuntu@44.210.144.149`
 
-### Deployment Script Fails
+### Migration Failures
 
-- Check EC2 instance has required dependencies
-- Verify deployment path exists and has correct permissions
-- Review EC2 logs: `sudo journalctl -u fastapi -f`
+- Check migration logs in workflow output
+- Verify database connection in `.env` file
+- Test migrations manually: `python -m app.db.migrations.run_all`
+- Check database permissions and connectivity
+- Review migration scripts for errors
+
+### Health Check Fails
+
+- Check service logs: `sudo journalctl -u fastapi -f`
+- Verify health endpoint manually: `curl http://44.210.144.149/api/health`
+- Check database connection in `.env` file
+- Review recent code changes that might break the service
+- Verify migrations completed successfully
 
 ### Frontend Build Fails
 
-- Check `VITE_API_URL` is set correctly
-- Verify Node.js version matches (18+)
-- Check for TypeScript or build errors
+- Check `VITE_API_URL` is set correctly (hardcoded to `http://44.210.144.149`)
+- Verify Node.js version (18+)
+- Check for TypeScript or build errors in logs
 
 ### S3 Deployment Fails
 
 - Verify AWS credentials have S3 write permissions
-- Check bucket name and region are correct
+- Check bucket name: `ad-mint-ai-frontend`
 - Ensure bucket policy allows uploads
+- Verify region: `us-east-1`
+
+### Git Pull Fails
+
+- Ensure EC2 instance has access to GitHub repository
+- Check git remote URL is correct
+- Verify SSH key or credentials are configured on EC2
 
 ## Security Best Practices
 
@@ -136,39 +175,20 @@ Ensure your EC2 instance has:
 3. **Rotate keys regularly** - Update SSH and AWS keys periodically
 4. **Enable 2FA** - Protect your GitHub account
 5. **Review workflow logs** - Monitor for unauthorized access
+6. **Backup preservation** - Keep backups for manual recovery
 
-## Customization
+## Important Notes
 
-### Add Staging Environment
-
-Create `.github/workflows/deploy-staging.yml` with similar configuration but:
-- Trigger on `develop` branch
-- Use different EC2 instance or S3 bucket
-- Use `staging` environment in GitHub
-
-### Add Approval Gate
-
-Add an approval step before production deployment:
-
-```yaml
-deploy-backend:
-  environment:
-    name: production
-    url: ${{ secrets.EC2_API_URL }}
-    # Requires manual approval
-```
-
-### Add More Tests
-
-Add additional test steps:
-- Security scanning (Snyk, OWASP)
-- Dependency checks (npm audit, safety)
-- E2E tests (Playwright, Cypress)
+- **No Tests:** The workflow deploys directly without running tests (as configured)
+- **Database Migrations:** All migrations in `backend/app/db/migrations/` are run automatically during deployment
+- **Environment Variables:** The `.env` file on EC2 is **not modified** by the pipeline
+- **Backup Retention:** Backups are preserved until next deployment (old backup is removed)
+- **Migration Failures:** If migrations fail, the deployment will automatically rollback
 
 ## Support
 
 For issues or questions:
 1. Check workflow logs in GitHub Actions
-2. Review deployment script logs on EC2
-3. Consult Story 1.5 documentation: `docs/sprint-artifacts/1-5-production-deployment.md`
-
+2. Review deployment guide: `deployment/production/DEPLOYMENT_GUIDE.md`
+3. Check service logs on EC2: `sudo journalctl -u fastapi -f`
+4. Verify health endpoint: `curl http://44.210.144.149/api/health`

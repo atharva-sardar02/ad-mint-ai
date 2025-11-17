@@ -55,6 +55,28 @@ MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 1  # seconds
 MAX_RETRY_DELAY = 30  # seconds
 
+# Model seed parameter support mapping
+# Maps model name to (seed_parameter_name, verified_support)
+# Most models use "seed" as the parameter name
+MODEL_SEED_SUPPORT = {
+    # Newer models (2025) - most use "seed" parameter
+    "openai/sora-2": ("seed", True),  # Sora-2 uses "seed" parameter (OpenAI standard)
+    "google/veo-3": ("seed", False),  # Likely supports seed, but not verified
+    "pixverse/pixverse-v5": ("seed", False),  # Likely supports seed, but not verified
+    "klingai/kling-2.5-turbo": ("seed", False),  # Likely supports seed, but not verified
+    "minimax-ai/hailuo-02": ("seed", False),  # Likely supports seed, but not verified
+    "bytedance/seedance-1": ("seed", False),  # Likely supports seed, but not verified
+    # Legacy models - verified support
+    "bytedance/seedance-1-lite": ("seed", True),
+    "minimax-ai/minimax-video-01": ("seed", True),
+    "klingai/kling-video": ("seed", True),
+    "runway/gen3-alpha-turbo": ("seed", True),
+    # Note: Some models may use different parameter names:
+    # - "random_seed" (less common)
+    # - "noise_seed" (rare)
+    # If a model doesn't support seed, Replicate API will ignore it silently
+}
+
 
 async def generate_video_clip_with_model(
     prompt: str,
@@ -363,20 +385,23 @@ async def _generate_with_retry(
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
             if use_seed and seed is not None:
-                input_params["seed"] = seed
-                logger.debug(f"Using seed {seed} for video generation with model {model_name}")
-                # Log warning for models that may not support seed (based on known model list)
-                # This is informational - API will handle gracefully if seed is not supported
-                models_with_known_seed_support = [
-                    "bytedance/seedance-1-lite",
-                    "minimax-ai/minimax-video-01",
-                    "klingai/kling-video",
-                    "runway/gen3-alpha-turbo"
-                ]
-                if model_name not in models_with_known_seed_support:
+                # Get model-specific seed parameter name (defaults to "seed")
+                seed_param_name, verified = MODEL_SEED_SUPPORT.get(
+                    model_name, 
+                    ("seed", False)  # Default to "seed" if model not in mapping
+                )
+                
+                # Add seed parameter with model-specific name
+                input_params[seed_param_name] = seed
+                logger.debug(
+                    f"Using {seed_param_name}={seed} for video generation with model {model_name}"
+                )
+                
+                # Log warning for models with unverified seed support
+                if not verified:
                     logger.warning(
-                        f"Seed parameter provided for model {model_name} - seed support not verified. "
-                        f"API will ignore seed if model doesn't support it."
+                        f"Seed parameter ({seed_param_name}) provided for model {model_name} - "
+                        f"seed support not verified. API will ignore if model doesn't support it."
                     )
             
             # Create prediction
@@ -439,9 +464,18 @@ async def _generate_with_retry(
                 continue
             
             # Check if error is related to unsupported seed parameter
-            if use_seed and "seed" in error_str and ("invalid" in error_str or "not supported" in error_str or "unknown" in error_str):
+            # Check for common seed parameter names in error message
+            seed_param_name, _ = MODEL_SEED_SUPPORT.get(model_name, ("seed", False))
+            seed_error_keywords = ["seed", "random_seed", "noise_seed", seed_param_name]
+            is_seed_error = (
+                use_seed and 
+                any(keyword in error_str for keyword in seed_error_keywords) and 
+                ("invalid" in error_str or "not supported" in error_str or "unknown" in error_str or "unexpected" in error_str)
+            )
+            
+            if is_seed_error:
                 logger.warning(
-                    f"Model {model_name} may not support seed parameter: {e}. "
+                    f"Model {model_name} may not support {seed_param_name} parameter: {e}. "
                     f"Retrying without seed parameter..."
                 )
                 # Disable seed for remaining attempts if seed parameter caused the error

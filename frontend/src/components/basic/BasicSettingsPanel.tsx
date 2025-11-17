@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { Select } from "../ui/Select";
 import { ModelSelect } from "../ui/ModelSelect";
-import { VIDEO_MODELS, DEFAULT_MODEL } from "../../lib/models/videoModels";
+import { VIDEO_MODELS } from "../../lib/models/videoModels";
 
 export interface BasicSettings {
   useSingleClip: boolean;
