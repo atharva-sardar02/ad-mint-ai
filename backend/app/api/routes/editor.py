@@ -1006,14 +1006,35 @@ def process_export_task(
             export_gen = db_session.query(Generation).filter(Generation.id == export_id).first()
             return export_gen.cancellation_requested if export_gen else False
         
+        # Get original generation's video path as fallback for missing clips
+        original_generation = db_session.query(Generation).filter(
+            Generation.id == generation_id
+        ).first()
+        
+        if original_generation:
+            logger.info(
+                f"Found original generation {generation_id}, video_path: {original_generation.video_path}"
+            )
+            fallback_video_path = original_generation.video_path
+            
+            # If video_path is not set in DB, construct expected path from generation ID
+            if not fallback_video_path:
+                constructed_path = f"output/videos/{generation_id}.mp4"
+                logger.info(f"video_path is None, constructing expected path: {constructed_path}")
+                fallback_video_path = constructed_path
+        else:
+            logger.warning(f"Original generation {generation_id} not found for fallback")
+            fallback_video_path = None
+        
         # Process export
         output_dir = "output"  # Base output directory
-        exported_video_path, export_gen_id = export_edited_video(
+        exported_video_path, export_gen_id, thumbnail_path = export_edited_video(
             editing_session=editing_session,
             output_dir=output_dir,
             export_generation_id=export_id,
             cancellation_check=check_cancellation,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            fallback_video_path=fallback_video_path
         )
         
         # Update editing session with exported video path
@@ -1024,7 +1045,8 @@ def process_export_task(
         # Update export generation with video paths
         # exported_video_path is full path, but we need relative path for video_url
         # Extract relative path from exported_video_path (e.g., "output/videos/{id}.mp4" -> "videos/{id}.mp4")
-        relative_video_path = exported_video_path.replace("output/", "").replace("\\", "/")
+        # First normalize path separators (Windows uses backslashes), then remove output/ prefix
+        relative_video_path = exported_video_path.replace("\\", "/").replace("output/", "")
         if relative_video_path.startswith("/"):
             relative_video_path = relative_video_path[1:]
         
@@ -1032,7 +1054,9 @@ def process_export_task(
         if export_generation:
             export_generation.video_path = exported_video_path
             export_generation.video_url = get_full_url(relative_video_path)
-            # Note: thumbnail_url will be set by export service (it returns thumbnail_url as relative path)
+            # Set thumbnail URL (thumbnail_path is already a relative path from export service)
+            if thumbnail_path:
+                export_generation.thumbnail_url = get_full_url(thumbnail_path)
             export_generation.status = "completed"
             export_generation.progress = 100
             export_generation.current_step = "Export complete"
