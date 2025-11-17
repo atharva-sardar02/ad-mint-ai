@@ -208,7 +208,8 @@ export const GenerationStatus: React.FC = () => {
               <video
                 src={status.video_url}
                 controls
-                className="w-full rounded-lg"
+                className="w-full h-auto max-h-[80vh] object-contain rounded-lg mx-auto block"
+                style={{ aspectRatio: 'auto' }}
               >
                 Your browser does not support the video tag.
               </video>

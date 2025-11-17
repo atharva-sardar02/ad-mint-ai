@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { generationService } from "../lib/generationService";
 import type { GenerationQueue, QueueItem } from "../lib/generationService";
+import { cancelGeneration } from "../lib/services/generations";
 import { Button } from "../components/ui/Button";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
 import { ProgressBar } from "../components/ProgressBar";
@@ -18,6 +19,7 @@ export const Queue: React.FC = () => {
   const [queue, setQueue] = useState<GenerationQueue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -76,17 +78,51 @@ export const Queue: React.FC = () => {
   };
 
   /**
+   * Handle cancel generation.
+   */
+  const handleCancel = async (e: React.MouseEvent, generationId: string) => {
+    e.stopPropagation(); // Prevent navigation
+    
+    if (!window.confirm("Are you sure you want to cancel this generation?")) {
+      return;
+    }
+    
+    setCancelling(prev => new Set(prev).add(generationId));
+    
+    try {
+      await cancelGeneration(generationId);
+      // Refresh queue after cancellation
+      await fetchQueue();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to cancel generation";
+      alert(errorMessage);
+      console.error("Error cancelling generation:", err);
+    } finally {
+      setCancelling(prev => {
+        const next = new Set(prev);
+        next.delete(generationId);
+        return next;
+      });
+    }
+  };
+
+  /**
    * Render a queue item.
    */
   const renderQueueItem = (item: QueueItem) => {
+    const isCancelling = cancelling.has(item.id);
+    
     return (
       <div
         key={item.id}
-        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-        onClick={() => navigate(`/gallery/${item.id}`)}
+        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
       >
         <div className="flex items-start justify-between mb-2">
-          <div className="flex-1">
+          <div 
+            className="flex-1 cursor-pointer"
+            onClick={() => navigate(`/gallery/${item.id}`)}
+          >
             <h3 className="text-sm font-semibold text-gray-900 mb-1">
               {item.title || `Generation ${item.id.substring(0, 8)}`}
             </h3>
@@ -127,6 +163,21 @@ export const Queue: React.FC = () => {
                 {item.num_scenes} scene{item.num_scenes !== 1 ? "s" : ""} planned
               </p>
             )}
+          </div>
+        )}
+        
+        {/* Cancel button */}
+        {(item.status === "pending" || item.status === "processing") && (
+          <div className="mt-3 flex justify-end">
+            <Button
+              variant="danger"
+              onClick={(e) => handleCancel(e, item.id)}
+              disabled={isCancelling}
+              isLoading={isCancelling}
+              className="text-sm px-3 py-1.5"
+            >
+              {isCancelling ? "Cancelling..." : "Cancel"}
+            </Button>
           </div>
         )}
       </div>

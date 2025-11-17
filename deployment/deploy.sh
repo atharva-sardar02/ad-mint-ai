@@ -172,7 +172,15 @@ success_msg "Nginx site enabled"
 info_msg "Testing Nginx configuration..."
 nginx -t || error_exit "Nginx configuration test failed"
 
-# Step 7: Copy systemd service file
+# Step 7: Create temp directory for MoviePy and other temporary files
+info_msg "Creating temp directory for application..."
+TEMP_DIR="$BACKEND_DIR/tmp"
+mkdir -p "$TEMP_DIR" || error_exit "Failed to create temp directory"
+chown www-data:www-data "$TEMP_DIR" || error_exit "Failed to set temp directory ownership"
+chmod 755 "$TEMP_DIR" || error_exit "Failed to set temp directory permissions"
+success_msg "Temp directory created: $TEMP_DIR"
+
+# Step 8: Copy systemd service file
 info_msg "Configuring systemd service..."
 SERVICE_SOURCE="$DEPLOYMENT_PATH/deployment/fastapi.service"
 SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -188,7 +196,7 @@ sed -i "s|/path/to/venv|$VENV_PATH|g" "$SERVICE_SOURCE"
 cp "$SERVICE_SOURCE" "$SERVICE_DEST" || error_exit "Failed to copy systemd service file"
 success_msg "Systemd service file copied to $SERVICE_DEST"
 
-# Step 8: Reload systemd and enable/start services
+# Step 9: Reload systemd and enable/start services
 info_msg "Reloading systemd daemon..."
 systemctl daemon-reload || error_exit "Failed to reload systemd daemon"
 success_msg "Systemd daemon reloaded"
@@ -204,7 +212,7 @@ info_msg "Reloading Nginx..."
 systemctl reload nginx || error_exit "Failed to reload Nginx"
 success_msg "Nginx reloaded"
 
-# Step 9: Run database initialization
+# Step 10: Run database initialization
 info_msg "Initializing database..."
 cd "$BACKEND_DIR" || error_exit "Failed to change to backend directory"
 source "$VENV_PATH/bin/activate"
@@ -213,7 +221,7 @@ deactivate
 success_msg "Database initialized"
 cd "$DEPLOYMENT_PATH" || error_exit "Failed to return to deployment directory"
 
-# Step 10: Verification steps
+# Step 11: Verification steps
 info_msg "Running verification steps..."
 
 # Check FastAPI service status

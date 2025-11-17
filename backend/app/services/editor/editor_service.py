@@ -165,7 +165,7 @@ def get_or_create_editing_session(
     )
     
     if existing_session:
-        logger.info(f"Found existing editing session {existing_session.id} for generation {generation.id}")
+        logger.debug(f"Found existing editing session {existing_session.id} for generation {generation.id}")
         return existing_session
     
     # Create new editing session
@@ -186,6 +186,7 @@ def get_or_create_editing_session(
                 "merged_with": [],
                 "scene_number": clip.scene_number,
                 "text_overlay": clip.text_overlay,
+                "track_index": 0,  # Default to track 0
             }
             for clip in clips
         ],
@@ -206,6 +207,6 @@ def get_or_create_editing_session(
     db.commit()
     
     # Note: Avoiding db.refresh() and attribute access after commit for testing compatibility
-    logger.info(f"Created new editing session {session_id} for generation {generation.id}")
+    logger.debug(f"Created new editing session {session_id} for generation {generation.id}")
     return new_session
 

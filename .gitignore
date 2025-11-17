@@ -176,11 +176,16 @@ docs/.doctrees/
 *.o
 *.so
 
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc*
+
 # Packages
 *.dmg
 *.pkg
 *.deb
 *.rpm
-*.pyc*
 
 ClipForge/

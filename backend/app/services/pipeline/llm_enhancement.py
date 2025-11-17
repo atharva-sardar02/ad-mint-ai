@@ -273,6 +273,19 @@ async def enhance_prompt_with_llm(
     """
     Generate a Sora-3.0 AIDA blueprint using GPT-4-Turbo (compact fragment style),
     then convert it into AdSpecification for the video pipeline.
+    
+    Args:
+        user_prompt: User's text prompt (10-2000 characters)
+        max_retries: Maximum number of retry attempts (default: 3)
+        image_path: Optional path to reference image for Sora-2 generation
+    
+    Returns:
+        AdSpecification: Validated Pydantic model with ad specification
+    
+    Raises:
+        ValueError: If API key is missing or invalid
+        openai.APIError: If API call fails after retries
+        ValidationError: If LLM response doesn't match schema
     """
 
     if not settings.OPENAI_API_KEY:

@@ -16,9 +16,16 @@ from app.schemas.generation import Scene, ScenePlan
 logger = logging.getLogger(__name__)
 
 # Replicate model configurations
-# Primary model: Seedance-1-Lite (ByteDance)
-# Fallback models: Minimax Video-01, Kling 1.5, Runway Gen-3 Alpha Turbo, Sora-2
+# Default model: Sora 2 (OpenAI) - State-of-the-art realism with exceptional physics
+# Top models ranked by quality: Sora 2, Veo 3, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
+    "default": "openai/sora-2",  # Sora 2 - Recommended default
+    "veo_3": "google/veo-3",
+    "pixverse_v5": "pixverse/pixverse-v5",
+    "kling_2_5": "klingai/kling-2.5-turbo",
+    "hailuo_02": "minimax-ai/hailuo-02",
+    "seedance_1": "bytedance/seedance-1",
+    # Legacy models (kept for backward compatibility)
     "primary": "bytedance/seedance-1-lite",
     "fallback_1": "minimax-ai/minimax-video-01",
     "fallback_2": "klingai/kling-video",
@@ -27,19 +34,48 @@ REPLICATE_MODELS = {
 }
 
 # Cost per second of video (approximate, varies by model)
-# Seedance-1-Lite: ~$0.04/sec (estimated), Minimax: ~$0.05/sec, Kling: ~$0.06/sec, Runway: ~$0.08/sec, Sora-2: ~$0.10/sec (estimated)
+# Updated costs for 2025 models
 MODEL_COSTS = {
+    # Top-tier models
+    "openai/sora-2": 0.10,  # Default - state-of-the-art
+    "google/veo-3": 0.12,  # Premium cinematic quality
+    "pixverse/pixverse-v5": 0.06,  # Balanced quality & cost
+    "klingai/kling-2.5-turbo": 0.07,  # Fast cinematic
+    "minimax-ai/hailuo-02": 0.09,  # Physics proficiency
+    "bytedance/seedance-1": 0.05,  # Multi-shot specialist
+    # Legacy models
     "bytedance/seedance-1-lite": 0.04,
     "minimax-ai/minimax-video-01": 0.05,
     "klingai/kling-video": 0.06,
     "runway/gen3-alpha-turbo": 0.08,
-    "openai/sora-2": 0.10
 }
 
 # Retry configuration
 MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 1  # seconds
 MAX_RETRY_DELAY = 30  # seconds
+
+# Model seed parameter support mapping
+# Maps model name to (seed_parameter_name, verified_support)
+# Most models use "seed" as the parameter name
+MODEL_SEED_SUPPORT = {
+    # Newer models (2025) - most use "seed" parameter
+    "openai/sora-2": ("seed", True),  # Sora-2 uses "seed" parameter (OpenAI standard)
+    "google/veo-3": ("seed", False),  # Likely supports seed, but not verified
+    "pixverse/pixverse-v5": ("seed", False),  # Likely supports seed, but not verified
+    "klingai/kling-2.5-turbo": ("seed", False),  # Likely supports seed, but not verified
+    "minimax-ai/hailuo-02": ("seed", False),  # Likely supports seed, but not verified
+    "bytedance/seedance-1": ("seed", False),  # Likely supports seed, but not verified
+    # Legacy models - verified support
+    "bytedance/seedance-1-lite": ("seed", True),
+    "minimax-ai/minimax-video-01": ("seed", True),
+    "klingai/kling-video": ("seed", True),
+    "runway/gen3-alpha-turbo": ("seed", True),
+    # Note: Some models may use different parameter names:
+    # - "random_seed" (less common)
+    # - "noise_seed" (rare)
+    # If a model doesn't support seed, Replicate API will ignore it silently
+}
 
 
 async def generate_video_clip_with_model(
@@ -179,18 +215,29 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: preferred_model (if specified) -> primary -> fallback_1 -> fallback_2 -> fallback_3
+    # Try models in order: preferred_model (if specified) -> default (Sora 2) -> fallback chain
     models_to_try = []
     if preferred_model and preferred_model in MODEL_COSTS:
         models_to_try.append(preferred_model)
         logger.info(f"Using preferred model: {preferred_model}")
+    else:
+        # Use Sora 2 as default when no model is specified
+        models_to_try.append(REPLICATE_MODELS["default"])
+        logger.info(f"Using default model: {REPLICATE_MODELS['default']}")
     
-    # Add default fallback chain
+    # Add fallback chain (only models that exist and work)
+    # Removed models that return 404: 
+    # - klingai/kling-2.5-turbo (404)
+    # - klingai/kling-video (404)
+    # - runway/gen3-alpha-turbo (404)
+    # - bytedance/seedance-1 (404)
+    # - minimax-ai/hailuo-02 (404)
     models_to_try.extend([
-        REPLICATE_MODELS["primary"],
-        REPLICATE_MODELS["fallback_1"],
-        REPLICATE_MODELS["fallback_2"],
-        REPLICATE_MODELS["fallback_3"]
+        REPLICATE_MODELS["veo_3"],  # May have rate limits but exists
+        REPLICATE_MODELS["pixverse_v5"],  # Reliable fallback
+        # Legacy fallbacks (verified to exist)
+        REPLICATE_MODELS["primary"],  # bytedance/seedance-1-lite
+        REPLICATE_MODELS["fallback_1"],  # minimax-ai/minimax-video-01
     ])
     
     # Remove duplicates while preserving order
@@ -311,6 +358,27 @@ async def _generate_with_retry(
                     "prompt": prompt,
                     "duration": duration,
                     "aspect_ratio": "portrait",  # Vertical for MVP
+                    "quality": "high",  # Request high quality output
+                }
+            elif model_name == "google/veo-3":
+                # Veo 3 only supports duration values: 4, 6, or 8 seconds
+                # Round to nearest valid duration
+                valid_durations = [4, 6, 8]
+                veo_duration = min(valid_durations, key=lambda x: abs(x - duration))
+                if veo_duration != duration:
+                    logger.debug(f"Veo-3: Rounding duration from {duration}s to {veo_duration}s (valid values: 4, 6, 8)")
+                input_params = {
+                    "prompt": prompt,
+                    "duration": veo_duration,
+                    "aspect_ratio": "9:16",  # Vertical for MVP
+                }
+            elif model_name == "pixverse/pixverse-v5":
+                # PixVerse requires quality as resolution string: "360p", "540p", "720p", "1080p"
+                input_params = {
+                    "prompt": prompt,
+                    "duration": duration,
+                    "aspect_ratio": "9:16",  # Vertical for MVP
+                    "quality": "1080p",  # Use resolution string instead of "high"
                 }
                 # Log exact Sora-2 prompt being sent
                 scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
@@ -373,20 +441,23 @@ async def _generate_with_retry(
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
             if use_seed and seed is not None:
-                input_params["seed"] = seed
-                logger.debug(f"Using seed {seed} for video generation with model {model_name}")
-                # Log warning for models that may not support seed (based on known model list)
-                # This is informational - API will handle gracefully if seed is not supported
-                models_with_known_seed_support = [
-                    "bytedance/seedance-1-lite",
-                    "minimax-ai/minimax-video-01",
-                    "klingai/kling-video",
-                    "runway/gen3-alpha-turbo"
-                ]
-                if model_name not in models_with_known_seed_support:
+                # Get model-specific seed parameter name (defaults to "seed")
+                seed_param_name, verified = MODEL_SEED_SUPPORT.get(
+                    model_name, 
+                    ("seed", False)  # Default to "seed" if model not in mapping
+                )
+                
+                # Add seed parameter with model-specific name
+                input_params[seed_param_name] = seed
+                logger.debug(
+                    f"Using {seed_param_name}={seed} for video generation with model {model_name}"
+                )
+                
+                # Log warning for models with unverified seed support
+                if not verified:
                     logger.warning(
-                        f"Seed parameter provided for model {model_name} - seed support not verified. "
-                        f"API will ignore seed if model doesn't support it."
+                        f"Seed parameter ({seed_param_name}) provided for model {model_name} - "
+                        f"seed support not verified. API will ignore if model doesn't support it."
                     )
             
             # Create prediction
@@ -462,9 +533,18 @@ async def _generate_with_retry(
                 continue
             
             # Check if error is related to unsupported seed parameter
-            if use_seed and "seed" in error_str and ("invalid" in error_str or "not supported" in error_str or "unknown" in error_str):
+            # Check for common seed parameter names in error message
+            seed_param_name, _ = MODEL_SEED_SUPPORT.get(model_name, ("seed", False))
+            seed_error_keywords = ["seed", "random_seed", "noise_seed", seed_param_name]
+            is_seed_error = (
+                use_seed and 
+                any(keyword in error_str for keyword in seed_error_keywords) and 
+                ("invalid" in error_str or "not supported" in error_str or "unknown" in error_str or "unexpected" in error_str)
+            )
+            
+            if is_seed_error:
                 logger.warning(
-                    f"Model {model_name} may not support seed parameter: {e}. "
+                    f"Model {model_name} may not support {seed_param_name} parameter: {e}. "
                     f"Retrying without seed parameter..."
                 )
                 # Disable seed for remaining attempts if seed parameter caused the error
