@@ -28,7 +28,7 @@ export interface TrimControlsProps {
   trimEnd?: number;
 }
 
-const TRIM_HANDLE_WIDTH = 8;
+const TRIM_HANDLE_WIDTH = 3; // Thin like playhead
 const MIN_CLIP_DURATION = 0.5; // Minimum clip duration in seconds
 
 /**
@@ -67,29 +67,30 @@ export const TrimControls: React.FC<TrimControlsProps> = ({
       return { startX: 0, endX: 0 };
     }
 
-    const clipStartTime = selectedClip.start_time;
     const clipDuration = selectedClip.duration;
     
     // Calculate trim positions relative to clip start
     const effectiveTrimStart = Math.max(0, Math.min(localTrimStart, clipDuration));
     const effectiveTrimEnd = Math.max(effectiveTrimStart + MIN_CLIP_DURATION, Math.min(localTrimEnd, clipDuration));
 
-    // Convert time to pixel position on timeline
-    const startTimeOnTimeline = clipStartTime + effectiveTrimStart;
-    const endTimeOnTimeline = clipStartTime + effectiveTrimEnd;
+    // Calculate positions as ratios within the clip's visual width
+    const trimStartRatio = effectiveTrimStart / clipDuration;
+    const trimEndRatio = effectiveTrimEnd / clipDuration;
     
-    const startX = (startTimeOnTimeline / totalDuration) * timelineWidth;
-    const endX = (endTimeOnTimeline / totalDuration) * timelineWidth;
+    // Position handles relative to the clip's position on screen
+    const startX = clipPosition.x + (trimStartRatio * clipPosition.width);
+    const endX = clipPosition.x + (trimEndRatio * clipPosition.width);
 
     return { startX, endX };
-  }, [selectedClip, clipPosition, timelineWidth, totalDuration, localTrimStart, localTrimEnd]);
+  }, [selectedClip, clipPosition, localTrimStart, localTrimEnd]);
 
   const { startX, endX } = getTrimHandlePositions();
 
   // Handle trim start drag
   const handleStartDrag = useCallback(
     (e: React.MouseEvent) => {
-      e.stopPropagation();
+      e.stopPropagation(); // Prevent clip drag from triggering
+      e.preventDefault();
       setIsDraggingStart(true);
     },
     []
@@ -98,7 +99,8 @@ export const TrimControls: React.FC<TrimControlsProps> = ({
   // Handle trim end drag
   const handleEndDrag = useCallback(
     (e: React.MouseEvent) => {
-      e.stopPropagation();
+      e.stopPropagation(); // Prevent clip drag from triggering
+      e.preventDefault();
       setIsDraggingEnd(true);
     },
     []
@@ -117,15 +119,19 @@ export const TrimControls: React.FC<TrimControlsProps> = ({
 
       const rect = timelineSvg.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
-      const timeOnTimeline = (mouseX / timelineWidth) * totalDuration;
 
-      const clipStartTime = selectedClip.start_time;
-      const clipEndTime = selectedClip.end_time;
       const clipDuration = selectedClip.duration;
+      
+      // Calculate mouse position relative to the clip's visual position
+      const mousePositionInClip = mouseX - clipPosition.x;
+      const ratioInClip = mousePositionInClip / clipPosition.width;
+      
+      // Convert ratio to time within the clip
+      const timeInClip = ratioInClip * clipDuration;
 
       if (isDraggingStart) {
-        // Calculate new trim start relative to clip start
-        const newTrimStart = Math.max(0, Math.min(timeOnTimeline - clipStartTime, clipDuration));
+        // Calculate new trim start
+        const newTrimStart = Math.max(0, Math.min(timeInClip, clipDuration));
         const effectiveTrimEnd = localTrimEnd ?? clipDuration;
         
         // Validate: trim start must be before trim end, maintain minimum duration
@@ -135,8 +141,8 @@ export const TrimControls: React.FC<TrimControlsProps> = ({
         onTrimStart(validatedTrimStart);
         onTrimChange(validatedTrimStart, effectiveTrimEnd);
       } else if (isDraggingEnd) {
-        // Calculate new trim end relative to clip start
-        const newTrimEnd = Math.max(0, Math.min(timeOnTimeline - clipStartTime, clipDuration));
+        // Calculate new trim end
+        const newTrimEnd = Math.max(0, Math.min(timeInClip, clipDuration));
         const effectiveTrimStart = localTrimStart;
         
         // Validate: trim end must be after trim start, maintain minimum duration
@@ -174,61 +180,108 @@ export const TrimControls: React.FC<TrimControlsProps> = ({
     localTrimStart < localTrimEnd &&
     (localTrimEnd - localTrimStart) >= MIN_CLIP_DURATION;
 
+  // Calculate trimmed regions (outside the handles)
+  const clipX = clipPosition?.x ?? 0;
+  const clipY = clipPosition?.y ?? 0;
+  const clipWidth = clipPosition?.width ?? 0;
+  
+  // Trimmed region at start (left of start handle)
+  const trimmedStartWidth = startX - clipX;
+  // Trimmed region at end (right of end handle)
+  const trimmedEndX = endX;
+  const trimmedEndWidth = (clipX + clipWidth) - endX;
+
   return (
     <g className="trim-controls">
-      {/* Start Trim Handle */}
+      {/* Trimmed region overlay - LEFT (dark grey) */}
+      {trimmedStartWidth > 0 && (
+        <rect
+          x={clipX}
+          y={clipY}
+          width={trimmedStartWidth}
+          height={clipHeight}
+          fill="#1f2937"
+          opacity={0.7}
+          pointerEvents="none"
+        />
+      )}
+      
+      {/* Trimmed region overlay - RIGHT (dark grey) */}
+      {trimmedEndWidth > 0 && (
+        <rect
+          x={trimmedEndX}
+          y={clipY}
+          width={trimmedEndWidth}
+          height={clipHeight}
+          fill="#1f2937"
+          opacity={0.7}
+          pointerEvents="none"
+        />
+      )}
+
+      {/* Start Trim Handle - Thin like playhead */}
       <g className="trim-handle-start">
+        {/* Main handle bar */}
         <rect
           ref={startHandleRef}
           x={startX - TRIM_HANDLE_WIDTH / 2}
-          y={clipPosition?.y ?? 0}
+          y={clipY}
           width={TRIM_HANDLE_WIDTH}
           height={clipHeight}
           fill={isValidTrim ? "#3b82f6" : "#ef4444"}
-          stroke={isValidTrim ? "#2563eb" : "#dc2626"}
-          strokeWidth={2}
           cursor={isDraggingStart ? "grabbing" : "ew-resize"}
           onMouseDown={handleStartDrag}
           className="trim-handle"
-          opacity={0.9}
+          style={{
+            filter: 'drop-shadow(0 1px 3px rgba(59, 130, 246, 0.5))'
+          }}
         />
-        {/* Handle indicator line */}
-        <line
-          x1={startX}
-          y1={clipPosition?.y ?? 0}
-          x2={startX}
-          y2={(clipPosition?.y ?? 0) + clipHeight}
-          stroke={isValidTrim ? "#2563eb" : "#dc2626"}
-          strokeWidth={2}
-          pointerEvents="none"
+        {/* Top circle handle */}
+        <circle
+          cx={startX}
+          cy={clipY - 4}
+          r={5}
+          fill={isValidTrim ? "#3b82f6" : "#ef4444"}
+          stroke="white"
+          strokeWidth={1.5}
+          cursor={isDraggingStart ? "grabbing" : "ew-resize"}
+          onMouseDown={handleStartDrag}
+          style={{
+            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))'
+          }}
         />
       </g>
 
-      {/* End Trim Handle */}
+      {/* End Trim Handle - Thin like playhead */}
       <g className="trim-handle-end">
+        {/* Main handle bar */}
         <rect
           ref={endHandleRef}
           x={endX - TRIM_HANDLE_WIDTH / 2}
-          y={clipPosition?.y ?? 0}
+          y={clipY}
           width={TRIM_HANDLE_WIDTH}
           height={clipHeight}
           fill={isValidTrim ? "#3b82f6" : "#ef4444"}
-          stroke={isValidTrim ? "#2563eb" : "#dc2626"}
-          strokeWidth={2}
           cursor={isDraggingEnd ? "grabbing" : "ew-resize"}
           onMouseDown={handleEndDrag}
           className="trim-handle"
-          opacity={0.9}
+          style={{
+            filter: 'drop-shadow(0 1px 3px rgba(59, 130, 246, 0.5))'
+          }}
         />
-        {/* Handle indicator line */}
-        <line
-          x1={endX}
-          y1={clipPosition?.y ?? 0}
-          x2={endX}
-          y2={(clipPosition?.y ?? 0) + clipHeight}
-          stroke={isValidTrim ? "#2563eb" : "#dc2626"}
-          strokeWidth={2}
-          pointerEvents="none"
+        {/* Top circle handle */}
+        <circle
+          cx={endX}
+          cy={clipY - 4}
+          r={5}
+          fill={isValidTrim ? "#3b82f6" : "#ef4444"}
+          stroke="white"
+          strokeWidth={1.5}
+          cursor={isDraggingEnd ? "grabbing" : "ew-resize"}
+          onMouseDown={handleEndDrag}
+          style={{
+            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))'
+          }}
         />
       </g>
     </g>
