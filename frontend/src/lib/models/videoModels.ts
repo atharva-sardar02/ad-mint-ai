@@ -69,13 +69,13 @@ export const VIDEO_MODELS: VideoModel[] = [
     rank: 4,
   },
   {
-    value: "klingai/kling-2.5-turbo",
-    label: "Kling 2.5 Turbo",
-    description: "Fast cinematic generator with excellent camera control and physics-aware motion. Best for ads requiring specific camera angles, pans, and zooms with realistic physics.",
+    value: "kwaivgi/kling-v2.5-turbo-pro",
+    label: "Kling 2.5 Turbo Pro",
+    description: "Fast cinematic generator with excellent camera control and physics-aware motion. Supports reference, start, and end images for precise frame control. Best for ads requiring specific camera angles, pans, and zooms with realistic physics.",
     maxLength: "5-10s",
     inputTypes: ["Text", "Image"],
     audio: false,
-    strengths: "Film-grade visuals, excellent camera control, physics-aware motion, strong prompt adherence",
+    strengths: "Film-grade visuals, excellent camera control, physics-aware motion, strong prompt adherence, supports start/end frame control",
     weaknesses: "No native audio, slower at 1080p, high compute cost",
     rank: 5,
   },
@@ -104,9 +104,17 @@ export const VIDEO_MODELS: VideoModel[] = [
 ];
 
 /**
- * Get the default model (Sora 2).
+ * Get the default model (Kling 2.5 Turbo Pro).
  */
-export const DEFAULT_MODEL = "openai/sora-2";
+export const DEFAULT_MODEL = "kwaivgi/kling-v2.5-turbo-pro";
+
+/**
+ * Get the default model label for display.
+ */
+export const getDefaultModelLabel = (): string => {
+  const defaultModel = VIDEO_MODELS.find((m) => m.value === DEFAULT_MODEL);
+  return defaultModel ? defaultModel.label : "Kling 2.5 Turbo Pro";
+};
 
 /**
  * Get model information by value.

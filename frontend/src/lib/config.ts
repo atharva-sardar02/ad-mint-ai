@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
     CREATE: "/api/generate",
     PARALLEL: "/api/generate/parallel",
     CREATE_SINGLE_CLIP: "/api/generate-single-clip",
+    CREATE_WITH_IMAGE: "/api/generate-with-image",
     LIST: "/api/generations",
     STATUS: (id: string) => `/api/status/${id}`,
     CANCEL: (id: string) => `/api/generations/${id}/cancel`,

@@ -13,6 +13,7 @@ import type { CoherenceSettings as CoherenceSettingsType } from "../components/c
 import { BasicSettingsPanel } from "../components/basic/BasicSettingsPanel";
 import type { BasicSettings } from "../components/basic/BasicSettingsPanel";
 import { ParallelGenerationPanel } from "../components/generation";
+import { StoryboardVisualizer } from "../components/storyboard";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse, GenerateRequest } from "../lib/generationService";
 import { getUserProfile } from "../lib/userService";
@@ -22,6 +23,7 @@ const MIN_PROMPT_LENGTH = 10;
 
 interface ValidationErrors {
   prompt?: string;
+  image?: string;
   coherence_settings?: { [key: string]: string };
 }
 
@@ -33,6 +35,7 @@ export const Dashboard: React.FC = () => {
 
   const [prompt, setPrompt] = useState("");
   const [title, setTitle] = useState("");
+  const [brandName, setBrandName] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [apiError, setApiError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
@@ -56,11 +59,13 @@ export const Dashboard: React.FC = () => {
     useSingleClip: false,
     useLlm: true,
     model: "",
-    numClips: 1,
+    targetDuration: 15,
   });
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
+  const [referenceImage, setReferenceImage] = useState<File | null>(null);
+  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -174,6 +179,17 @@ export const Dashboard: React.FC = () => {
     setErrors(newErrors);
     setApiError(""); // Clear API error when user types
   }, [prompt]);
+
+  /**
+   * Cleanup object URL when reference image preview changes/unmounts.
+   */
+  useEffect(() => {
+    return () => {
+      if (referenceImagePreview) {
+        URL.revokeObjectURL(referenceImagePreview);
+      }
+    };
+  }, [referenceImagePreview]);
 
   /**
    * Poll status endpoint every 2 seconds when there's an active generation.
@@ -321,7 +337,16 @@ export const Dashboard: React.FC = () => {
     setErrors({});
 
     try {
-      if (basicSettings.useSingleClip) {
+      if (referenceImage) {
+        // When a reference image is provided, use the dedicated image endpoint.
+        await generationService.startGenerationWithImage(
+          prompt,
+          referenceImage,
+          basicSettings.model || undefined,
+          basicSettings.targetDuration || undefined,
+          brandName || undefined
+        );
+      } else if (basicSettings.useSingleClip) {
         if (!basicSettings.model) {
           setApiError("Please select a model for single clip generation");
           setIsLoading(false);
@@ -330,22 +355,29 @@ export const Dashboard: React.FC = () => {
         await generationService.startSingleClipGeneration(
           prompt,
           basicSettings.model,
-          basicSettings.numClips
+          basicSettings.targetDuration
         );
       } else {
         await generationService.startGeneration(
           prompt,
           basicSettings.model || undefined,
-          basicSettings.numClips > 1 ? basicSettings.numClips : undefined,
+          basicSettings.targetDuration || undefined,
           basicSettings.useLlm,
           coherenceSettings,
-          title || undefined
+          title || undefined,
+          brandName || undefined
         );
       }
       
       // Clear prompt and title immediately after successful submission
       setPrompt("");
       setTitle("");
+      setBrandName("");
+      setReferenceImage(null);
+      if (referenceImagePreview) {
+        URL.revokeObjectURL(referenceImagePreview);
+        setReferenceImagePreview(null);
+      }
       setIsLoading(false);
       
       // Show notification
@@ -500,6 +532,16 @@ export const Dashboard: React.FC = () => {
                 onCancel={handleCancel}
                 error={activeGeneration.error}
               />
+              
+              {/* Storyboard Visualizer */}
+              {activeGeneration.storyboard_plan && (
+                <div className="mt-6">
+                  <StoryboardVisualizer
+                    storyboardPlan={activeGeneration.storyboard_plan}
+                    prompt={prompt}
+                  />
+                </div>
+              )}
 
               {/* Video Player (when completed) */}
               {activeGeneration.status === "completed" && activeGeneration.video_url && (
@@ -585,23 +627,43 @@ export const Dashboard: React.FC = () => {
           {/* Single Generation Form (hidden when parallel mode is active or active generation is processing) */}
           {!parallelMode && (!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-                  Video Title (Optional)
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., Luxury Watch Ad - Instagram"
-                  maxLength={200}
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Give your video a name to easily identify it later
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                    Video Title (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g., Luxury Watch Ad - Instagram"
+                    maxLength={200}
+                    disabled={isLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Give your video a name to easily identify it later
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="brand-name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Brand Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="brand-name"
+                    value={brandName}
+                    onChange={(e) => setBrandName(e.target.value)}
+                    placeholder="e.g., Nike, Apple (optional)"
+                    maxLength={50}
+                    disabled={isLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    If not provided, the system will attempt to extract it from your prompt.
+                  </p>
+                </div>
               </div>
 
               <Textarea
@@ -617,6 +679,100 @@ export const Dashboard: React.FC = () => {
                 disabled={isLoading}
                 required
               />
+
+              {/* Optional reference image upload */}
+              <div>
+                <label
+                  htmlFor="reference-image"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Reference Image (Optional)
+                </label>
+                <input
+                  id="reference-image"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  disabled={isLoading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setErrors((prev) => ({ ...prev, image: undefined }));
+
+                    if (!file) {
+                      setReferenceImage(null);
+                      if (referenceImagePreview) {
+                        URL.revokeObjectURL(referenceImagePreview);
+                        setReferenceImagePreview(null);
+                      }
+                      return;
+                    }
+
+                    // Validate file type
+                    if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        image: "Only JPG and PNG images are allowed",
+                      }));
+                      event.target.value = "";
+                      return;
+                    }
+
+                    // Validate file size (10MB max)
+                    const maxSizeBytes = 10 * 1024 * 1024;
+                    if (file.size > maxSizeBytes) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        image: "Image size must be less than 10MB",
+                      }));
+                      event.target.value = "";
+                      return;
+                    }
+
+                    // Set file and preview
+                    setReferenceImage(file);
+                    if (referenceImagePreview) {
+                      URL.revokeObjectURL(referenceImagePreview);
+                    }
+                    const previewUrl = URL.createObjectURL(file);
+                    setReferenceImagePreview(previewUrl);
+                  }}
+                  className="block w-full text-sm text-gray-900 border border-gray-300 rounded-md cursor-pointer focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Optional. JPG or PNG up to 10MB. Used as a visual reference for the product.
+                </p>
+                {errors.image && (
+                  <p className="mt-1 text-xs text-red-600">{errors.image}</p>
+                )}
+
+                {referenceImagePreview && (
+                  <div className="mt-3 flex items-center space-x-4">
+                    <img
+                      src={referenceImagePreview}
+                      alt="Reference preview"
+                      className="h-20 w-20 object-cover rounded-md border"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setReferenceImage(null);
+                        if (referenceImagePreview) {
+                          URL.revokeObjectURL(referenceImagePreview);
+                          setReferenceImagePreview(null);
+                        }
+                        const input = document.getElementById(
+                          "reference-image"
+                        ) as HTMLInputElement | null;
+                        if (input) {
+                          input.value = "";
+                        }
+                      }}
+                    >
+                      Remove Image
+                    </Button>
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                 <BasicSettingsPanel

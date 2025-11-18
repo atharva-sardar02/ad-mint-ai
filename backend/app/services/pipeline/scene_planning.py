@@ -2,7 +2,7 @@
 Scene planning module that processes LLM output and generates enriched scene plans.
 """
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.schemas.generation import AdSpecification, Scene, ScenePlan, TextOverlay
 
@@ -24,7 +24,7 @@ FRAMEWORK_TEMPLATES: Dict[str, List[Dict[str, any]]] = {
         {"type": "Attention", "duration": 4, "description": "Grab attention with compelling visuals"},
         {"type": "Interest", "duration": 4, "description": "Build interest with product features"},
         {"type": "Desire", "duration": 4, "description": "Create desire through benefits"},
-        {"type": "Action", "duration": 3, "description": "Prompt action with clear CTA"}
+        {"type": "Action", "duration": 4, "description": "Prompt action with clear CTA"}
     ]
 }
 
@@ -104,13 +104,29 @@ def _generate_scenes_from_template(
 
 
 def _enrich_scene(scene: Scene, ad_spec: AdSpecification, index: int) -> Scene:
-    """Enrich scene visual prompt with brand keywords and context."""
+    """
+    Enrich scene visual prompt with brand keywords and context.
+    
+    Note: The scene.visual_prompt is already built from compact fragments (3-7 words each)
+    by _build_sora_scene_prompt(). This function adds style/mood guidance as post-processing
+    to help Sora-2 understand the overall aesthetic without modifying the core scene fragments.
+    """
     # Enhance visual prompt with brand guidelines
     brand_keywords = ad_spec.brand_guidelines.visual_style_keywords
     mood = ad_spec.brand_guidelines.mood
-    
-    # Add brand context to visual prompt
-    enriched_prompt = f"{scene.visual_prompt}. Visual style: {brand_keywords}. Mood: {mood}. Brand colors: {', '.join(ad_spec.brand_guidelines.brand_colors)}"
+
+    # Start with the compact fragment-based prompt from LLM
+    enriched_parts = [scene.visual_prompt]
+
+    # Add style/mood guidance (these are style hints, not scene description fragments)
+    # They help Sora-2 understand the overall aesthetic
+    if brand_keywords:
+        enriched_parts.append(f"The overall visual style feels {brand_keywords}.")
+
+    if mood:
+        enriched_parts.append(f"The mood is {mood}.")
+
+    enriched_prompt = "\n".join(enriched_parts)
     
     # Ensure text overlay uses brand colors
     text_overlay = scene.text_overlay
@@ -161,7 +177,7 @@ def _adjust_durations(scenes: List[Scene], target_duration: int) -> List[Scene]:
 def create_basic_scene_plan_from_prompt(
     prompt: str, 
     target_duration: int = 15,
-    num_scenes: int = 3
+    num_scenes: Optional[int] = None
 ) -> ScenePlan:
     """
     Create a basic scene plan directly from user prompt without LLM enhancement.
@@ -170,17 +186,26 @@ def create_basic_scene_plan_from_prompt(
     Args:
         prompt: User's text prompt
         target_duration: Target total duration in seconds (default: 15)
-        num_scenes: Number of scenes to create (default: 3, max 5)
+        num_scenes: Number of scenes to create (optional, will be calculated from target_duration if None)
     
     Returns:
         ScenePlan: Basic scene plan with scenes generated from prompt
     """
     logger.info(f"Creating basic scene plan from prompt (no LLM): {prompt[:100]}...")
     
-    # Limit num_scenes to valid range
-    num_scenes = max(3, min(5, num_scenes))
+    # If num_scenes not provided, calculate based on target_duration
+    # Aim for 4-5 seconds per scene on average, but respect max 7s per scene
+    if num_scenes is None:
+        # Calculate optimal number of scenes
+        # Try to use 4-5 seconds per scene, but can go up to 7s if needed
+        avg_duration = 4.5  # Target average duration per scene
+        num_scenes = max(3, min(8, round(target_duration / avg_duration)))
+        logger.info(f"Calculated {num_scenes} scenes for target duration {target_duration}s")
     
-    # Calculate duration per scene
+    # Limit num_scenes to valid range
+    num_scenes = max(3, min(8, num_scenes))
+    
+    # Calculate duration per scene (max 7 seconds per scene)
     duration_per_scene = max(3, min(7, target_duration // num_scenes))
     remaining_duration = target_duration - (duration_per_scene * (num_scenes - 1))
     
