@@ -8,7 +8,7 @@ import tempfile
 import shutil
 import asyncio
 
-from app.services.pipeline.image_generation import (
+from app.services.image_generation import (
     generate_images,
     ImageGenerationResult,
     _generate_with_retry,
@@ -21,7 +21,7 @@ from app.services.pipeline.image_generation import (
 @pytest.fixture
 def mock_replicate_client():
     """Mock Replicate client."""
-    with patch("app.services.pipeline.image_generation.replicate.Client") as mock:
+    with patch("app.services.image_generation.replicate.Client") as mock:
         mock_client = MagicMock()
         mock.return_value = mock_client
         yield mock_client
@@ -30,7 +30,7 @@ def mock_replicate_client():
 @pytest.fixture
 def mock_httpx_client():
     """Mock httpx client for image downloads."""
-    with patch("app.services.pipeline.image_generation.httpx.AsyncClient") as mock:
+    with patch("app.services.image_generation.httpx.AsyncClient") as mock:
         mock_client = AsyncMock()
         mock.return_value.__aenter__.return_value = mock_client
         mock.return_value.__aexit__.return_value = None
@@ -65,7 +65,7 @@ async def test_generate_images_success(mock_replicate_client, sample_prompt, tem
     mock_replicate_client.predictions.get.return_value = mock_prediction
     
     # Mock image download
-    with patch("app.services.pipeline.image_generation._download_image") as mock_download:
+    with patch("app.services.image_generation._download_image") as mock_download:
         mock_download.return_value = str(temp_output_dir / "image_001.png")
         
         results = await generate_images(
@@ -93,7 +93,7 @@ async def test_generate_images_with_seed(mock_replicate_client, sample_prompt, t
     mock_replicate_client.predictions.create.return_value = mock_prediction
     mock_replicate_client.predictions.get.return_value = mock_prediction
     
-    with patch("app.services.pipeline.image_generation._download_image") as mock_download:
+    with patch("app.services.image_generation._download_image") as mock_download:
         mock_download.return_value = str(temp_output_dir / "image_001.png")
         
         seed = 12345
@@ -134,7 +134,7 @@ async def test_generate_images_invalid_aspect_ratio(sample_prompt):
 @pytest.mark.asyncio
 async def test_generate_images_missing_api_token(sample_prompt):
     """Test that missing API token raises ValueError."""
-    with patch("app.services.pipeline.image_generation.settings") as mock_settings:
+    with patch("app.services.image_generation.settings") as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = None
         
         with pytest.raises(ValueError, match="Replicate API token is not configured"):
@@ -152,7 +152,7 @@ async def test_generate_with_retry_success(mock_replicate_client):
     mock_replicate_client.predictions.create.return_value = mock_prediction
     mock_replicate_client.predictions.get.return_value = mock_prediction
     
-    with patch("app.services.pipeline.image_generation.settings") as mock_settings:
+    with patch("app.services.image_generation.settings") as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         url = await _generate_with_retry(
@@ -184,7 +184,7 @@ async def test_generate_with_retry_rate_limit(mock_replicate_client):
         MagicMock(status="succeeded", output="https://example.com/image.png")
     ]
     
-    with patch("app.services.pipeline.image_generation.settings") as mock_settings:
+    with patch("app.services.image_generation.settings") as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         with patch("asyncio.sleep"):  # Speed up test
             url = await _generate_with_retry(

@@ -543,7 +543,7 @@ async def test_metadata_includes_narrative_references(tmp_path):
             StoryboardEnhancementResult,
             ScenePromptSet
         )
-        from app.services.pipeline.image_generation import ImageGenerationResult
+        from app.services.image_generation import ImageGenerationResult
         
         # Mock enhancement result with narrative
         mock_enhance_result = StoryboardEnhancementResult(

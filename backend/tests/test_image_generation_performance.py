@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from app.services.pipeline.image_generation import generate_images
+from app.services.image_generation import generate_images
 from app.services.pipeline.image_quality_scoring import score_image
 
 
@@ -45,8 +45,8 @@ async def test_image_generation_performance_target(temp_output_dir):
     mock_prediction.output = "https://example.com/image.png"
     mock_prediction.id = "test-prediction-id"
     
-    with patch("app.services.pipeline.image_generation.replicate.Client") as mock_client_class, \
-         patch("app.services.pipeline.image_generation._download_image") as mock_download:
+    with patch("app.services.image_generation.replicate.Client") as mock_client_class, \
+         patch("app.services.image_generation._download_image") as mock_download:
         
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
@@ -109,11 +109,11 @@ async def test_quality_scoring_performance_target(sample_image_path):
 async def test_combined_generation_and_scoring_performance(temp_output_dir, sample_image_path):
     """Test combined generation + scoring performance."""
     # This is a combined test to verify the full workflow timing
-    with patch("app.services.pipeline.image_generation.generate_images") as mock_gen, \
+    with patch("app.services.image_generation.generate_images") as mock_gen, \
          patch("app.services.pipeline.image_quality_scoring.score_image") as mock_score:
         
         # Mock generation results
-        from app.services.pipeline.image_generation import ImageGenerationResult
+        from app.services.image_generation import ImageGenerationResult
         mock_results = [
             ImageGenerationResult(
                 image_path=str(temp_output_dir / f"image_{i+1}.png"),
@@ -170,7 +170,7 @@ def test_performance_logging(temp_output_dir):
     # Setup logging capture
     log_capture = StringIO()
     handler = logging.StreamHandler(log_capture)
-    logger = logging.getLogger("app.services.pipeline.image_generation")
+    logger = logging.getLogger("app.services.image_generation")
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     

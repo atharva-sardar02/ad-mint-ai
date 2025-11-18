@@ -36,7 +36,7 @@ def temp_output_dir():
 @pytest.fixture
 def mock_generation_results(temp_output_dir):
     """Mock image generation results with actual image files."""
-    from app.services.pipeline.image_generation import ImageGenerationResult
+    from app.services.image_generation import ImageGenerationResult
     from PIL import Image
     import time
     

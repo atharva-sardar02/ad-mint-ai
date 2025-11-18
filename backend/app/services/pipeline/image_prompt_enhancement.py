@@ -739,7 +739,7 @@ async def enhance_prompt_with_parallel_exploration(
     Returns:
         ImagePromptEnhancementResult with best prompt from parallel exploration
     """
-    from app.services.pipeline.image_generation import generate_images
+    from app.services.image_generation import generate_images
     from app.services.pipeline.image_quality_scoring import score_image
     
     logger.info(f"Starting parallel exploration (max_iterations={max_iterations}, variations={num_variations})")
@@ -1000,7 +1000,7 @@ async def enhance_prompt_with_image_feedback(
     Returns:
         ImagePromptEnhancementResult with enhanced prompt based on image feedback
     """
-    from app.services.pipeline.image_generation import generate_images
+    from app.services.image_generation import generate_images
     from app.services.pipeline.image_quality_scoring import score_image
     
     logger.info(f"Starting image feedback loop (max_iterations={max_iterations}, test_images={num_test_images})")
