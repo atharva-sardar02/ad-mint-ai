@@ -227,18 +227,18 @@ export const Queue: React.FC = () => {
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading indicator (non-blocking) */}
         {loading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Loading queue...</p>
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+              <p className="text-sm text-blue-800">Loading queue...</p>
             </div>
           </div>
         )}
 
-        {/* Queue content */}
-        {!loading && queue && (
+        {/* Queue content - show even while loading if we have data */}
+        {queue && (
           <div className="space-y-6">
             {/* Processing Section */}
             {queue.processing.length > 0 && (
@@ -264,8 +264,8 @@ export const Queue: React.FC = () => {
               </div>
             )}
 
-            {/* Empty state */}
-            {queue.total_active === 0 && (
+            {/* Empty state - only show if not loading */}
+            {!loading && queue.total_active === 0 && (
               <div className="bg-white rounded-lg shadow p-12 text-center">
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"

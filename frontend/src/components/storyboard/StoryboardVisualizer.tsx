@@ -167,85 +167,112 @@ export const StoryboardVisualizer: React.FC<StoryboardVisualizerProps> = ({
             {/* Scene Images */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               {/* Reference Image */}
-              {scene.reference_image_url && (
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <h5 className="text-xs font-semibold text-gray-600 mb-2">Reference Image</h5>
-                  <img
-                    src={scene.reference_image_url}
-                    alt={`Scene ${scene.scene_number} - Reference`}
-                    className="w-full h-48 object-cover rounded-lg mb-2"
-                    onError={(e) => {
-                      console.error(`Failed to load reference image for scene ${scene.scene_number}:`, scene.reference_image_url);
-                      (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Loading...%3C/text%3E%3C/svg%3E";
-                    }}
-                    onLoad={() => {
-                      console.log(`Successfully loaded reference image for scene ${scene.scene_number}:`, scene.reference_image_url);
-                    }}
-                  />
-                  {(scene.reference_image_prompt || scene.detailed_prompt) && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
-                      <p className="text-xs font-medium text-gray-700 mb-1">Image Prompt:</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">
-                        {scene.reference_image_prompt || scene.detailed_prompt}
-                      </p>
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <h5 className="text-xs font-semibold text-gray-600 mb-2">Reference Image</h5>
+                {scene.reference_image_url ? (
+                  <>
+                    <img
+                      src={scene.reference_image_url}
+                      alt={`Scene ${scene.scene_number} - Reference`}
+                      className="w-full h-48 object-cover rounded-lg mb-2"
+                      onError={(e) => {
+                        console.error(`Failed to load reference image for scene ${scene.scene_number}:`, scene.reference_image_url);
+                        (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Loading...%3C/text%3E%3C/svg%3E";
+                      }}
+                      onLoad={() => {
+                        console.log(`Successfully loaded reference image for scene ${scene.scene_number}:`, scene.reference_image_url);
+                      }}
+                    />
+                    {(scene.reference_image_prompt || scene.detailed_prompt) && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Image Prompt:</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          {scene.reference_image_prompt || scene.detailed_prompt}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 rounded-lg mb-2 flex items-center justify-center border-2 border-dashed border-gray-300">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                      <p className="text-xs text-gray-500">Generating reference image...</p>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
 
               {/* Start Image (for Kling 2.5 Turbo Pro) */}
-              {scene.start_image_url && (
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <h5 className="text-xs font-semibold text-gray-600 mb-2">Start Frame</h5>
-                  <img
-                    src={scene.start_image_url}
-                    alt={`Scene ${scene.scene_number} - Start`}
-                    className="w-full h-48 object-cover rounded-lg mb-2"
-                    onError={(e) => {
-                      console.error(`Failed to load start image for scene ${scene.scene_number}:`, scene.start_image_url);
-                      (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Loading...%3C/text%3E%3C/svg%3E";
-                    }}
-                    onLoad={() => {
-                      console.log(`Successfully loaded start image for scene ${scene.scene_number}:`, scene.start_image_url);
-                    }}
-                  />
-                  {(scene.start_image_enhanced_prompt || scene.start_image_prompt) && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
-                      <p className="text-xs font-medium text-gray-700 mb-1">Image Prompt:</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">
-                        {scene.start_image_enhanced_prompt || scene.start_image_prompt}
-                      </p>
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <h5 className="text-xs font-semibold text-gray-600 mb-2">Start Frame</h5>
+                {scene.start_image_url ? (
+                  <>
+                    <img
+                      src={scene.start_image_url}
+                      alt={`Scene ${scene.scene_number} - Start`}
+                      className="w-full h-48 object-cover rounded-lg mb-2"
+                      onError={(e) => {
+                        console.error(`Failed to load start image for scene ${scene.scene_number}:`, scene.start_image_url);
+                        (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Loading...%3C/text%3E%3C/svg%3E";
+                      }}
+                      onLoad={() => {
+                        console.log(`Successfully loaded start image for scene ${scene.scene_number}:`, scene.start_image_url);
+                      }}
+                    />
+                    {(scene.start_image_enhanced_prompt || scene.start_image_prompt) && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Image Prompt:</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          {scene.start_image_enhanced_prompt || scene.start_image_prompt}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 rounded-lg mb-2 flex items-center justify-center border-2 border-dashed border-gray-300">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                      <p className="text-xs text-gray-500">Generating start frame...</p>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
 
               {/* End Image (for Kling 2.5 Turbo Pro) */}
-              {scene.end_image_url && (
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <h5 className="text-xs font-semibold text-gray-600 mb-2">End Frame</h5>
-                  <img
-                    src={scene.end_image_url}
-                    alt={`Scene ${scene.scene_number} - End`}
-                    className="w-full h-48 object-cover rounded-lg mb-2"
-                    onError={(e) => {
-                      console.error(`Failed to load end image for scene ${scene.scene_number}:`, scene.end_image_url);
-                      (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Loading...%3C/text%3E%3C/svg%3E";
-                    }}
-                    onLoad={() => {
-                      console.log(`Successfully loaded end image for scene ${scene.scene_number}:`, scene.end_image_url);
-                    }}
-                  />
-                  {(scene.end_image_enhanced_prompt || scene.end_image_prompt) && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
-                      <p className="text-xs font-medium text-gray-700 mb-1">Image Prompt:</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">
-                        {scene.end_image_enhanced_prompt || scene.end_image_prompt}
-                      </p>
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <h5 className="text-xs font-semibold text-gray-600 mb-2">End Frame</h5>
+                {scene.end_image_url ? (
+                  <>
+                    <img
+                      src={scene.end_image_url}
+                      alt={`Scene ${scene.scene_number} - End`}
+                      className="w-full h-48 object-cover rounded-lg mb-2"
+                      onError={(e) => {
+                        console.error(`Failed to load end image for scene ${scene.scene_number}:`, scene.end_image_url);
+                        (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImage Loading...%3C/text%3E%3C/svg%3E";
+                      }}
+                      onLoad={() => {
+                        console.log(`Successfully loaded end image for scene ${scene.scene_number}:`, scene.end_image_url);
+                      }}
+                    />
+                    {(scene.end_image_enhanced_prompt || scene.end_image_prompt) && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
+                        <p className="text-xs font-medium text-gray-700 mb-1">Image Prompt:</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          {scene.end_image_enhanced_prompt || scene.end_image_prompt}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 rounded-lg mb-2 flex items-center justify-center border-2 border-dashed border-gray-300">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                      <p className="text-xs text-gray-500">Generating end frame...</p>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Scene Description - Complete Flow */}

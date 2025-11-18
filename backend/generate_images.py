@@ -140,17 +140,17 @@ async def main():
         "--num-variations",
         type=int,
         default=8,
-        choices=range(1, 9),
+        choices=range(1, 21),
         metavar="N",
-        help="Number of image variations to generate (1-8, default: 8)"
+        help="Number of image variations to generate (1-20, default: 8)"
     )
     
     parser.add_argument(
         "--aspect-ratio",
         type=str,
         default="16:9",
-        choices=["1:1", "4:3", "16:9", "9:16"],
-        help="Aspect ratio for generated images (default: 16:9)"
+        choices=["1:1", "4:3", "3:4", "16:9", "9:16"],
+        help="Aspect ratio for generated images (default: 16:9). Note: 3:4 is supported by imagen-4-ultra"
     )
     
     parser.add_argument(
@@ -171,7 +171,7 @@ async def main():
         "--model",
         type=str,
         default="black-forest-labs/flux-schnell",
-        help="Replicate model to use (default: black-forest-labs/flux-schnell). Options: black-forest-labs/flux-schnell, google/nano-banana, black-forest-labs/flux-dev, stability-ai/sdxl-turbo"
+        help="Replicate model to use (default: black-forest-labs/flux-schnell). Options: black-forest-labs/flux-schnell, google/nano-banana, google/imagen-4-ultra, black-forest-labs/flux-dev, stability-ai/sdxl-turbo"
     )
     
     parser.add_argument(
