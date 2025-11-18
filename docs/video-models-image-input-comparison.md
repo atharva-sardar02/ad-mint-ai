@@ -191,3 +191,4 @@ Based on `backend/app/services/pipeline/video_generation.py`:
 - Frontend model definitions: `frontend/src/lib/models/videoModels.ts`
 - Replicate API documentation: https://replicate.com/collections/video-generation
 
+
