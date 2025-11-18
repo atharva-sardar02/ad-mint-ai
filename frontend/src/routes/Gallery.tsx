@@ -18,7 +18,7 @@ import { ErrorMessage } from "../components/ui/ErrorMessage";
  */
 export const Gallery: React.FC = () => {
   const [generations, setGenerations] = useState<GenerationListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false - don't block page render
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -127,12 +127,22 @@ export const Gallery: React.FC = () => {
           </div>
         )}
 
-        {/* Loading state */}
-        {loading && (
+        {/* Loading indicator (non-blocking) */}
+        {loading && generations.length === 0 && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="mt-4 text-gray-600">Loading videos...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading overlay for existing content */}
+        {loading && generations.length > 0 && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+              <p className="text-sm text-blue-800">Refreshing videos...</p>
             </div>
           </div>
         )}
@@ -164,8 +174,8 @@ export const Gallery: React.FC = () => {
           </div>
         )}
 
-        {/* Video grid */}
-        {!loading && generations.length > 0 && (
+        {/* Video grid - show even while loading if we have data */}
+        {generations.length > 0 && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
               {generations.map((generation) => (

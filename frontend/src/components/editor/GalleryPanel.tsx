@@ -17,7 +17,7 @@ interface GalleryPanelProps {
  */
 export const GalleryPanel: React.FC<GalleryPanelProps> = ({ onVideoSelect }) => {
   const [generations, setGenerations] = useState<GenerationListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false - don't block panel render
   const [error, setError] = useState<string | null>(null);
 
   // Fetch completed videos only
@@ -53,42 +53,44 @@ export const GalleryPanel: React.FC<GalleryPanelProps> = ({ onVideoSelect }) => 
     onVideoSelect(generation.id);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading videos...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <ErrorMessage message={error} />;
-  }
-
-  if (generations.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-600">
-          No completed videos available. Generate a video first to edit it.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {generations.map((generation) => (
-        <div
-          key={generation.id}
-          onClick={() => handleVideoClick(generation)}
-          className="cursor-pointer transition-transform hover:scale-105"
-        >
-          <VideoCard generation={generation} />
+    <div>
+      {/* Loading indicator (non-blocking) */}
+      {loading && generations.length === 0 && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="mt-4 text-gray-600">Loading videos...</p>
+          </div>
         </div>
-      ))}
+      )}
+
+      {/* Error message */}
+      {error && <ErrorMessage message={error} />}
+
+      {/* Empty state */}
+      {!loading && !error && generations.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-gray-600">
+            No completed videos available. Generate a video first to edit it.
+          </p>
+        </div>
+      )}
+
+      {/* Video grid - show even while loading if we have data */}
+      {generations.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {generations.map((generation) => (
+            <div
+              key={generation.id}
+              onClick={() => handleVideoClick(generation)}
+              className="cursor-pointer transition-transform hover:scale-105"
+            >
+              <VideoCard generation={generation} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

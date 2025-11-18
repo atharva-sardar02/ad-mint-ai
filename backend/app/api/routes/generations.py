@@ -139,7 +139,10 @@ async def process_generation(
             # This creates detailed prompts for each scene that will be used for both images and videos
             from app.services.pipeline.storyboard_planner import plan_storyboard
             from app.services.pipeline.image_generation import generate_image
-            from app.services.pipeline.image_generation_batch import generate_images_with_sequential_references
+            from app.services.pipeline.image_generation_batch import (
+                generate_images_with_sequential_references,
+                _build_enhanced_image_prompt
+            )
             
             storyboard_plan = None
             consistency_markers = None
@@ -307,22 +310,49 @@ async def process_generation(
                 image_dir = Path("output/temp/images") / generation_id
                 image_dir.mkdir(parents=True, exist_ok=True)
                 
-                logger.info(f"[{generation_id}] Generating {len(scene_image_generation_prompts)} reference images sequentially with enhanced prompts...")
+                logger.info(f"[{generation_id}] Generating {len(scene_image_generation_prompts)} enhanced reference images with prompt enhancement and quality scoring...")
                 try:
-                    # Generate reference images with sequential references using enhanced image generation prompts
-                    # These prompts are more detailed and include explicit visual consistency instructions
-                    # IMPORTANT: Use user's initial reference image (if provided) as the base for the first scene's reference image
-                    # This ensures all scenes are coherent with the user's initial vision
-                    # BUT: Only use it if the first scene has subject_presence that includes the subject
+                    # Generate enhanced reference images with prompt enhancement, quality scoring, and sequential chaining
+                    # STEP: Generate a master reference image from user's reference image + enhanced prompt
+                    # This master reference will be used for ALL scenes to ensure maximum consistency
                     user_initial_reference = image_path if image_path else None
                     first_scene_subject_presence = scene_subject_presence[0] if scene_subject_presence and len(scene_subject_presence) > 0 else "full"
                     
-                    # Only use user's reference image if first scene includes the subject
+                    master_reference_image = None
                     if user_initial_reference and first_scene_subject_presence != "none":
-                        logger.info(f"[{generation_id}] Using user-provided reference image as base for first scene's reference image: {user_initial_reference}")
+                        logger.info(f"[{generation_id}] Generating master reference image from user's reference image + enhanced prompt...")
+                        
+                        # Use the first scene's prompt as the base for the master reference image
+                        # This ensures the master image matches the overall vision
+                        first_scene_prompt = scene_image_generation_prompts[0] if scene_image_generation_prompts else ""
+                        
+                        # Build enhanced prompt for master reference image
+                        master_prompt = _build_enhanced_image_prompt(
+                            base_prompt=first_scene_prompt,
+                            consistency_markers=consistency_markers,
+                            continuity_note=scene_continuity_notes[0] if scene_continuity_notes and len(scene_continuity_notes) > 0 else None,
+                            consistency_guideline=scene_consistency_guidelines[0] if scene_consistency_guidelines and len(scene_consistency_guidelines) > 0 else None,
+                            transition_note=None,  # No transition for master image
+                            scene_number=1,
+                        )
+                        
+                        # Generate master reference image using user's reference + enhanced prompt
+                        master_reference_image = await generate_image(
+                            prompt=master_prompt,
+                            output_dir=str(image_dir),
+                            generation_id=generation_id,
+                            scene_number=0,  # Use scene 0 to indicate master reference
+                            consistency_markers=None,  # Already included in enhanced prompt
+                            reference_image_path=user_initial_reference,  # Use user's reference as input
+                            cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                        )
+                        
+                        logger.info(f"[{generation_id}] ✅ Generated master reference image: {master_reference_image}")
+                        logger.info(f"[{generation_id}] This master reference will be used for all {len(scene_image_generation_prompts)} scenes")
                     elif user_initial_reference and first_scene_subject_presence == "none":
-                        logger.info(f"[{generation_id}] First scene has subject_presence='none', not using user's reference image (scene doesn't include subject)")
-                        user_initial_reference = None  # Don't use subject reference if scene doesn't have subject
+                        logger.info(f"[{generation_id}] First scene has subject_presence='none', skipping master reference generation (scene doesn't include subject)")
+                    else:
+                        logger.info(f"[{generation_id}] No user reference image provided, will generate scene-specific reference images without master reference")
                     
                     # Enhance reference image prompts based on subject_presence
                     enhanced_reference_prompts = []
@@ -336,19 +366,61 @@ async def process_generation(
                             # Subject is present - use original prompt
                             enhanced_reference_prompts.append(prompt)
                     
-                    reference_image_paths = await generate_images_with_sequential_references(
-                        prompts=enhanced_reference_prompts,  # Use enhanced prompts that respect subject_presence
-                        output_dir=str(image_dir),
-                        generation_id=generation_id,
-                        consistency_markers=consistency_markers,
-                        continuity_notes=scene_continuity_notes,
-                        consistency_guidelines=scene_consistency_guidelines,
-                        transition_notes=scene_transition_notes,
-                        initial_reference_image=user_initial_reference,  # Use user's reference image as base (only if first scene has subject)
-                        cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
-                    )
-                    
-                    logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} reference images (coherent across all scenes)")
+                    # Generate reference images for each scene
+                    # If master reference exists, use it for ALL scenes (maximum consistency)
+                    # Otherwise, use sequential chaining (fallback)
+                    if master_reference_image:
+                        logger.info(f"[{generation_id}] Generating scene reference images using master reference for all scenes...")
+                        reference_image_paths = []
+                        for idx, prompt in enumerate(enhanced_reference_prompts, start=1):
+                            # Check cancellation
+                            cancellation_check = lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False
+                            if cancellation_check():
+                                raise RuntimeError("Image generation cancelled by user")
+                            
+                            logger.info(f"[{generation_id}] Generating reference image {idx}/{len(enhanced_reference_prompts)} using master reference")
+                            
+                            # Build enhanced prompt for this scene
+                            enhanced_prompt = _build_enhanced_image_prompt(
+                                base_prompt=prompt,
+                                consistency_markers=consistency_markers,
+                                continuity_note=scene_continuity_notes[idx - 1] if scene_continuity_notes and idx - 1 < len(scene_continuity_notes) else None,
+                                consistency_guideline=scene_consistency_guidelines[idx - 1] if scene_consistency_guidelines and idx - 1 < len(scene_consistency_guidelines) else None,
+                                transition_note=scene_transition_notes[idx - 1] if scene_transition_notes and idx - 1 < len(scene_transition_notes) else None,
+                                scene_number=idx,
+                            )
+                            
+                            # Generate scene reference image using master reference
+                            scene_reference_image = await generate_image(
+                                prompt=enhanced_prompt,
+                                output_dir=str(image_dir),
+                                generation_id=generation_id,
+                                scene_number=idx,
+                                consistency_markers=None,  # Already included in enhanced prompt
+                                reference_image_path=master_reference_image,  # Use master reference for ALL scenes
+                                cancellation_check=cancellation_check,
+                            )
+                            
+                            reference_image_paths.append(scene_reference_image)
+                            logger.info(f"[{generation_id}] Scene {idx} reference image generated: {scene_reference_image}")
+                        
+                        logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} scene reference images using master reference (maximum consistency)")
+                    else:
+                        # Fallback: Use sequential chaining if no master reference
+                        logger.info(f"[{generation_id}] No master reference, using sequential chaining for scene reference images...")
+                        reference_image_paths = await generate_images_with_sequential_references(
+                            prompts=enhanced_reference_prompts,  # Use enhanced prompts that respect subject_presence
+                            output_dir=str(image_dir),
+                            generation_id=generation_id,
+                            consistency_markers=consistency_markers,
+                            continuity_notes=scene_continuity_notes,
+                            consistency_guidelines=scene_consistency_guidelines,
+                            transition_notes=scene_transition_notes,
+                            initial_reference_image=None,  # No initial reference in fallback mode
+                            cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                        )
+                        
+                        logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} reference images with sequential chaining (coherent across all scenes)")
                     
                     # Generate start images (for Kling 2.5 Turbo) - SEQUENTIALLY for visual cohesion
                     # CRITICAL: Generate ALL start images in one sequential batch to maintain visual cohesion

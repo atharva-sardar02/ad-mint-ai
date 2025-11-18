@@ -2487,6 +2487,93 @@ So that I can rapidly iterate through the entire pipeline: image prompt → imag
 
 ---
 
+### Story 9.4: Enhanced Reference Image Generation with Prompt Enhancement and Quality Scoring
+
+As a **user**,  
+I want reference images generated using enhanced prompts and quality scoring,  
+So that I get higher quality, more consistent reference images for my video generation.
+
+**Acceptance Criteria:**
+
+1. **Given** I start a video generation with the enhanced reference image feature enabled
+   **When** the system generates reference images for each scene
+   **Then** the system:
+   - Enhances each scene's image generation prompt using iterative two-agent enhancement:
+     - Agent 1 (Creative Director): Enhances prompt with visual details, style, composition, lighting
+     - Agent 2 (Prompt Engineer): Critiques and scores the enhanced prompt
+     - Iterates up to 4 rounds until score threshold is met or convergence detected
+     - Scores prompts on dimensions: Completeness, Specificity, Professionalism, Cinematography, Brand Alignment
+   - Generates 4 image variations per scene using the enhanced prompt
+   - Scores all 4 variations using quality metrics:
+     - PickScore (human preference prediction, 0-100)
+     - CLIP-Score (image-text alignment, 0-100)
+     - Aesthetic Predictor (aesthetic quality, 0-100)
+     - Overall Quality Score (weighted combination)
+   - Ranks all variations by overall quality score
+   - Selects the best-ranked image (rank 1) as the reference image for the scene
+   - Checks if selected image's quality score is ≥ 30:
+     - If score ≥ 30: Proceeds with selected image
+     - If score < 30: Logs warning with score but proceeds with selected image
+   - Uses selected reference image as input for next scene's generation (maintains sequential chaining)
+   - Saves trace files to `output/reference_image_traces/{generation_id}/scene_{N}/`:
+     - `00_original_prompt.txt` - Original scene prompt
+     - `01_agent1_iteration_1.txt` - First Creative Director enhancement
+     - `02_agent2_iteration_1.txt` - First Prompt Engineer critique + score
+     - `03_agent1_iteration_2.txt` - Second enhancement (if iterated)
+     - `04_agent2_iteration_2.txt` - Second critique (if iterated)
+     - ... (up to 4 iterations)
+     - `final_enhanced_prompt.txt` - Final enhanced prompt used for generation
+     - `prompt_trace_summary.json` - Enhancement metadata: scores, iterations, timestamps
+     - `generation_trace.json` - Image generation metadata: variations, scores, rankings, selected image
+   - Cleans up trace files immediately after reference image generation completes (no retention)
+   - Updates progress: "Enhancing prompts for reference images" → "Generating reference image variations" → "Scoring and ranking reference images"
+
+2. **Given** the system maintains sequential chaining for visual consistency
+   **Then** reference image generation:
+   - First scene: Uses user's initial reference image (if provided) as base for first scene's generation
+   - Subsequent scenes: Uses previous scene's best-ranked reference image as reference for next scene
+   - Maintains consistency markers, continuity notes, and consistency guidelines from LLM planning
+   - Ensures visual coherence across all scenes
+
+3. **Given** I start a video generation
+   **When** the system processes the generation request
+   **Then** the enhanced reference image generation is enabled by default for all users:
+   - No optional toggle required (feature is always on)
+   - No backward compatibility mode (replaces previous approach entirely)
+   - All new generations use enhanced prompt + quality scoring workflow
+
+4. **Given** reference image generation completes
+   **When** the system has selected the best reference images for all scenes
+   **Then** the system:
+   - Logs quality scores for each scene's selected reference image
+   - Logs warnings for any scenes where quality score < 30
+   - Continues with video generation pipeline using selected reference images
+   - Cleans up all trace files immediately after completion
+
+5. **Given** an error occurs during prompt enhancement or image generation
+   **When** the system encounters the error
+   **Then** the system:
+   - Logs the error with context (scene number, step, error details)
+   - Falls back gracefully: Uses original prompt (without enhancement) and generates single image
+   - Continues pipeline with fallback image
+   - Does not fail the entire generation due to enhancement errors
+
+**Prerequisites:** Story 8.3 (Storyboard Creation CLI), Story 8.4 (Unified Narrative Generation), Epic 3 (Progress Tracking), existing prompt enhancement service, existing image generation service, existing quality scoring service.
+
+**Technical Notes:**
+- Replace `generate_images_with_sequential_references()` call in `process_generation()` (around line 339)
+- Use `app.services.pipeline.prompt_enhancement.enhance_prompt_iterative()` for prompt enhancement
+- Use `app.services.image_generation.generate_images()` for generating variations
+- Use `app.services.pipeline.image_quality_scoring.score_image()` for quality scoring
+- Use `app.services.pipeline.image_quality_scoring.rank_images_by_quality()` for ranking
+- Configuration: 4 variations per scene, 4 enhancement iterations, quality threshold 30.0
+- Trace cleanup: Immediate (delete trace files after generation completes)
+- Update progress tracking to include enhancement and scoring steps
+- Error handling: Fallback to original prompt if enhancement fails, retry once if generation fails, use first image if scoring fails
+- Performance overhead: ~33-70s per scene (2-5 minutes for 4 scenes)
+
+---
+
 ## FR Coverage Matrix
 
 - **FR-001:** User Registration → Epic 2, Story 2.1
@@ -2549,7 +2636,7 @@ This epic breakdown decomposes all 35 functional requirements from the PRD into 
 6. **Epic 6 (Video Editing)** - Enables users to edit generated videos with timeline-based editor (6 stories)
 7. **Epic 7 (Multi-Scene Coherence & Quality Optimization)** [MVP: Stories 7.0-7.4] - Implements state-of-the-art generation-time consistency techniques (seed control, IP-Adapter, LoRA training with infrastructure setup, VideoDirectorGPT-style planning) to ensure professional multi-scene coherence. MVP includes dev tool for testing coherence settings (Story 7.0), seed control (7.1), parallel generation comparison tool (7.2), enhanced LLM planning (7.3), IP-Adapter (7.4), and LoRA training pipeline (7.5). Growth phase (7.6-7.10) includes advanced quality control (VBench, CSFD, ControlNet) and feedback loops. Quality is priority; cost and generation time are not constraints.
 8. **Epic 8 (CLI MVP - Image Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for image prompt enhancement and image generation with automatic quality scoring (PickScore, CLIP-Score, VQAScore, Aesthetic Predictor). Includes: image prompt feedback loop using two-agent approach (8.1), image generation with automatic scoring (8.2), and storyboard creation with start/end frames (8.3). Enables developers to quickly test and refine image generation workflows before building UI.
-9. **Epic 9 (CLI MVP - Video Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for video prompt enhancement and video generation with automatic VBench quality scoring. Includes: video prompt feedback loop using two-agent approach + VideoDirectorGPT (9.1), video generation with VBench scoring (9.2), and integrated complete workflow orchestrator (9.3). Enables developers to rapidly iterate through entire pipeline: image prompt → image generation → video prompt → video generation.
+9. **Epic 9 (CLI MVP - Video Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for video prompt enhancement and video generation with automatic VBench quality scoring. Includes: video prompt feedback loop using two-agent approach + VideoDirectorGPT (9.1), video generation with VBench scoring (9.2), integrated complete workflow orchestrator (9.3), and enhanced reference image generation with prompt enhancement and quality scoring (9.4). Enables developers to rapidly iterate through entire pipeline: image prompt → image generation → video prompt → video generation.
 
 **Next Steps in BMad Method:**
 1. **UX Design** (if UI exists) - Run: `*create-ux-design` workflow

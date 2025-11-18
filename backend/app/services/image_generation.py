@@ -23,6 +23,7 @@ REPLICATE_IMAGE_MODELS = {
     "flux-dev": "black-forest-labs/flux-dev",
     "flux-schnell": "black-forest-labs/flux-schnell",
     "nano-banana": "google/nano-banana",
+    "imagen-4-ultra": "google/imagen-4-ultra",
     "sdxl-turbo": "stability-ai/sdxl-turbo",
     "stable-diffusion": "stability-ai/stable-diffusion",
     # Fallback models
@@ -38,6 +39,7 @@ MODEL_COSTS = {
     "black-forest-labs/flux-dev": 0.004,  # Development version
     "black-forest-labs/flux-schnell": 0.003,  # Faster version
     "google/nano-banana": 0.002,  # Google Nano Banana - supports image input
+    "google/imagen-4-ultra": 0.01,  # Google Imagen 4 Ultra - high quality
     "stability-ai/sdxl-turbo": 0.002,  # Faster, slightly lower quality
     "stability-ai/stable-diffusion": 0.001,  # Legacy fallback
     # Legacy models (may not be available)
@@ -72,6 +74,15 @@ NANO_BANANA_ASPECT_RATIOS = [
     "21:9"
 ]
 
+# Imagen 4 Ultra specific aspect ratios
+IMAGEN_4_ULTRA_ASPECT_RATIOS = [
+    "1:1",
+    "9:16",
+    "16:9",
+    "3:4",
+    "4:3"
+]
+
 
 @dataclass
 class ImageGenerationResult:
@@ -102,7 +113,7 @@ async def generate_images(
     
     Args:
         prompt: Enhanced image prompt text
-        num_variations: Number of image variations to generate (1-8, default: 8)
+        num_variations: Number of image variations to generate (1-20, default: 8)
         aspect_ratio: Aspect ratio string (1:1, 4:3, 16:9, 9:16)
         seed: Optional seed value for reproducibility
         model_name: Replicate model identifier (default: stability-ai/sdxl)
@@ -122,8 +133,8 @@ async def generate_images(
         raise ValueError("Replicate API token is not configured")
     
     # Validate parameters
-    if num_variations < 1 or num_variations > 8:
-        raise ValueError(f"num_variations must be between 1 and 8, got {num_variations}")
+    if num_variations < 1 or num_variations > 20:
+        raise ValueError(f"num_variations must be between 1 and 20, got {num_variations}")
     
     # Validate aspect ratio based on model
     if model_name == "google/nano-banana":
@@ -140,6 +151,21 @@ async def generate_images(
             else:
                 aspect_ratio = "16:9"  # Default fallback
         width, height = None, None  # Nano-banana doesn't use width/height
+    elif model_name == "google/imagen-4-ultra":
+        if aspect_ratio not in IMAGEN_4_ULTRA_ASPECT_RATIOS:
+            # Map common ratios to imagen-4-ultra format
+            ratio_map = {
+                "1:1": "1:1",
+                "4:3": "4:3",
+                "3:4": "3:4",
+                "16:9": "16:9",
+                "9:16": "9:16",
+            }
+            if aspect_ratio in ratio_map:
+                aspect_ratio = ratio_map[aspect_ratio]
+            else:
+                aspect_ratio = "1:1"  # Default fallback for imagen-4-ultra
+        width, height = None, None  # Imagen-4-ultra uses aspect_ratio string, not width/height
     else:
         if aspect_ratio not in ASPECT_RATIOS:
             raise ValueError(f"aspect_ratio must be one of {list(ASPECT_RATIOS.keys())}, got {aspect_ratio}")
@@ -307,12 +333,12 @@ async def _generate_with_retry(
     Args:
         model_name: Replicate model identifier
         prompt: Image prompt text
-        width: Image width in pixels (None for nano-banana which uses aspect_ratio string)
-        height: Image height in pixels (None for nano-banana which uses aspect_ratio string)
-        aspect_ratio: Aspect ratio string (used by nano-banana, ignored by standard models)
-        seed: Optional seed value for reproducibility (not supported by nano-banana)
+        width: Image width in pixels (None for nano-banana/imagen-4-ultra which use aspect_ratio string)
+        height: Image height in pixels (None for nano-banana/imagen-4-ultra which use aspect_ratio string)
+        aspect_ratio: Aspect ratio string (used by nano-banana/imagen-4-ultra, ignored by standard models)
+        seed: Optional seed value for reproducibility (not supported by nano-banana/imagen-4-ultra)
         image_input: Optional list of image URIs for image-to-image generation (nano-banana only)
-        negative_prompt: Optional negative prompt to avoid unwanted elements
+        negative_prompt: Optional negative prompt to avoid unwanted elements (not supported by imagen-4-ultra)
     
     Returns:
         str: URL to the generated image
@@ -371,6 +397,16 @@ async def _generate_with_retry(
                         logger.info(f"Using {len(processed_images)} image(s) for image-to-image generation")
                     else:
                         logger.warning("No valid images processed for image_input, skipping image conditioning")
+            elif model_name == "google/imagen-4-ultra":
+                # Imagen 4 Ultra uses specific input format
+                input_params = {
+                    "prompt": prompt,
+                    "aspect_ratio": aspect_ratio if aspect_ratio in IMAGEN_4_ULTRA_ASPECT_RATIOS else "1:1",
+                    "output_format": "png",  # Default to PNG, can be "jpg" or "png"
+                    "safety_filter_level": "block_only_high",  # Most permissive default
+                }
+                # Note: imagen-4-ultra doesn't support negative_prompt or seed
+                logger.debug(f"Using imagen-4-ultra with aspect_ratio: {input_params['aspect_ratio']}")
             else:
                 # Standard models use width/height
                 input_params = {
