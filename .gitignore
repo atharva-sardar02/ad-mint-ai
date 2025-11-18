@@ -132,6 +132,8 @@ logs/
 # Generated files
 *.generated.*
 generated/
+backend/output/
+output/
 
 # Media files (if not tracked)
 # Uncomment if you don't want to track media files
