@@ -19,31 +19,27 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO"):
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
     # Determine log file path
+    # ALWAYS log to file (both DEBUG and production) so we can capture Sora prompts and LLM responses
     if log_file is None:
-        if settings.DEBUG:
-            # Development: log to stdout only
-            log_file = None
-        else:
-            # Production: try to log to file
-            # Use project-relative logs directory (preferred for development and production)
-            # Get project root: backend/app/core -> backend/app -> backend -> project root
-            project_root = Path(__file__).parent.parent.parent.parent
-            project_log_dir = project_root / "logs"
-            
+        # Use project-relative logs directory (preferred for development and production)
+        # Get project root: backend/app/core -> backend/app -> backend -> project root
+        project_root = Path(__file__).parent.parent.parent.parent
+        project_log_dir = project_root / "logs"
+        
+        try:
+            project_log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = str(project_log_dir / "app.log")
+        except (PermissionError, OSError):
+            # If project logs directory fails, try system log directory (production only)
             try:
-                project_log_dir.mkdir(parents=True, exist_ok=True)
-                log_file = str(project_log_dir / "app.log")
+                system_log_dir = Path("/var/log/fastapi")
+                system_log_dir.mkdir(parents=True, exist_ok=True)
+                log_file = str(system_log_dir / "app.log")
             except (PermissionError, OSError):
-                # If project logs directory fails, try system log directory (production only)
-                try:
-                    system_log_dir = Path("/var/log/fastapi")
-                    system_log_dir.mkdir(parents=True, exist_ok=True)
-                    log_file = str(system_log_dir / "app.log")
-                except (PermissionError, OSError):
-                    # If both fail, just log to stdout
-                    # Note: Can't use logging.warning here as logger isn't configured yet
-                    print("WARNING: Could not create log directory. Logging to stdout only.")
-                    log_file = None
+                # If both fail, just log to stdout
+                # Note: Can't use logging.warning here as logger isn't configured yet
+                print("WARNING: Could not create log directory. Logging to stdout only.")
+                log_file = None
     
     # Configure root logger
     root_logger = logging.getLogger()
@@ -89,8 +85,8 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO"):
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
     
-    # File handler (production only)
-    if log_file and not settings.DEBUG:
+    # File handler (ALWAYS enabled to capture Sora prompts and LLM responses)
+    if log_file:
         # Create rotating file handler
         # Max file size: 10MB, keep 5 backup files
         file_handler = RotatingFileHandler(

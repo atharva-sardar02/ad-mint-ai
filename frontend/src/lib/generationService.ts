@@ -21,14 +21,68 @@ export interface GenerateRequest {
   title?: string; // Optional title for the video
   coherence_settings?: CoherenceSettings;
   model?: string;
-  num_clips?: number;
+  target_duration?: number; // Target total video duration in seconds (default: 15). LLM will decide number of scenes and duration per scene (max 7s per scene)
   use_llm?: boolean;
+  refinement_instructions?: Record<number | string, string>; // Optional refinement instructions
+  brand_name?: string; // Optional brand name to display at the end of the video
 }
 
 export interface GenerateResponse {
   generation_id: string;
   status: string;
   message: string;
+}
+
+export interface StoryboardScene {
+  scene_number: number;
+  aida_stage: string;
+  detailed_prompt: string; // Main scene prompt for video generation
+  image_generation_prompt?: string; // Detailed image generation prompt (80-150 words, more explicit)
+  image_continuity_notes?: string; // How this scene relates to previous scenes
+  visual_consistency_guidelines?: string; // Per-scene consistency instructions
+  scene_transition_notes?: string; // How this scene transitions from previous
+  start_image_prompt?: string; // Base prompt for start frame
+  end_image_prompt?: string; // Base prompt for end frame
+  reference_image_prompt?: string; // Enhanced prompt used for reference image generation (includes markers + continuity)
+  start_image_enhanced_prompt?: string; // Enhanced prompt used for start image generation
+  end_image_enhanced_prompt?: string; // Enhanced prompt used for end image generation
+  video_generation_prompt?: string; // Enhanced prompt sent to video generation model (includes markers)
+  video_generation_base_prompt?: string; // Base prompt before enhancement
+  video_generation_model?: string; // Model used for video generation (e.g., "openai/sora-2")
+  reference_image_url?: string;
+  start_image_url?: string;
+  end_image_url?: string;
+  duration_seconds: number;
+  scene_description?: {
+    environment?: string;
+    character_action?: string;
+    camera_angle?: string;
+    composition?: string;
+    visual_elements?: string;
+  };
+}
+
+export interface StoryboardPlan {
+  consistency_markers?: {
+    style?: string;
+    color_palette?: string;
+    lighting?: string;
+    composition?: string;
+    mood?: string;
+  };
+  llm_input?: {
+    system_prompt?: string;
+    user_message?: string;
+    model?: string;
+    num_scenes?: number;
+    reference_image_provided?: boolean;
+  };
+  llm_output?: {
+    raw_response?: string;
+    model_used?: string;
+    finish_reason?: string;
+  };
+  scenes: StoryboardScene[];
 }
 
 export interface StatusResponse {
@@ -41,7 +95,45 @@ export interface StatusResponse {
   error: string | null;
   num_scenes: number | null;  // Total number of scenes planned
   available_clips: number;  // Number of clips currently available for download
+  storyboard_plan?: StoryboardPlan;  // Storyboard plan with scenes and images
 }
+
+/**
+ * Start a new video generation from a prompt and a reference image.
+ * Uses multipart/form-data and the /api/generate-with-image endpoint.
+ */
+export const startGenerationWithImage = async (
+  prompt: string,
+  image: File,
+  model?: string,
+  targetDuration?: number,
+  brandName?: string
+): Promise<GenerateResponse> => {
+  const formData = new FormData();
+  formData.append("prompt", prompt.trim());
+  formData.append("image", image);
+  if (model) {
+    formData.append("model", model);
+  }
+  if (targetDuration) {
+    formData.append("target_duration", targetDuration.toString());
+  }
+  if (brandName) {
+    formData.append("brand_name", brandName);
+  }
+
+  const response = await apiClient.post<GenerateResponse>(
+    API_ENDPOINTS.GENERATIONS.CREATE_WITH_IMAGE,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+};
 
 export interface ParallelGenerateRequest {
   variations: GenerateRequest[];
@@ -87,20 +179,22 @@ export interface ComparisonGroupResponse {
 export const startGeneration = async (
   prompt: string,
   model?: string,
-  numClips?: number,
+  targetDuration?: number,
   useLlm: boolean = true,
   coherenceSettings?: CoherenceSettings,
-  title?: string
+  title?: string,
+  brandName?: string
 ): Promise<GenerateResponse> => {
   const response = await apiClient.post<GenerateResponse>(
     API_ENDPOINTS.GENERATIONS.CREATE,
     { 
       prompt, 
       model, 
-      num_clips: numClips, 
+      target_duration: targetDuration, 
       use_llm: useLlm,
       coherence_settings: coherenceSettings, 
-      title 
+      title,
+      brand_name: brandName
     }
   );
   return response.data;
@@ -213,6 +307,7 @@ export const getGenerationQueue = async (): Promise<GenerationQueue> => {
  */
 export const generationService = {
   startGeneration,
+  startGenerationWithImage,
   startSingleClipGeneration,
   getGenerationStatus,
   cancelGeneration,

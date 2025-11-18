@@ -48,8 +48,17 @@ class GenerateRequest(BaseModel):
         description="Optional coherence technique settings. If not provided, defaults will be applied."
     )
     model: Optional[str] = Field(None, description="Specific model to use (optional, uses default fallback chain if not specified)")
-    num_clips: Optional[int] = Field(None, ge=1, le=10, description="Number of clips to generate (optional, uses scene plan if not specified)")
+    target_duration: Optional[int] = Field(None, ge=9, le=60, description="Target total video duration in seconds (default: 15). LLM will decide number of scenes and duration per scene (max 7s per scene)")
     use_llm: Optional[bool] = Field(True, description="Whether to use LLM enhancement (default: True)")
+    refinement_instructions: Optional[dict] = Field(
+        default=None,
+        description="Optional refinement instructions for storyboard. Dict mapping scene_number (int) to refinement instruction (str), or 'all' to refine all scenes. Example: {1: 'make lighting more dramatic', 2: 'add more product details', 'all': 'increase visual detail'}"
+    )
+    brand_name: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Optional brand name to display at the end of the video. If not provided, the system will attempt to extract it from the prompt."
+    )
 
 
 class StatusResponse(BaseModel):
@@ -64,6 +73,7 @@ class StatusResponse(BaseModel):
     num_scenes: Optional[int] = None  # Total number of scenes planned
     available_clips: int = 0  # Number of clips currently available for download
     seed_value: Optional[int] = None  # Seed value used for visual consistency across scenes
+    storyboard_plan: Optional[dict] = None  # Storyboard plan with scenes and images
 
 
 class GenerateResponse(BaseModel):
@@ -178,12 +188,29 @@ class TextOverlay(BaseModel):
 
 
 class Scene(BaseModel):
-    """Scene specification from LLM response."""
+    """
+    Scene specification from storyboard.
+    
+    Each scene includes:
+    - Reference image path (from storyboard)
+    - Start image path (first frame for Kling 2.5 Turbo)
+    - End image path (last frame for Kling 2.5 Turbo)
+    - Model-specific optimized prompts (different for each video model)
+    - Standard scene metadata
+    """
+    model_config = {"protected_namespaces": ()}  # Allow model_prompts field
+    
     scene_number: int = Field(..., ge=1)
-    scene_type: str = Field(..., description="Framework-specific type (e.g., 'Problem', 'Solution' for PAS)")
-    visual_prompt: str
+    scene_type: str = Field(..., description="Framework-specific type (e.g., 'Attention', 'Interest' for AIDA)")
+    visual_prompt: str = Field(..., description="Base visual prompt from storyboard")
+    # Model-specific prompts (optimized for each video generation model)
+    model_prompts: dict[str, str] = Field(default_factory=dict, description="Model-specific optimized prompts: {'openai/sora-2': '...', 'google/veo-3': '...', etc.}")
+    reference_image_path: Optional[str] = Field(None, description="Path to reference image for this scene (from storyboard)")
+    start_image_path: Optional[str] = Field(None, description="Path to start image (first frame) for Kling 2.5 Turbo")
+    end_image_path: Optional[str] = Field(None, description="Path to end image (last frame) for Kling 2.5 Turbo")
     text_overlay: Optional[TextOverlay] = None
-    duration: int = Field(..., ge=3, le=7, description="Duration in seconds")
+    duration: int = Field(..., ge=3, le=7, description="Duration in seconds (4 seconds for AIDA framework)")
+    sound_design: Optional[str] = Field(None, description="Sound design description for ambient SFX (e.g., 'gentle room tone, faint fabric movement')")
 
 
 class AdSpec(BaseModel):
@@ -194,12 +221,18 @@ class AdSpec(BaseModel):
 
 
 class AdSpecification(BaseModel):
-    """Complete LLM response schema for ad specification."""
+    """
+    Complete LLM response schema for ad specification.
+    
+    Note: With the new v2.0 compact format (AIDA framework), exactly 4 scenes
+    of 4 seconds each are generated. Each scene uses 3-7 word fragments for
+    visual descriptions, assembled into natural Sora-2 prompts.
+    """
     product_description: str
     brand_guidelines: BrandGuidelines
     ad_specifications: AdSpec
-    framework: str = Field(..., pattern="^(PAS|BAB|AIDA)$", description="Selected framework")
-    scenes: List[Scene] = Field(..., min_length=3, max_length=5)
+    framework: str = Field(..., pattern="^(PAS|BAB|AIDA)$", description="Selected framework (AIDA uses 4 scenes of 4s each)")
+    scenes: List[Scene] = Field(..., min_length=3, max_length=5, description="3-5 scenes (AIDA: exactly 4 scenes of 4s each)")
 
 
 class ScenePlan(BaseModel):

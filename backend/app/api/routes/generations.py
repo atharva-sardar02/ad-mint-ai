@@ -9,7 +9,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -45,7 +56,7 @@ from app.services.cost_tracking import (
 from app.services.cancellation import request_cancellation, handle_cancellation
 from app.services.pipeline.progress_tracking import update_generation_progress, update_generation_status
 from app.services.pipeline.llm_enhancement import enhance_prompt_with_llm
-from app.services.pipeline.overlays import add_overlays_to_clips
+from app.services.pipeline.overlays import add_overlays_to_clips, extract_brand_name, add_brand_overlay_to_final_video
 from app.services.pipeline.scene_planning import plan_scenes, create_basic_scene_plan_from_prompt
 from app.services.pipeline.stitching import stitch_video_clips
 from app.services.pipeline.audio import add_audio_layer
@@ -71,102 +82,513 @@ TEXT_OVERLAYS_ENABLED = True
 
 
 async def process_generation(
-    generation_id: str, 
+    generation_id: str,
     prompt: str,
     preferred_model: Optional[str] = None,
-    num_clips: Optional[int] = None,
-    use_llm: bool = True
+    target_duration: Optional[int] = None,
+    use_llm: bool = True,
+    image_path: Optional[str] = None,
+    refinement_instructions: Optional[dict] = None,
+    brand_name: Optional[str] = None,
 ):
     """
     Background task to process video generation.
     This runs asynchronously after the API returns a response.
     """
-    logger.info(f"[{generation_id}] Starting background generation task")
-    logger.info(f"[{generation_id}] User prompt: {prompt[:100]}...")
+    logger.info(f"[{generation_id}] ========== STARTING GENERATION TASK ==========")
+    logger.info(f"[{generation_id}] Parameters received:")
+    logger.info(f"[{generation_id}]   - prompt: {prompt[:100]}...")
+    logger.info(f"[{generation_id}]   - preferred_model: {preferred_model}")
+    logger.info(f"[{generation_id}]   - target_duration: {target_duration}")
+    logger.info(f"[{generation_id}]   - use_llm: {use_llm}")
+    logger.info(f"[{generation_id}]   - image_path: {image_path}")
+    logger.info(f"[{generation_id}]   - refinement_instructions: {refinement_instructions}")
+    logger.info(f"[{generation_id}]   - brand_name: {brand_name}")
     
     # Track generation start time
     generation_start_time = time.time()
     
     # Create a new database session for the background task
+    logger.info(f"[{generation_id}] Creating database session...")
     db = SessionLocal()
     try:
+        logger.info(f"[{generation_id}] Querying generation record from database...")
         generation = db.query(Generation).filter(Generation.id == generation_id).first()
         if not generation:
-            logger.error(f"[{generation_id}] Generation not found in background task")
+            logger.error(f"[{generation_id}] ❌ Generation not found in background task - generation_id: {generation_id}")
             return
         
-        # Store basic settings
+        logger.info(f"[{generation_id}] ✅ Generation record found: id={generation.id}, status={generation.status}, user_id={generation.user_id}")
+        
+        # Use target_duration if provided, otherwise default to 15 seconds
+        target_duration_seconds = target_duration if target_duration and target_duration > 0 else 15
+        logger.info(f"[{generation_id}] Setting generation parameters: model={preferred_model}, target_duration={target_duration_seconds}s, use_llm={use_llm}")
         generation.model = preferred_model
-        generation.num_clips = num_clips
         generation.use_llm = use_llm
         db.commit()
+        logger.info(f"[{generation_id}] ✅ Generation parameters saved to database")
         
-        logger.info(f"[{generation_id}] Generation record found, starting processing")
-        logger.info(f"[{generation_id}] Basic settings: model={preferred_model}, num_clips={num_clips}, use_llm={use_llm}")
+        logger.info(f"[{generation_id}] ========== STARTING PROCESSING ==========")
+        logger.info(f"[{generation_id}] Basic settings: model={preferred_model}, target_duration={target_duration_seconds}s, use_llm={use_llm}")
         
         try:
+            # STEP 1: Plan detailed storyboard using LLM
+            # This creates detailed prompts for each scene that will be used for both images and videos
+            from app.services.pipeline.storyboard_planner import plan_storyboard
+            from app.services.pipeline.image_generation import generate_image
+            from app.services.pipeline.image_generation_batch import generate_images_with_sequential_references
+            
+            storyboard_plan = None
+            consistency_markers = None
+            scene_detailed_prompts = []
+            
             if use_llm:
-                # Update status to processing
+                # Update status to storyboard planning
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=5,
+                    current_step="Storyboard Planning",
+                    status="processing"
+                )
+                logger.info(f"[{generation_id}] Status updated: processing (5%) - Storyboard Planning")
+                
+                logger.info(f"[{generation_id}] Planning detailed storyboard with LLM...")
+                logger.info(f"[{generation_id}] Calling plan_storyboard with:")
+                logger.info(f"[{generation_id}]   - user_prompt: {prompt[:100]}...")
+                logger.info(f"[{generation_id}]   - reference_image_path: {image_path}")
+                logger.info(f"[{generation_id}]   - target_duration: {target_duration_seconds}")
+                try:
+                    # LLM will decide number of scenes based on target_duration
+                    logger.info(f"[{generation_id}] ⏳ Awaiting plan_storyboard()...")
+                    storyboard_plan = await plan_storyboard(
+                        user_prompt=prompt,
+                        reference_image_path=image_path,
+                        target_duration=target_duration_seconds,
+                    )
+                    logger.info(f"[{generation_id}] ✅ plan_storyboard() completed successfully")
+                    logger.info(f"[{generation_id}] Storyboard plan keys: {list(storyboard_plan.keys()) if storyboard_plan else 'None'}")
+                    
+                    # Extract consistency markers and detailed prompts
+                    consistency_markers = storyboard_plan.get("consistency_markers", {})
+                    scenes = storyboard_plan.get("scenes", [])
+                    
+                    # Extract detailed prompts for video generation (keep for backward compatibility)
+                    scene_detailed_prompts = [
+                        scene.get("detailed_prompt", "") 
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    
+                    # Extract enhanced image generation prompts (new detailed prompts for better cohesion)
+                    # Fallback to detailed_prompt if image_generation_prompt not available
+                    scene_image_generation_prompts = [
+                        scene.get("image_generation_prompt") or scene.get("detailed_prompt", "")
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    
+                    # Extract continuity notes and consistency guidelines for enhanced prompts
+                    scene_continuity_notes = [
+                        scene.get("image_continuity_notes", "")
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    scene_consistency_guidelines = [
+                        scene.get("visual_consistency_guidelines", "")
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    scene_transition_notes = [
+                        scene.get("scene_transition_notes", "")
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    
+                    # Extract start and end image prompts for Kling 2.5 Turbo
+                    scene_start_prompts = [
+                        scene.get("start_image_prompt", "") 
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    scene_end_prompts = [
+                        scene.get("end_image_prompt", "") 
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    
+                    # Extract subject presence information for each scene
+                    scene_subject_presence = [
+                        scene.get("subject_presence", "full")  # Default to "full" for backward compatibility
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    scene_subject_timing = [
+                        scene.get("subject_appearance_timing", "")
+                        for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                    ]
+                    
+                    logger.info(f"[{generation_id}] ✅ Storyboard plan created with {len(scenes)} detailed scenes")
+                    logger.info(f"[{generation_id}] Consistency markers: {consistency_markers}")
+                    
+                    # OPTIONAL REFINEMENT STEP: Refine specific scenes or prompts if requested
+                    # This allows fine-tuning before generating images/videos
+                    # Can be triggered via API parameter or manual review
+                    if refinement_instructions:
+                        logger.info(f"[{generation_id}] Refining storyboard based on instructions: {refinement_instructions}")
+                        from app.services.pipeline.storyboard_planner import refine_storyboard_prompts
+                        try:
+                            storyboard_plan = await refine_storyboard_prompts(
+                                storyboard_plan=storyboard_plan,
+                                refinement_instructions=refinement_instructions,
+                                max_retries=2,
+                            )
+                            # Re-extract prompts after refinement
+                            scenes = storyboard_plan.get("scenes", [])
+                            scene_detailed_prompts = [
+                                scene.get("detailed_prompt", "") 
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            scene_image_generation_prompts = [
+                                scene.get("image_generation_prompt") or scene.get("detailed_prompt", "")
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            scene_continuity_notes = [
+                                scene.get("image_continuity_notes", "")
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            scene_consistency_guidelines = [
+                                scene.get("visual_consistency_guidelines", "")
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            scene_transition_notes = [
+                                scene.get("scene_transition_notes", "")
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            scene_start_prompts = [
+                                scene.get("start_image_prompt", "") 
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            scene_end_prompts = [
+                                scene.get("end_image_prompt", "") 
+                                for scene in sorted(scenes, key=lambda x: x.get("scene_number", 0))
+                            ]
+                            logger.info(f"[{generation_id}] ✅ Storyboard refined successfully")
+                        except Exception as e:
+                            logger.warning(f"[{generation_id}] Storyboard refinement failed: {e}. Continuing with original storyboard.")
+                    
+                    # Store storyboard plan and markers
+                    if generation.coherence_settings is None:
+                        generation.coherence_settings = {}
+                    generation.coherence_settings["consistency_markers"] = consistency_markers
+                    generation.coherence_settings["storyboard_plan"] = storyboard_plan
+                    db.commit()
+                    logger.info(f"[{generation_id}] ✅ Storyboard plan saved to coherence_settings with {len(scenes)} scenes")
+                    
+                except Exception as e:
+                    logger.error(f"[{generation_id}] ❌ Failed to plan storyboard: {e}", exc_info=True)
+                    logger.error(f"[{generation_id}] Exception type: {type(e).__name__}")
+                    logger.error(f"[{generation_id}] Exception message: {str(e)}")
+                    logger.warning(f"[{generation_id}] Falling back to basic scene plan without LLM enhancement")
+                    # Fall through to basic scene plan creation below
+                    storyboard_plan = None
+                    consistency_markers = None
+                    scene_detailed_prompts = []
+                    scene_start_prompts = []
+                    scene_end_prompts = []
+            
+            # STEP 2: Generate images (reference, start, end) using detailed prompts + markers + sequential references
+            if storyboard_plan and scene_detailed_prompts:
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=15,
+                    current_step="Generating Reference Images",
+                    status="processing"
+                )
+                logger.info(f"[{generation_id}] Status updated: processing (15%) - Generating Reference Images")
+                
+                # Setup image output directory
+                image_dir = Path("output/temp/images") / generation_id
+                image_dir.mkdir(parents=True, exist_ok=True)
+                
+                logger.info(f"[{generation_id}] Generating {len(scene_image_generation_prompts)} reference images sequentially with enhanced prompts...")
+                try:
+                    # Generate reference images with sequential references using enhanced image generation prompts
+                    # These prompts are more detailed and include explicit visual consistency instructions
+                    # IMPORTANT: Use user's initial reference image (if provided) as the base for the first scene's reference image
+                    # This ensures all scenes are coherent with the user's initial vision
+                    # BUT: Only use it if the first scene has subject_presence that includes the subject
+                    user_initial_reference = image_path if image_path else None
+                    first_scene_subject_presence = scene_subject_presence[0] if scene_subject_presence and len(scene_subject_presence) > 0 else "full"
+                    
+                    # Only use user's reference image if first scene includes the subject
+                    if user_initial_reference and first_scene_subject_presence != "none":
+                        logger.info(f"[{generation_id}] Using user-provided reference image as base for first scene's reference image: {user_initial_reference}")
+                    elif user_initial_reference and first_scene_subject_presence == "none":
+                        logger.info(f"[{generation_id}] First scene has subject_presence='none', not using user's reference image (scene doesn't include subject)")
+                        user_initial_reference = None  # Don't use subject reference if scene doesn't have subject
+                    
+                    # Enhance reference image prompts based on subject_presence
+                    enhanced_reference_prompts = []
+                    for idx, prompt in enumerate(scene_image_generation_prompts):
+                        subject_presence = scene_subject_presence[idx] if idx < len(scene_subject_presence) else "full"
+                        if subject_presence == "none":
+                            # Add instruction that this scene does NOT include the subject
+                            enhanced_prompt = f"{prompt} | IMPORTANT: This scene does NOT include the main subject. Focus on environment, atmosphere, and supporting elements. Maintain visual style consistency with other scenes."
+                            enhanced_reference_prompts.append(enhanced_prompt)
+                        else:
+                            # Subject is present - use original prompt
+                            enhanced_reference_prompts.append(prompt)
+                    
+                    reference_image_paths = await generate_images_with_sequential_references(
+                        prompts=enhanced_reference_prompts,  # Use enhanced prompts that respect subject_presence
+                        output_dir=str(image_dir),
+                        generation_id=generation_id,
+                        consistency_markers=consistency_markers,
+                        continuity_notes=scene_continuity_notes,
+                        consistency_guidelines=scene_consistency_guidelines,
+                        transition_notes=scene_transition_notes,
+                        initial_reference_image=user_initial_reference,  # Use user's reference image as base (only if first scene has subject)
+                        cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                    )
+                    
+                    logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} reference images (coherent across all scenes)")
+                    
+                    # Generate start images (for Kling 2.5 Turbo) - SEQUENTIALLY for visual cohesion
+                    # CRITICAL: Generate ALL start images in one sequential batch to maintain visual cohesion
+                    # Start Image 1 → Start Image 2 → Start Image 3 → Start Image 4 (each uses previous as reference)
+                    # Strategy: Start with Scene 1's reference image, then chain start images sequentially
+                    # IMPORTANT: Respect subject_presence - enhance prompts accordingly
+                    start_image_paths = []
+                    if scene_start_prompts:
+                        logger.info(f"[{generation_id}] Generating {len(scene_start_prompts)} start images SEQUENTIALLY (unique moments, visually cohesive)...")
+                        
+                        # Build enhanced prompts for all start images
+                        enhanced_start_prompts = []
+                        for idx, start_prompt in enumerate(scene_start_prompts):
+                            subject_presence = scene_subject_presence[idx] if idx < len(scene_subject_presence) else "full"
+                            subject_timing = scene_subject_timing[idx] if idx < len(scene_subject_timing) else ""
+                            
+                            # Determine if subject should be in start image based on subject_presence
+                            subject_in_start = subject_presence in ("full", "appears_at_start", "appears_mid_scene") or (
+                                subject_presence == "partial" and "start" in subject_timing.lower()
+                            )
+                            
+                            if subject_in_start:
+                                logger.info(f"[{generation_id}] Start image {idx+1} - subject appears at start, maintaining visual cohesion")
+                                enhanced_start_prompt = f"{start_prompt} | CRITICAL: Maintain exact visual consistency with the reference image - same subject appearance, same colors, same lighting, same style. This is a different moment/pose but must look like it's from the same visual universe."
+                            else:
+                                logger.info(f"[{generation_id}] Start image {idx+1} - subject does NOT appear at start (subject_presence: {subject_presence})")
+                                # Subject not in start frame - emphasize style consistency but no subject
+                                enhanced_start_prompt = f"{start_prompt} | CRITICAL: Maintain exact visual consistency with the reference image for style, colors, lighting, and environment - but this frame does NOT include the subject. This is an establishing shot or scene before subject appears."
+                            
+                            enhanced_start_prompts.append(enhanced_start_prompt)
+                        
+                        # Generate ALL start images sequentially in one batch
+                        # Use Scene 1's reference image as the initial reference to start the chain
+                        initial_start_reference = reference_image_paths[0] if reference_image_paths else None
+                        start_image_paths = await generate_images_with_sequential_references(
+                            prompts=enhanced_start_prompts,  # All start prompts at once
+                            output_dir=str(image_dir / "start"),
+                            generation_id=generation_id,
+                            consistency_markers=consistency_markers,
+                            continuity_notes=None,  # Start frames don't need continuity notes
+                            consistency_guidelines=scene_consistency_guidelines if scene_consistency_guidelines else None,
+                            transition_notes=None,  # Start frames don't need transition notes
+                            initial_reference_image=initial_start_reference,  # Use Scene 1's reference to start the chain
+                            cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                            scene_offset=0,  # Start from 1 (idx+1 happens inside generate_images_with_sequential_references)
+                        )
+                        logger.info(f"[{generation_id}] ✅ Generated {len(start_image_paths)} start images SEQUENTIALLY (unique moments, visually cohesive, subject presence respected)")
+                    
+                    # Generate end images (for Kling 2.5 Turbo) - SEQUENTIALLY for visual cohesion
+                    # CRITICAL: Generate ALL end images in one sequential batch to maintain visual cohesion
+                    # End Image 1 → End Image 2 → End Image 3 → End Image 4 (each uses previous as reference)
+                    # Strategy: Start with Scene 1's reference image, then chain end images sequentially
+                    # IMPORTANT: Respect subject_presence - enhance prompts accordingly
+                    end_image_paths = []
+                    if scene_end_prompts:
+                        logger.info(f"[{generation_id}] Generating {len(scene_end_prompts)} end images SEQUENTIALLY (unique moments, visually cohesive)...")
+                        
+                        # Build enhanced prompts for all end images
+                        enhanced_end_prompts = []
+                        for idx, end_prompt in enumerate(scene_end_prompts):
+                            subject_presence = scene_subject_presence[idx] if idx < len(scene_subject_presence) else "full"
+                            subject_timing = scene_subject_timing[idx] if idx < len(scene_subject_timing) else ""
+                            
+                            # Determine if subject should be in end image based on subject_presence
+                            subject_in_end = subject_presence in ("full", "appears_at_end", "appears_mid_scene") or (
+                                subject_presence == "partial" and ("end" in subject_timing.lower() or "until end" in subject_timing.lower())
+                            )
+                            
+                            if subject_in_end:
+                                logger.info(f"[{generation_id}] End image {idx+1} - subject appears at end, maintaining visual cohesion")
+                                enhanced_end_prompt = f"{end_prompt} | CRITICAL: Maintain exact visual consistency with the reference image - same subject appearance, same colors, same lighting, same style. This is a different moment/pose but must look like it's from the same visual universe."
+                            else:
+                                logger.info(f"[{generation_id}] End image {idx+1} - subject does NOT appear at end (subject_presence: {subject_presence})")
+                                # Subject not in end frame - emphasize style consistency but no subject
+                                enhanced_end_prompt = f"{end_prompt} | CRITICAL: Maintain exact visual consistency with the reference image for style, colors, lighting, and environment - but this frame does NOT include the subject. This is a scene after subject has exited or before subject appears."
+                            
+                            enhanced_end_prompts.append(enhanced_end_prompt)
+                        
+                        # Generate ALL end images sequentially in one batch
+                        # Use Scene 1's reference image as the initial reference to start the chain
+                        initial_end_reference = reference_image_paths[0] if reference_image_paths else None
+                        end_image_paths = await generate_images_with_sequential_references(
+                            prompts=enhanced_end_prompts,  # All end prompts at once
+                            output_dir=str(image_dir / "end"),
+                            generation_id=generation_id,
+                            consistency_markers=consistency_markers,
+                            continuity_notes=None,  # End frames don't need continuity notes
+                            consistency_guidelines=scene_consistency_guidelines if scene_consistency_guidelines else None,
+                            transition_notes=None,  # End frames don't need transition notes
+                            initial_reference_image=initial_end_reference,  # Use Scene 1's reference to start the chain
+                            cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                            scene_offset=0,  # Start from 1 (idx+1 happens inside generate_images_with_sequential_references)
+                        )
+                        logger.info(f"[{generation_id}] ✅ Generated {len(end_image_paths)} end images SEQUENTIALLY (unique moments, visually cohesive, subject presence respected)")
+                    
+                    # Store image paths and enhanced prompts in storyboard plan
+                    from app.services.pipeline.image_generation_batch import _build_enhanced_image_prompt
+                    import os
+                    
+                    def normalize_path(path: str) -> str:
+                        """Convert absolute path to relative path for storage."""
+                        if not path:
+                            return path
+                        # If already relative, return as-is
+                        if not os.path.isabs(path):
+                            return path
+                        # Convert absolute path to relative
+                        # Paths are like: D:\gauntlet-ai\ad-mint-ai\backend\output\temp\images\...
+                        # We want: output/temp/images/...
+                        backend_dir = Path(__file__).parent.parent.parent  # backend directory
+                        try:
+                            relative_path = os.path.relpath(path, backend_dir)
+                            # Normalize to forward slashes for URLs
+                            return relative_path.replace("\\", "/")
+                        except ValueError:
+                            # If path is on different drive (Windows), extract the relative part
+                            # Find "output" in the path and take everything from there
+                            if "output" in path:
+                                idx = path.find("output")
+                                return path[idx:].replace("\\", "/")
+                            return path.replace("\\", "/")
+                    
+                    for idx, scene in enumerate(storyboard_plan.get("scenes", [])):
+                        if idx < len(reference_image_paths):
+                            scene["reference_image_path"] = normalize_path(reference_image_paths[idx])
+                            # Store the actual enhanced prompt used for image generation
+                            # Use image_generation_prompt if available, otherwise fallback to detailed_prompt
+                            base_prompt = scene.get("image_generation_prompt") or scene.get("detailed_prompt", "")
+                            continuity_note = scene_continuity_notes[idx] if idx < len(scene_continuity_notes) else None
+                            consistency_guideline = scene_consistency_guidelines[idx] if idx < len(scene_consistency_guidelines) else None
+                            transition_note = scene_transition_notes[idx] if idx < len(scene_transition_notes) else None
+                            scene["reference_image_prompt"] = _build_enhanced_image_prompt(
+                                base_prompt=base_prompt,
+                                consistency_markers=consistency_markers,
+                                continuity_note=continuity_note,
+                                consistency_guideline=consistency_guideline,
+                                transition_note=transition_note,
+                                scene_number=idx + 1,
+                            )
+                        
+                        if idx < len(start_image_paths):
+                            scene["start_image_path"] = normalize_path(start_image_paths[idx])
+                            # Store the actual enhanced prompt used for start image generation
+                            base_prompt = scene.get("start_image_prompt", "")
+                            consistency_guideline = scene_consistency_guidelines[idx] if idx < len(scene_consistency_guidelines) else None
+                            scene["start_image_enhanced_prompt"] = _build_enhanced_image_prompt(
+                                base_prompt=base_prompt,
+                                consistency_markers=consistency_markers,
+                                continuity_note=None,  # Start frames don't need continuity
+                                consistency_guideline=consistency_guideline,
+                                transition_note=None,  # Start frames don't need transition
+                                scene_number=idx + 1,
+                            )
+                        
+                        if idx < len(end_image_paths):
+                            scene["end_image_path"] = normalize_path(end_image_paths[idx])
+                            # Store the actual enhanced prompt used for end image generation
+                            base_prompt = scene.get("end_image_prompt", "")
+                            consistency_guideline = scene_consistency_guidelines[idx] if idx < len(scene_consistency_guidelines) else None
+                            scene["end_image_enhanced_prompt"] = _build_enhanced_image_prompt(
+                                base_prompt=base_prompt,
+                                consistency_markers=consistency_markers,
+                                continuity_note=None,  # End frames don't need continuity
+                                consistency_guideline=consistency_guideline,
+                                transition_note=None,  # End frames don't need transition
+                                scene_number=idx + 1,
+                            )
+                    
+                    # Ensure coherence_settings exists before updating
+                    if generation.coherence_settings is None:
+                        generation.coherence_settings = {}
+                    generation.coherence_settings["storyboard_plan"] = storyboard_plan
+                    db.commit()
+                    logger.info(f"[{generation_id}] ✅ Storyboard plan updated with image paths and saved to coherence_settings")
+                    
+                except Exception as e:
+                    logger.error(f"[{generation_id}] Failed to generate images: {e}", exc_info=True)
+                    raise
+            
+            # STEP 3: Create scene plan from storyboard for video generation
+            if storyboard_plan:
+                scenes_data = storyboard_plan.get("scenes", [])
+                scenes = []
+                
+                for scene_data in scenes_data:
+                    detailed_prompt = scene_data.get("detailed_prompt", "")
+                    reference_image_path = scene_data.get("reference_image_path")
+                    start_image_path = scene_data.get("start_image_path")
+                    end_image_path = scene_data.get("end_image_path")
+                    
+                    # Create Scene object with detailed prompt and images
+                    scenes.append(
+                        Scene(
+                            scene_number=scene_data.get("scene_number", 0),
+                            scene_type=scene_data.get("aida_stage", "Scene"),
+                            visual_prompt=detailed_prompt,  # Use detailed prompt from storyboard
+                            model_prompts={},  # Can be populated later if needed
+                            reference_image_path=reference_image_path,  # Generated reference image
+                            start_image_path=start_image_path,  # Generated start image (for Kling 2.5 Turbo)
+                            end_image_path=end_image_path,  # Generated end image (for Kling 2.5 Turbo)
+                            text_overlay=None,  # Can be added later
+                            duration=int(scene_data.get("duration_seconds", 4)),
+                            sound_design=None,  # Can be added later
+                        )
+                    )
+                
+                scene_plan = ScenePlan(
+                    scenes=scenes,
+                    total_duration=sum(s.duration for s in scenes),
+                    framework="AIDA",
+                )
+                
+                logger.info(f"[{generation_id}] Scene plan created from storyboard: {len(scenes)} scenes")
+            else:
+                # Fallback: Create basic scene plan without LLM (when storyboard planning fails or use_llm is False)
+                logger.info(f"[{generation_id}] Creating basic scene plan without LLM enhancement")
                 update_generation_progress(
                     db=db,
                     generation_id=generation_id,
                     progress=10,
-                    current_step="LLM Enhancement",
-                    status="processing"
-                )
-                logger.info(f"[{generation_id}] Status updated: processing (10%) - LLM Enhancement")
-                
-                # Call LLM enhancement service
-                logger.info(f"[{generation_id}] Calling LLM enhancement service...")
-                ad_spec = await enhance_prompt_with_llm(prompt)
-                logger.info(f"[{generation_id}] LLM enhancement completed - Framework: {ad_spec.framework}, Scenes: {len(ad_spec.scenes)}")
-                
-                # Store LLM specification
-                generation.llm_specification = ad_spec.model_dump()
-                generation.framework = ad_spec.framework
-                db.commit()
-                update_generation_progress(
-                    db=db,
-                    generation_id=generation_id,
-                    progress=20,
-                    current_step="Scene Planning"
-                )
-                logger.info(f"[{generation_id}] LLM specification stored, progress: 20% - Scene Planning")
-                
-                # Call scene planning module
-                logger.info(f"[{generation_id}] Calling scene planning module...")
-                scene_plan = plan_scenes(ad_spec, target_duration=15)
-            else:
-                # Skip LLM enhancement, create basic scene plan directly
-                logger.info(f"[{generation_id}] LLM layer disabled, creating basic scene plan from prompt")
-                update_generation_progress(
-                    db=db,
-                    generation_id=generation_id,
-                    progress=20,
-                    current_step="Scene Planning (No LLM)",
+                    current_step="Creating Basic Scene Plan",
                     status="processing"
                 )
                 
                 # Create basic scene plan from prompt
-                num_scenes_for_plan = num_clips if num_clips else 3
+                # For basic scene plan (fallback), use target_duration
+                from app.services.pipeline.scene_planning import create_basic_scene_plan_from_prompt
                 scene_plan = create_basic_scene_plan_from_prompt(
                     prompt=prompt,
-                    target_duration=15,
-                    num_scenes=num_scenes_for_plan
+                    target_duration=target_duration_seconds,
+                    num_scenes=None  # Let it decide based on target_duration
                 )
+                logger.info(f"[{generation_id}] Basic scene plan created: {len(scene_plan.scenes)} scenes")
                 
                 # Store basic specification
                 generation.framework = scene_plan.framework
                 generation.llm_specification = None  # No LLM spec when disabled
                 db.commit()
+            
             logger.info(f"[{generation_id}] Scene planning completed - {len(scene_plan.scenes)} scenes planned, total duration: {scene_plan.total_duration}s")
             
-            # If num_clips is specified, limit the scenes
-            if num_clips is not None and num_clips > 0:
-                logger.info(f"[{generation_id}] Limiting scenes to {num_clips} as requested")
-                scene_plan.scenes = scene_plan.scenes[:num_clips]
-                scene_plan.total_duration = sum(s.duration for s in scene_plan.scenes)
-                logger.info(f"[{generation_id}] Adjusted to {len(scene_plan.scenes)} scenes, total duration: {scene_plan.total_duration}s")
+            # No need to limit scenes - LLM has already decided based on target_duration
+            logger.info(f"[{generation_id}] Using {len(scene_plan.scenes)} scenes as planned by LLM, total duration: {scene_plan.total_duration}s")
             
             # Store scene plan
             generation.scene_plan = scene_plan.model_dump()
@@ -264,7 +686,46 @@ async def process_generation(
                         )
                         
                         # Generate video clip
+                        # IMPORTANT: For Kling 2.5 Turbo Pro, prioritize start_image and end_image for frame control
+                        # Each scene should have its OWN start_image and end_image (different frames for each scene)
+                        # Reference image is used for style/character consistency but doesn't override start/end frames
+                        # CRITICAL: Respect subject_presence - only use reference image if subject should be in the scene
+                        scene_data_from_storyboard = None
+                        if storyboard_plan and "scenes" in storyboard_plan:
+                            scenes_list = storyboard_plan.get("scenes", [])
+                            scene_idx = scene_number - 1
+                            if 0 <= scene_idx < len(scenes_list):
+                                scene_data_from_storyboard = scenes_list[scene_idx]
+                        
+                        subject_presence = scene_data_from_storyboard.get("subject_presence", "full") if scene_data_from_storyboard else "full"
+                        subject_timing = scene_data_from_storyboard.get("subject_appearance_timing", "") if scene_data_from_storyboard else ""
+                        
+                        # Determine which images to use based on subject_presence
+                        scene_reference_image = None
+                        if subject_presence != "none":
+                            # Only use reference image if subject appears in this scene
+                            scene_reference_image = scene.reference_image_path if scene.reference_image_path else (image_path if subject_presence == "full" else None)
+                        
+                        scene_start_image = scene.start_image_path  # Each scene has its own start image (different first frame)
+                        scene_end_image = scene.end_image_path  # Each scene has its own end image (different last frame)
+                        
                         logger.info(f"[{generation_id}] Calling Replicate API for clip {scene_number}...")
+                        logger.info(f"[{generation_id}] Using detailed prompt: {scene.visual_prompt[:100]}...")
+                        logger.info(f"[{generation_id}] Scene {scene_number} subject_presence: {subject_presence}")
+                        logger.info(f"[{generation_id}] Scene {scene_number} images:")
+                        if scene_reference_image:
+                            logger.info(f"[{generation_id}]   - Reference image (style consistency, subject present): {scene_reference_image}")
+                        else:
+                            logger.info(f"[{generation_id}]   - No reference image (subject_presence='{subject_presence}' - scene doesn't include subject)")
+                        if scene_start_image:
+                            logger.info(f"[{generation_id}]   - Start image (first frame - UNIQUE to this scene): {scene_start_image}")
+                        else:
+                            logger.warning(f"[{generation_id}]   - No start image for scene {scene_number} - video will start from prompt")
+                        if scene_end_image:
+                            logger.info(f"[{generation_id}]   - End image (last frame - UNIQUE to this scene): {scene_end_image}")
+                        else:
+                            logger.warning(f"[{generation_id}]   - No end image for scene {scene_number} - video will end from prompt")
+                        
                         clip_path, model_used = await generate_video_clip(
                             scene=scene,
                             output_dir=temp_output_dir,
@@ -272,9 +733,79 @@ async def process_generation(
                             scene_number=scene_number,
                             cancellation_check=check_cancellation,
                             seed=seed,  # Pass seed for visual consistency (None if seed_control disabled)
-                            preferred_model=preferred_model  # Pass preferred model if specified
+                            preferred_model=preferred_model,  # Pass preferred model if specified
+                            # PRIORITY: start_image and end_image control the actual frames (each scene has different frames)
+                            # reference_image is for style consistency (shared subject/style across scenes)
+                            start_image_path=scene_start_image,  # PRIMARY: Controls first frame (unique per scene)
+                            end_image_path=scene_end_image,  # PRIMARY: Controls last frame (unique per scene)
+                            reference_image_path=scene_reference_image,  # SECONDARY: Style consistency (shared across scenes)
+                            consistency_markers=consistency_markers,  # Pass shared markers for cohesion
                         )
                         logger.info(f"[{generation_id}] Clip {scene_number} generated successfully: {clip_path} (model: {model_used})")
+                        
+                        # Store the enhanced video generation prompt in storyboard_plan
+                        # Always reload from database to get latest version and avoid race conditions
+                        try:
+                            from app.services.pipeline.video_generation import _enhance_prompt_with_markers
+                            import json
+                            import copy
+                            
+                            # Reload generation and storyboard_plan from database
+                            db.refresh(generation)
+                            
+                            # Get storyboard_plan from database (always use fresh copy)
+                            current_storyboard_plan = None
+                            if generation.coherence_settings and "storyboard_plan" in generation.coherence_settings:
+                                current_storyboard_plan = generation.coherence_settings["storyboard_plan"]
+                                # Handle JSON string case
+                                if isinstance(current_storyboard_plan, str):
+                                    current_storyboard_plan = json.loads(current_storyboard_plan)
+                            
+                            # Only proceed if we have a valid storyboard_plan
+                            if current_storyboard_plan and isinstance(current_storyboard_plan, dict):
+                                scenes_list = current_storyboard_plan.get("scenes", [])
+                                scene_idx = scene_number - 1
+                                
+                                if 0 <= scene_idx < len(scenes_list):
+                                    # Deep copy to avoid modifying the database object directly
+                                    updated_storyboard_plan = copy.deepcopy(current_storyboard_plan)
+                                    scene_data = updated_storyboard_plan["scenes"][scene_idx]
+                                    
+                                    base_video_prompt = scene.visual_prompt
+                                    
+                                    # Enhance prompt with consistency markers
+                                    enhanced_video_prompt = _enhance_prompt_with_markers(
+                                        base_prompt=base_video_prompt,
+                                        consistency_markers=consistency_markers
+                                    )
+                                    
+                                    # Add subject presence information to video prompt if available
+                                    scene_subject_presence_info = scene_data.get("subject_presence", "full")
+                                    scene_subject_timing_info = scene_data.get("subject_appearance_timing", "")
+                                    if scene_subject_presence_info and scene_subject_presence_info != "full":
+                                        # Add explicit instruction about subject presence
+                                        if scene_subject_presence_info == "none":
+                                            enhanced_video_prompt += " | IMPORTANT: This scene does NOT include the main subject. Focus on environment, atmosphere, and supporting elements."
+                                        elif scene_subject_presence_info == "partial":
+                                            enhanced_video_prompt += f" | IMPORTANT: Subject appears only partially in this scene. {scene_subject_timing_info}"
+                                        elif scene_subject_presence_info in ("appears_at_start", "appears_at_end", "appears_mid_scene", "disappears_mid_scene"):
+                                            enhanced_video_prompt += f" | IMPORTANT: Subject {scene_subject_presence_info.replace('_', ' ')}. {scene_subject_timing_info}"
+                                    
+                                    scene_data["video_generation_prompt"] = enhanced_video_prompt
+                                    scene_data["video_generation_model"] = model_used
+                                    scene_data["video_generation_base_prompt"] = base_video_prompt
+                                    
+                                    # Update storyboard_plan in database
+                                    generation.coherence_settings["storyboard_plan"] = updated_storyboard_plan
+                                    db.commit()
+                                    logger.info(f"[{generation_id}] ✅ Updated storyboard_plan with video generation prompt for scene {scene_number} (model: {model_used})")
+                                else:
+                                    logger.warning(f"[{generation_id}] Scene index {scene_idx} out of range for storyboard_plan scenes (total: {len(scenes_list)}, scene_number: {scene_number})")
+                            else:
+                                logger.debug(f"[{generation_id}] No storyboard_plan in database for scene {scene_number} - skipping prompt storage (this is normal if use_llm was False)")
+                        except Exception as e:
+                            # Don't fail the entire generation if prompt storage fails
+                            logger.warning(f"[{generation_id}] Failed to store video generation prompt for scene {scene_number}: {e}. Continuing without storing prompt.")
                         
                         # Quality control evaluation (if enabled)
                         quality_passed = True
@@ -379,6 +910,12 @@ async def process_generation(
                                     )
                         except Exception as e:
                             logger.error(f"[{generation_id}] Quality evaluation failed for clip {scene_number}: {e}", exc_info=True)
+                            # Rollback the session if quality evaluation failed (e.g., missing table)
+                            # This ensures subsequent database operations can proceed
+                            try:
+                                db.rollback()
+                            except Exception as rollback_error:
+                                logger.warning(f"[{generation_id}] Error rolling back session after quality evaluation failure: {rollback_error}")
                             # Graceful degradation: continue even if quality assessment fails
                             quality_passed = True
                         
@@ -478,17 +1015,21 @@ async def process_generation(
                 logger.info(f"[{generation_id}] All {len(clip_paths)} video clips generated, progress: 70% - Adding text overlays")
                 
                 if TEXT_OVERLAYS_ENABLED:
-                    # Add text overlays to all video clips
+                    # Add text overlays to all video clips (with error handling)
                     logger.info(f"[{generation_id}] Starting text overlay addition for {len(clip_paths)} clips...")
-                    scene_plan_obj = ScenePlan(**generation.scene_plan)
-                    overlay_output_dir = str(temp_dir / f"{generation_id}_overlays")
-                    logger.info(f"[{generation_id}] Overlay output directory: {overlay_output_dir}")
-                    overlay_paths = add_overlays_to_clips(
-                        clip_paths=clip_paths,
-                        scene_plan=scene_plan_obj,
-                        output_dir=overlay_output_dir
-                    )
-                    logger.info(f"[{generation_id}] Text overlays added successfully to all clips")
+                    try:
+                        scene_plan_obj = ScenePlan(**generation.scene_plan)
+                        overlay_output_dir = str(temp_dir / f"{generation_id}_overlays")
+                        logger.info(f"[{generation_id}] Overlay output directory: {overlay_output_dir}")
+                        overlay_paths = add_overlays_to_clips(
+                            clip_paths=clip_paths,
+                            scene_plan=scene_plan_obj,
+                            output_dir=overlay_output_dir
+                        )
+                        logger.info(f"[{generation_id}] Text overlays added successfully to all clips")
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Text overlay addition failed: {e}. Continuing without overlays.")
+                        overlay_paths = clip_paths  # Fallback to raw clips
                 else:
                     # Fallback: use raw clips without overlays (should not happen with flag enabled)
                     overlay_paths = clip_paths
@@ -565,14 +1106,76 @@ async def process_generation(
                 # Pass scene plan for transition detection
                 scene_plan_obj = ScenePlan(**generation.scene_plan) if generation.scene_plan else None
                 
-                video_with_audio = add_audio_layer(
-                    video_path=stitched_video_path,
-                    music_style=music_style,
-                    output_path=audio_output_path,
-                    scene_plan=scene_plan_obj,
-                    cancellation_check=check_cancellation
+                # Pass LLM specification to audio layer for sound_design extraction
+                llm_spec = generation.llm_specification if generation.llm_specification else None
+                
+                # Add audio layer (with error handling - don't fail generation if audio fails)
+                try:
+                    video_with_audio = add_audio_layer(
+                        video_path=stitched_video_path,
+                        music_style=music_style,
+                        output_path=audio_output_path,
+                        scene_plan=scene_plan_obj,
+                        cancellation_check=check_cancellation,
+                        llm_specification=llm_spec,  # Pass LLM spec for sound_design
+                    )
+                    logger.info(f"[{generation_id}] Audio layer added successfully: {video_with_audio}")
+                except Exception as e:
+                    logger.warning(f"[{generation_id}] Audio layer addition failed: {e}. Continuing without audio.")
+                    # Fallback: use stitched video without audio
+                    video_with_audio = stitched_video_path
+                
+                # Check cancellation before brand overlay
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before brand overlay")
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
+                    return
+                
+                # Brand Overlay Stage (after audio, before export)
+                logger.info(f"[{generation_id}] Adding brand overlay to final video...")
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=92,
+                    current_step="Adding brand overlay"
                 )
-                logger.info(f"[{generation_id}] Audio layer added successfully: {video_with_audio}")
+                
+                # ALWAYS prioritize user-provided brand name
+                # Only extract from prompt if user did NOT provide a brand name
+                if brand_name:
+                    logger.info(f"[{generation_id}] Using user-provided brand name: {brand_name}")
+                else:
+                    # Only try extraction if user didn't provide one
+                    extracted_brand = extract_brand_name(prompt)
+                    if extracted_brand:
+                        brand_name = extracted_brand
+                        logger.info(f"[{generation_id}] Extracted brand name from prompt: {brand_name}")
+                    else:
+                        logger.info(f"[{generation_id}] No brand name provided and none found in prompt - skipping brand overlay")
+                
+                # Add brand overlay if brand name found (with error handling)
+                if brand_name:
+                    try:
+                        brand_overlay_output_path = str(Path(audio_output_dir) / "with_brand_overlay.mp4")
+                        video_with_brand = add_brand_overlay_to_final_video(
+                            video_path=video_with_audio,
+                            brand_name=brand_name,
+                            output_path=brand_overlay_output_path,
+                            duration=2.0  # Show brand for 2 seconds at the end
+                        )
+                        logger.info(f"[{generation_id}] Brand overlay added successfully: {video_with_brand}")
+                        video_for_export = video_with_brand
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Brand overlay addition failed: {e}. Continuing without brand overlay.")
+                        video_for_export = video_with_audio  # Fallback to video without brand overlay
+                else:
+                    logger.info(f"[{generation_id}] No brand name found in prompt, skipping brand overlay")
+                    video_for_export = video_with_audio
                 
                 # Check cancellation before export
                 if check_cancellation():
@@ -605,7 +1208,7 @@ async def process_generation(
                 logger.info(f"[{generation_id}] Exporting to: {output_base_dir}")
                 
                 video_url, thumbnail_url = export_final_video(
-                    video_path=video_with_audio,
+                    video_path=video_for_export,
                     brand_style=brand_style,
                     output_dir=output_base_dir,
                     generation_id=generation_id,
@@ -702,18 +1305,33 @@ async def process_generation(
                 error_message=str(e)
             )
         except Exception as e:
-            logger.error(f"Unexpected error in generation {generation_id}: {e}", exc_info=True)
+            logger.error(f"[{generation_id}] ========== UNEXPECTED ERROR ==========")
+            logger.error(f"[{generation_id}] Exception type: {type(e).__name__}")
+            logger.error(f"[{generation_id}] Exception message: {str(e)}")
+            logger.error(f"[{generation_id}] Full traceback:", exc_info=True)
+            
+            # Create user-friendly error message
+            error_str = str(e)
+            logger.error(f"[{generation_id}] Error string: {error_str}")
+            if "refused" in error_str.lower() or "content filtering" in error_str.lower():
+                user_error = "The AI model refused to process this request. This may be due to content filtering. Please try rephrasing your prompt or using different wording."
+            elif "storyboard planning failed" in error_str.lower():
+                user_error = f"Failed to create storyboard: {error_str}. Please try again with a different prompt."
+            else:
+                user_error = f"Generation failed: {error_str[:200]}"  # Truncate long errors
+            
             update_generation_progress(
                 db=db,
                 generation_id=generation_id,
                 progress=0,
-                status="failed"
+                status="failed",
+                current_step="Error occurred"
             )
             update_generation_status(
                 db=db,
                 generation_id=generation_id,
                 status="failed",
-                error_message=str(e)
+                error_message=user_error
             )
     finally:
         db.close()
@@ -741,7 +1359,18 @@ async def create_generation(
         HTTPException: 422 if validation fails (handled by FastAPI)
         HTTPException: 500 if LLM or scene planning fails
     """
-    logger.info(f"Creating generation for user {current_user.id}, prompt length: {len(request.prompt)}")
+    logger.info(f"========== /api/generate ENDPOINT CALLED ==========")
+    logger.info(f"User ID: {current_user.id}")
+    logger.info(f"Request received:")
+    logger.info(f"  - prompt length: {len(request.prompt)}")
+    logger.info(f"  - prompt preview: {request.prompt[:100]}...")
+    logger.info(f"  - title: {request.title}")
+    logger.info(f"  - model: {request.model}")
+    logger.info(f"  - target_duration: {request.target_duration}")
+    logger.info(f"  - use_llm: {request.use_llm}")
+    logger.info(f"  - coherence_settings: {request.coherence_settings}")
+    logger.info(f"  - refinement_instructions: {request.refinement_instructions}")
+    logger.info(f"  - brand_name: {request.brand_name}")
     
     # Process coherence settings: apply defaults if not provided, validate if provided
     coherence_settings_dict = None
@@ -780,15 +1409,19 @@ async def create_generation(
     logger.info(f"Created generation {generation_id}")
     
     # Add background task to process the generation
-    # Pass model, num_clips, and use_llm if specified
+    # Pass model, target_duration, use_llm, refinement_instructions, and brand_name if specified
     background_tasks.add_task(
-        process_generation, 
-        generation_id, 
+        process_generation,
+        generation_id,
         request.prompt,
         request.model,
-        request.num_clips,
-        request.use_llm if request.use_llm is not None else True
+        request.target_duration,  # Use target_duration instead of num_clips
+        request.use_llm if request.use_llm is not None else True,
+        None,  # image_path (for /api/generate endpoint, no image)
+        request.refinement_instructions,  # Pass refinement instructions
+        request.brand_name,  # Pass brand name if provided
     )
+    logger.info(f"[{generation_id}] ✅ Background task added successfully")
     
     return GenerateResponse(
         generation_id=generation_id,
@@ -948,20 +1581,16 @@ async def create_parallel_generation(
             generation_ids.append(generation.id)
             logger.info(f"Created generation {generation.id} for variation {i+1}")
             
-            # Start generation task concurrently using asyncio
-            # This allows true parallel processing instead of sequential BackgroundTasks
-            # The task will run in the background even after the response is sent
             # Extract per-variation settings
             variation_model = variation.model if hasattr(variation, 'model') else None
-            variation_num_clips = variation.num_clips if hasattr(variation, 'num_clips') else None
+            variation_target_duration = variation.target_duration if hasattr(variation, 'target_duration') else None
             variation_use_llm = variation.use_llm if hasattr(variation, 'use_llm') else True
+            variation_brand_name = variation.brand_name if hasattr(variation, 'brand_name') else None
             
             # Determine if this is single clip generation (bypass pipeline)
-            # Single clip mode: model is required, num_clips is set, and use_llm is False
+            # Single clip mode: model is required and use_llm is False (target_duration not used for single clip)
             is_single_clip = (
                 variation_model is not None and 
-                variation_num_clips is not None and 
-                variation_num_clips > 0 and
                 variation_use_llm is False
             )
             
@@ -972,22 +1601,29 @@ async def create_parallel_generation(
                     errors.append(f"Variation {i+1}: Invalid model for single clip generation")
                     continue
                 
-                asyncio.create_task(process_single_clip_generation(
+                # Single clip generation still uses num_clips (legacy function)
+                # Default to 1 clip for single clip mode
+                background_tasks.add_task(
+                    process_single_clip_generation,
                     generation.id,
                     variation.prompt,
                     variation_model,
-                    variation_num_clips
-                ))
+                    1  # Single clip mode always generates 1 clip
+                )
                 logger.info(f"Started single clip generation task for generation {generation.id} (variation {i+1})")
             else:
                 # Use full pipeline generation
-                asyncio.create_task(process_generation(
+                background_tasks.add_task(
+                    process_generation,
                     generation.id, 
                     variation.prompt,
-                    preferred_model=variation_model,
-                    num_clips=variation_num_clips,
-                    use_llm=variation_use_llm
-                ))
+                    variation_model,  # preferred_model
+                    variation_target_duration,  # target_duration
+                    variation_use_llm,  # use_llm
+                    None,  # image_path
+                    None,  # refinement_instructions
+                    variation_brand_name,  # brand_name
+                )
                 logger.info(f"Started full pipeline generation task for generation {generation.id} (variation {i+1})")
             
         except Exception as e:
@@ -1159,25 +1795,173 @@ async def get_generation_status(
         if relative_path.startswith("http://") or relative_path.startswith("https://"):
             return relative_path
         
+        # Normalize path: convert backslashes to forward slashes (handle Windows paths)
+        normalized_path = relative_path.replace("\\", "/")
+        
         # If storage mode is S3, generate presigned URL
         if settings.STORAGE_MODE == "s3":
             try:
                 from app.services.storage.s3_storage import get_s3_storage
                 s3_storage = get_s3_storage()
                 # Generate presigned URL (expires in 1 hour)
-                presigned_url = s3_storage.generate_presigned_url(relative_path, expiration=3600)
+                presigned_url = s3_storage.generate_presigned_url(normalized_path, expiration=3600)
                 return presigned_url
             except Exception as e:
-                logger.warning(f"Failed to generate presigned URL for {relative_path}: {e}, falling back to static URL")
+                logger.warning(f"Failed to generate presigned URL for {normalized_path}: {e}, falling back to static URL")
                 # Fall back to static URL if S3 fails
                 base_url = settings.STATIC_BASE_URL.rstrip("/")
-                path = relative_path.lstrip("/")
+                # Remove "output/" prefix if present (since base_url already includes /output)
+                path = normalized_path.lstrip("/")
+                if path.startswith("output/"):
+                    path = path[7:]  # Remove "output/" prefix
                 return f"{base_url}/{path}"
         else:
             # Convert relative path to full URL (local storage)
+            # Static files are mounted at /output, so paths like "output/temp/images/..." 
+            # should become "http://localhost:8000/output/temp/images/..."
             base_url = settings.STATIC_BASE_URL.rstrip("/")
-            path = relative_path.lstrip("/")
+            # Remove "output/" prefix if present (since base_url already includes /output)
+            path = normalized_path.lstrip("/")
+            if path.startswith("output/"):
+                path = path[7:]  # Remove "output/" prefix (7 chars: "output/")
             return f"{base_url}/{path}"
+    
+    # Extract storyboard plan from coherence_settings and convert image paths to URLs
+    storyboard_plan = None
+    if generation.coherence_settings:
+        # Log coherence_settings structure for debugging
+        logger.debug(f"[{generation_id}] coherence_settings type: {type(generation.coherence_settings)}, keys: {list(generation.coherence_settings.keys()) if isinstance(generation.coherence_settings, dict) else 'N/A'}")
+        
+        if isinstance(generation.coherence_settings, dict) and "storyboard_plan" in generation.coherence_settings:
+            storyboard_plan_data = generation.coherence_settings["storyboard_plan"]
+            
+            # Handle case where storyboard_plan might be stored as a string (JSON)
+            if isinstance(storyboard_plan_data, str):
+                try:
+                    import json
+                    storyboard_plan_data = json.loads(storyboard_plan_data)
+                except json.JSONDecodeError:
+                    logger.warning(f"[{generation_id}] Failed to parse storyboard_plan JSON string")
+                    storyboard_plan_data = None
+            
+            if storyboard_plan_data:
+                # Deep copy to preserve all fields including llm_input, llm_output, and all scene prompts
+                import copy
+                storyboard_plan = copy.deepcopy(storyboard_plan_data) if isinstance(storyboard_plan_data, dict) else storyboard_plan_data
+                
+                # Convert image paths to public URLs for each scene (preserve all other fields)
+                if isinstance(storyboard_plan, dict) and "scenes" in storyboard_plan:
+                    for scene in storyboard_plan["scenes"]:
+                        if isinstance(scene, dict):
+                            # Convert image paths to URLs (add URL fields without removing path fields)
+                            if "reference_image_path" in scene and scene["reference_image_path"]:
+                                scene["reference_image_url"] = get_public_path(scene["reference_image_path"])
+                            if "start_image_path" in scene and scene["start_image_path"]:
+                                scene["start_image_url"] = get_public_path(scene["start_image_path"])
+                            if "end_image_path" in scene and scene["end_image_path"]:
+                                scene["end_image_url"] = get_public_path(scene["end_image_path"])
+                
+                # Ensure llm_input and llm_output are preserved (they should be from deepcopy, but verify)
+                logger.debug(f"[{generation_id}] Storyboard plan keys: {list(storyboard_plan.keys()) if isinstance(storyboard_plan, dict) else 'N/A'}")
+                if isinstance(storyboard_plan, dict):
+                    if "llm_input" in storyboard_plan:
+                        logger.debug(f"[{generation_id}] LLM input present in storyboard_plan")
+                    if "llm_output" in storyboard_plan:
+                        logger.debug(f"[{generation_id}] LLM output present in storyboard_plan")
+                    # Log scene prompt fields for debugging
+                    if "scenes" in storyboard_plan:
+                        for idx, scene in enumerate(storyboard_plan["scenes"]):
+                            if isinstance(scene, dict):
+                                scene_keys = list(scene.keys())
+                                logger.debug(f"[{generation_id}] Scene {idx+1} keys: {scene_keys}")
+                                if "video_generation_prompt" in scene:
+                                    logger.debug(f"[{generation_id}] Scene {idx+1} has video_generation_prompt")
+                                if "reference_image_prompt" in scene:
+                                    logger.debug(f"[{generation_id}] Scene {idx+1} has reference_image_prompt")
+        else:
+            logger.debug(f"[{generation_id}] No storyboard_plan in coherence_settings. Available keys: {list(generation.coherence_settings.keys()) if isinstance(generation.coherence_settings, dict) else 'N/A'}")
+            
+            # Fallback: Try to reconstruct storyboard from scene_plan if it has image paths
+            # This helps with videos generated earlier that might have images but no storyboard_plan stored
+            if generation.scene_plan and isinstance(generation.scene_plan, dict):
+                scenes = generation.scene_plan.get("scenes", [])
+                if scenes and any(scene.get("reference_image_path") for scene in scenes if isinstance(scene, dict)):
+                    logger.info(f"[{generation_id}] Attempting to reconstruct storyboard from scene_plan")
+                    try:
+                        # Reconstruct a basic storyboard structure from scene_plan
+                        reconstructed_scenes = []
+                        consistency_markers = generation.coherence_settings.get("consistency_markers", {}) if generation.coherence_settings else {}
+                        
+                        for scene in scenes:
+                            if isinstance(scene, dict):
+                                reconstructed_scene = {
+                                    "scene_number": scene.get("scene_number", 0),
+                                    "aida_stage": scene.get("scene_type", "Scene"),
+                                    "detailed_prompt": scene.get("visual_prompt", ""),
+                                    "reference_image_path": scene.get("reference_image_path"),
+                                    "start_image_path": scene.get("start_image_path"),
+                                    "end_image_path": scene.get("end_image_path"),
+                                    "duration_seconds": scene.get("duration", 4),
+                                }
+                                reconstructed_scenes.append(reconstructed_scene)
+                        
+                        if reconstructed_scenes:
+                            storyboard_plan = {
+                                "consistency_markers": consistency_markers,
+                                "scenes": reconstructed_scenes
+                            }
+                            logger.info(f"[{generation_id}] Successfully reconstructed storyboard from scene_plan with {len(reconstructed_scenes)} scenes")
+                            
+                            # Convert image paths to public URLs
+                            for scene in storyboard_plan["scenes"]:
+                                if "reference_image_path" in scene and scene["reference_image_path"]:
+                                    scene["reference_image_url"] = get_public_path(scene["reference_image_path"])
+                                if "start_image_path" in scene and scene["start_image_path"]:
+                                    scene["start_image_url"] = get_public_path(scene["start_image_path"])
+                                if "end_image_path" in scene and scene["end_image_path"]:
+                                    scene["end_image_url"] = get_public_path(scene["end_image_path"])
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Failed to reconstruct storyboard from scene_plan: {e}")
+    else:
+        logger.debug(f"[{generation_id}] coherence_settings is None or empty")
+        
+        # Fallback: Try to reconstruct from scene_plan even if coherence_settings is None
+        if generation.scene_plan and isinstance(generation.scene_plan, dict):
+            scenes = generation.scene_plan.get("scenes", [])
+            if scenes and any(scene.get("reference_image_path") for scene in scenes if isinstance(scene, dict)):
+                logger.info(f"[{generation_id}] Attempting to reconstruct storyboard from scene_plan (no coherence_settings)")
+                try:
+                    reconstructed_scenes = []
+                    for scene in scenes:
+                        if isinstance(scene, dict):
+                            reconstructed_scene = {
+                                "scene_number": scene.get("scene_number", 0),
+                                "aida_stage": scene.get("scene_type", "Scene"),
+                                "detailed_prompt": scene.get("visual_prompt", ""),
+                                "reference_image_path": scene.get("reference_image_path"),
+                                "start_image_path": scene.get("start_image_path"),
+                                "end_image_path": scene.get("end_image_path"),
+                                "duration_seconds": scene.get("duration", 4),
+                            }
+                            reconstructed_scenes.append(reconstructed_scene)
+                    
+                    if reconstructed_scenes:
+                        storyboard_plan = {
+                            "consistency_markers": {},
+                            "scenes": reconstructed_scenes
+                        }
+                        logger.info(f"[{generation_id}] Successfully reconstructed storyboard from scene_plan with {len(reconstructed_scenes)} scenes")
+                        
+                        # Convert image paths to public URLs
+                        for scene in storyboard_plan["scenes"]:
+                            if "reference_image_path" in scene and scene["reference_image_path"]:
+                                scene["reference_image_url"] = get_public_path(scene["reference_image_path"])
+                            if "start_image_path" in scene and scene["start_image_path"]:
+                                scene["start_image_url"] = get_public_path(scene["start_image_path"])
+                            if "end_image_path" in scene and scene["end_image_path"]:
+                                scene["end_image_url"] = get_public_path(scene["end_image_path"])
+                except Exception as e:
+                    logger.warning(f"[{generation_id}] Failed to reconstruct storyboard from scene_plan: {e}")
     
     return StatusResponse(
         generation_id=generation.id,
@@ -1189,7 +1973,8 @@ async def get_generation_status(
         error=generation.error_message,
         num_scenes=generation.num_scenes,
         available_clips=available_clips,
-        seed_value=generation.seed_value
+        seed_value=generation.seed_value,
+        storyboard_plan=storyboard_plan
     )
 
 
@@ -1361,9 +2146,14 @@ async def get_comparison_group(
         # If already a full URL, return as-is
         if relative_path.startswith("http://") or relative_path.startswith("https://"):
             return relative_path
+        # Normalize path: convert backslashes to forward slashes (handle Windows paths)
+        normalized_path = relative_path.replace("\\", "/")
         # Convert relative path to full URL
         base_url = settings.STATIC_BASE_URL.rstrip("/")
-        path = relative_path.lstrip("/")
+        # Remove "output/" prefix if present (since base_url already includes /output)
+        path = normalized_path.lstrip("/")
+        if path.startswith("output/"):
+            path = path[7:]  # Remove "output/" prefix
         return f"{base_url}/{path}"
     
     # Build variations list
@@ -1529,13 +2319,23 @@ async def get_generations(
             except Exception as e:
                 logger.warning(f"Failed to generate presigned URL for {relative_path}: {e}, falling back to static URL")
                 # Fall back to static URL if S3 fails
+                # Normalize path: convert backslashes to forward slashes
+                normalized_path = relative_path.replace("\\", "/")
                 base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
-                path = relative_path.lstrip("/")
+                # Remove "output/" prefix if present (since base_url already includes /output)
+                path = normalized_path.lstrip("/")
+                if path.startswith("output/"):
+                    path = path[7:]  # Remove "output/" prefix
                 return f"{base_url}/{path}" if base_url else relative_path
         else:
             # Convert relative path to full URL (local storage or S3 with skip_s3=True)
+            # Normalize path: convert backslashes to forward slashes
+            normalized_path = relative_path.replace("\\", "/")
             base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
-            path = relative_path.lstrip("/")
+            # Remove "output/" prefix if present (since base_url already includes /output)
+            path = normalized_path.lstrip("/")
+            if path.startswith("output/"):
+                path = path[7:]  # Remove "output/" prefix
             return f"{base_url}/{path}" if base_url else relative_path
     
     # Pre-fetch variation labels for all generations in groups (optimize N+1 queries)
@@ -1684,12 +2484,22 @@ async def get_generation(
                 return presigned_url
             except Exception as e:
                 logger.warning(f"Failed to generate presigned URL for {relative_path}: {e}, falling back to static URL")
+                # Normalize path: convert backslashes to forward slashes
+                normalized_path = relative_path.replace("\\", "/")
                 base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
-                path = relative_path.lstrip("/")
+                # Remove "output/" prefix if present (since base_url already includes /output)
+                path = normalized_path.lstrip("/")
+                if path.startswith("output/"):
+                    path = path[7:]  # Remove "output/" prefix
                 return f"{base_url}/{path}" if base_url else relative_path
         else:
+            # Normalize path: convert backslashes to forward slashes
+            normalized_path = relative_path.replace("\\", "/")
             base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
-            path = relative_path.lstrip("/")
+            # Remove "output/" prefix if present (since base_url already includes /output)
+            path = normalized_path.lstrip("/")
+            if path.startswith("output/"):
+                path = path[7:]  # Remove "output/" prefix
             return f"{base_url}/{path}" if base_url else relative_path
     
     # Calculate variation label if part of a parallel generation group
@@ -1989,12 +2799,13 @@ async def create_single_clip_generation(
     logger.info(f"Created single clip generation {generation_id}")
     
     # Add background task to process the single clip generation
+    # Single clip generation always generates 1 clip (legacy function still uses num_clips parameter)
     background_tasks.add_task(
         process_single_clip_generation,
         generation_id,
         request.prompt,
         request.model,
-        request.num_clips or 1
+        1  # Single clip mode always generates 1 clip
     )
     
     # Return immediately - processing happens in background
@@ -2076,6 +2887,11 @@ async def process_single_clip_generation(
                 
                 logger.info(f"[{generation_id}] Starting clip {clip_index}/{num_clips} with model {model_name}")
                 
+                # Retrieve consistency markers if available
+                markers = None
+                if generation.coherence_settings and "consistency_markers" in generation.coherence_settings:
+                    markers = generation.coherence_settings["consistency_markers"]
+                
                 clip_path, model_used = await generate_video_clip_with_model(
                     prompt=prompt,
                     duration=duration,
@@ -2083,7 +2899,8 @@ async def process_single_clip_generation(
                     generation_id=generation_id,
                     model_name=model_name,
                     cancellation_check=check_cancellation,
-                    clip_index=clip_index
+                    clip_index=clip_index,
+                    consistency_markers=markers,  # Pass shared markers for cohesion
                 )
                 
                 clip_cost = MODEL_COSTS.get(model_used, 0.05) * duration

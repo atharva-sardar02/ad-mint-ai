@@ -11,7 +11,7 @@ import { ErrorMessage } from "../ui/ErrorMessage";
 import { CoherenceSettingsPanel, validateCoherenceSettings } from "../coherence";
 import type { CoherenceSettings as CoherenceSettingsType } from "../coherence";
 import type { GenerateRequest } from "../../lib/generationService";
-import { VIDEO_MODELS } from "../../lib/models/videoModels";
+import { VIDEO_MODELS, DEFAULT_MODEL, getDefaultModelLabel } from "../../lib/models/videoModels";
 
 /**
  * Tooltip component for help text.
@@ -100,8 +100,9 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
   // Per-variation settings (shared across both comparison modes)
   const [useSingleClip, setUseSingleClip] = useState<boolean[]>([false, false]);
   const [useLlm, setUseLlm] = useState<boolean[]>([true, true]);
-  const [model, setModel] = useState<string[]>(["", ""]);
-  const [numClips, setNumClips] = useState<number[]>([1, 1]);
+  const [model, setModel] = useState<string[]>(["", ""]); // Empty string means use default (Kling 2.5 Turbo Pro)
+  const [targetDuration, setTargetDuration] = useState<number[]>([15, 15]); // Default to 15 seconds
+  const [brandName, setBrandName] = useState<string>(""); // Brand name (shared across all variations)
   
   // Collapsible basic settings state (collapsed by default for each variation)
   const [basicSettingsExpanded, setBasicSettingsExpanded] = useState<Record<number, boolean>>({});
@@ -136,18 +137,18 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
       // Add new default values
       const newSingleClip = Array.from({ length: variationCount - currentCount }, () => false);
       const newUseLlm = Array.from({ length: variationCount - currentCount }, () => true);
-      const newModel = Array.from({ length: variationCount - currentCount }, () => "");
-      const newNumClips = Array.from({ length: variationCount - currentCount }, () => 1);
+      const newModel = Array.from({ length: variationCount - currentCount }, () => ""); // Empty = default (Kling 2.5 Turbo Pro)
+      const newTargetDuration = Array.from({ length: variationCount - currentCount }, () => 15); // Default to 15 seconds
       setUseSingleClip([...useSingleClip, ...newSingleClip]);
       setUseLlm([...useLlm, ...newUseLlm]);
       setModel([...model, ...newModel]);
-      setNumClips([...numClips, ...newNumClips]);
+      setTargetDuration([...targetDuration, ...newTargetDuration]);
     } else if (variationCount < currentCount) {
       // Remove excess values
       setUseSingleClip(useSingleClip.slice(0, variationCount));
       setUseLlm(useLlm.slice(0, variationCount));
       setModel(model.slice(0, variationCount));
-      setNumClips(numClips.slice(0, variationCount));
+      setTargetDuration(targetDuration.slice(0, variationCount));
     }
   }, [variationCount]);
 
@@ -238,9 +239,10 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
           prompt: settingsPrompt,
           title: variationTitle,
           coherence_settings: profile,
-          model: model[index] || undefined,
-          num_clips: useSingleClip[index] ? (numClips[index] || 1) : undefined,
+          model: model[index] || undefined, // Empty string means use default (Kling 2.5 Turbo Pro)
+          target_duration: targetDuration[index] || 15, // Default to 15 seconds
           use_llm: useSingleClip[index] ? false : (useLlm[index] ?? true),
+          brand_name: brandName || undefined, // Add brand name if provided
         };
       });
     } else {
@@ -252,9 +254,10 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
           prompt,
           title: variationTitle,
           coherence_settings: promptSettings[index] || getDefaultCoherenceSettings(),
-          model: model[index] || undefined,
-          num_clips: useSingleClip[index] ? (numClips[index] || 1) : undefined,
+          model: model[index] || undefined, // Empty string means use default (Kling 2.5 Turbo Pro)
+          target_duration: targetDuration[index] || 15, // Default to 15 seconds
           use_llm: useSingleClip[index] ? false : (useLlm[index] ?? true),
+          brand_name: brandName || undefined, // Add brand name if provided
         };
       });
     }
@@ -331,10 +334,10 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
     setModel(newValues);
   };
 
-  const updateNumClips = (index: number, value: number) => {
-    const newValues = [...numClips];
+  const updateTargetDuration = (index: number, value: number) => {
+    const newValues = [...targetDuration];
     newValues[index] = value;
-    setNumClips(newValues);
+    setTargetDuration(newValues);
   };
 
   return (
@@ -439,6 +442,25 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
               )}
             </div>
 
+            {/* Brand Name (shared across all variations) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Brand Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={brandName}
+                onChange={(e) => setBrandName(e.target.value)}
+                placeholder="e.g., Nike, Apple, Coca-Cola"
+                maxLength={50}
+                disabled={isLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Brand name will be displayed at the end of all variations. If not provided, the system will attempt to extract it from the prompt.
+              </p>
+            </div>
+
             {/* Multiple Settings Profiles */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-4">
@@ -539,23 +561,33 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
                             onChange={(e) => updateModel(index, e.target.value)}
                             disabled={isLoading}
                             required={useSingleClip[index]}
-                            placeholder={useSingleClip[index] ? "Select a model (required)" : "Auto (use default)"}
+                            placeholder={useSingleClip[index] ? "Select a model (required)" : undefined}
                           />
                         </div>
 
-                        {/* Number of Clips */}
+                        {/* Target Duration */}
                         <div>
                           <Select
-                            label="Number of Clips"
-                            id={`numClips_${index}`}
-                            value={numClips[index].toString()}
-                            onChange={(e) => updateNumClips(index, parseInt(e.target.value, 10))}
+                            label="Target Duration (seconds)"
+                            id={`targetDuration_${index}`}
+                            value={targetDuration[index].toString()}
+                            onChange={(e) => updateTargetDuration(index, parseInt(e.target.value, 10))}
                             disabled={isLoading}
-                            options={Array.from({ length: 10 }, (_, i) => ({
-                              value: (i + 1).toString(),
-                              label: (i + 1).toString(),
-                            }))}
+                            options={[
+                              { value: "9", label: "9 seconds" },
+                              { value: "12", label: "12 seconds" },
+                              { value: "15", label: "15 seconds (default)" },
+                              { value: "18", label: "18 seconds" },
+                              { value: "21", label: "21 seconds" },
+                              { value: "24", label: "24 seconds" },
+                              { value: "30", label: "30 seconds" },
+                              { value: "45", label: "45 seconds" },
+                              { value: "60", label: "60 seconds" },
+                            ]}
                           />
+                          <p className="mt-1 text-xs text-gray-500">
+                            LLM will decide number of scenes and duration per scene (max 7s per scene)
+                          </p>
                         </div>
                           </div>
                         )}
@@ -578,6 +610,25 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
         {/* Prompt Comparison Mode */}
         {comparisonType === "prompt" && (
           <div className="space-y-6">
+            {/* Brand Name (shared across all prompt variations) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Brand Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={brandName}
+                onChange={(e) => setBrandName(e.target.value)}
+                placeholder="e.g., Nike, Apple, Coca-Cola"
+                maxLength={50}
+                disabled={isLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Brand name will be displayed at the end of all variations. If not provided, the system will attempt to extract it from the prompt.
+              </p>
+            </div>
+
             {/* Multiple Prompts */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-4">
@@ -705,23 +756,33 @@ export const ParallelGenerationPanel: React.FC<ParallelGenerationPanelProps> = (
                             onChange={(e) => updateModel(index, e.target.value)}
                             disabled={isLoading}
                             required={useSingleClip[index]}
-                            placeholder={useSingleClip[index] ? "Select a model (required)" : "Auto (use default)"}
+                            placeholder={useSingleClip[index] ? "Select a model (required)" : undefined}
                           />
                         </div>
 
-                        {/* Number of Clips */}
+                        {/* Target Duration */}
                         <div>
                           <Select
-                            label="Number of Clips"
-                            id={`numClips_prompt_${index}`}
-                            value={numClips[index].toString()}
-                            onChange={(e) => updateNumClips(index, parseInt(e.target.value, 10))}
+                            label="Target Duration (seconds)"
+                            id={`targetDuration_prompt_${index}`}
+                            value={targetDuration[index].toString()}
+                            onChange={(e) => updateTargetDuration(index, parseInt(e.target.value, 10))}
                             disabled={isLoading}
-                            options={Array.from({ length: 10 }, (_, i) => ({
-                              value: (i + 1).toString(),
-                              label: (i + 1).toString(),
-                            }))}
+                            options={[
+                              { value: "9", label: "9 seconds" },
+                              { value: "12", label: "12 seconds" },
+                              { value: "15", label: "15 seconds (default)" },
+                              { value: "18", label: "18 seconds" },
+                              { value: "21", label: "21 seconds" },
+                              { value: "24", label: "24 seconds" },
+                              { value: "30", label: "30 seconds" },
+                              { value: "45", label: "45 seconds" },
+                              { value: "60", label: "60 seconds" },
+                            ]}
                           />
+                          <p className="mt-1 text-xs text-gray-500">
+                            LLM will decide number of scenes and duration per scene (max 7s per scene)
+                          </p>
                         </div>
                           </div>
                         )}
