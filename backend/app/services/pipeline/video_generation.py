@@ -16,10 +16,10 @@ from app.schemas.generation import Scene, ScenePlan
 logger = logging.getLogger(__name__)
 
 # Replicate model configurations
-# Default model: Sora 2 (OpenAI) - State-of-the-art realism with exceptional physics
+# Default model: Kling 2.5 Turbo Pro - Fast cinematic quality with reference/start/end image support
 # Top models ranked by quality: Sora 2, Veo 3, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
-    "default": "openai/sora-2",  # Sora 2 - Recommended default
+    "default": "kwaivgi/kling-v2.5-turbo-pro",  # Kling 2.5 Turbo Pro - Default with start/end image support
     "veo_3": "google/veo-3",
     "pixverse_v5": "pixverse/pixverse-v5",
     "kling_2_5": "kwaivgi/kling-v2.5-turbo-pro",  # Kling 2.5 Turbo Pro on Replicate
@@ -261,13 +261,13 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: preferred_model (if specified) -> default (Sora 2) -> fallback chain
+    # Try models in order: preferred_model (if specified) -> default (Kling 2.5 Turbo Pro) -> fallback chain
     models_to_try = []
     if preferred_model and preferred_model in MODEL_COSTS:
         models_to_try.append(preferred_model)
         logger.info(f"Using preferred model: {preferred_model}")
     else:
-        # Use Sora 2 as default when no model is specified
+        # Use Kling 2.5 Turbo Pro as default when no model is specified
         models_to_try.append(REPLICATE_MODELS["default"])
         logger.info(f"Using default model: {REPLICATE_MODELS['default']}")
     
@@ -441,6 +441,8 @@ async def _generate_with_retry(
                 logger.info("=" * 80)
                 # If a reference image is available, pass it as media so Sora can
                 # condition on the actual product visuals instead of inferred text.
+                # NOTE: Sora-2 only supports reference_image parameter, not start_image or end_image.
+                # For models that support start/end images (like Kling 2.5 Turbo Pro), see the Kling section below.
                 if reference_image_path:
                     try:
                         # Verify file exists and is accessible
@@ -497,6 +499,18 @@ async def _generate_with_retry(
                     "duration": veo_duration,
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
+                # Veo-3 supports reference image for style/character consistency
+                if reference_image_path:
+                    try:
+                        ref_image_path_obj = Path(reference_image_path)
+                        if ref_image_path_obj.exists():
+                            ref_file_handle = open(ref_image_path_obj, "rb")
+                            input_params["image"] = ref_file_handle
+                            file_handles_to_close.append(ref_file_handle)
+                            logger.info(f"✅ Attached reference image for Veo-3: {reference_image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load reference image for Veo-3: {e}")
+                # Note: Veo-3 does not support start_image or end_image parameters
             elif model_name == "pixverse/pixverse-v5":
                 # PixVerse requires quality as resolution string: "360p", "540p", "720p", "1080p"
                 input_params = {
@@ -505,6 +519,18 @@ async def _generate_with_retry(
                     "aspect_ratio": "9:16",  # Vertical for MVP
                     "quality": "1080p",  # Use resolution string instead of "high"
                 }
+                # PixVerse supports reference image for style/character consistency
+                if reference_image_path:
+                    try:
+                        ref_image_path_obj = Path(reference_image_path)
+                        if ref_image_path_obj.exists():
+                            ref_file_handle = open(ref_image_path_obj, "rb")
+                            input_params["image"] = ref_file_handle
+                            file_handles_to_close.append(ref_file_handle)
+                            logger.info(f"✅ Attached reference image for PixVerse: {reference_image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load reference image for PixVerse: {e}")
+                # Note: PixVerse does not support start_image or end_image parameters
             elif model_name == "kwaivgi/kling-v2.5-turbo-pro":
                 # Kling 2.5 Turbo Pro supports reference image, start image, and end image
                 # Based on Replicate API: https://replicate.com/kwaivgi/kling-v2.5-turbo-pro
@@ -513,25 +539,17 @@ async def _generate_with_retry(
                 }
                 
                 # Kling 2.5 Turbo Pro supports multiple image inputs:
-                # - image: reference image (main scene image) - optional
-                # - start_image: first frame of the video - optional
-                # - end_image: last frame of the video - optional
-                # Note: duration and aspect_ratio may be auto-detected or have defaults
-                # If the model requires them, we'll add them based on actual API behavior
+                # - image: reference image (for style/character consistency) - optional
+                # - start_image: first frame of the video (REQUIRED for precise frame control) - optional
+                # - end_image: last frame of the video (REQUIRED for precise frame control) - optional
+                # 
+                # PRIORITY: When start_image and end_image are available, use them for frame control.
+                # Reference image can still be used for style consistency, but start/end images control the actual frames.
+                # 
+                # IMPORTANT: Each scene should have its OWN start_image and end_image (different frames),
+                # but they should share the same subject/style (maintained via reference_image and consistency markers).
                 
-                # Add reference image if available
-                if reference_image_path:
-                    try:
-                        ref_image_path_obj = Path(reference_image_path)
-                        if ref_image_path_obj.exists():
-                            ref_file_handle = open(ref_image_path_obj, "rb")
-                            input_params["image"] = ref_file_handle
-                            file_handles_to_close.append(ref_file_handle)
-                            logger.info(f"✅ Attached reference image for Kling 2.5 Turbo Pro: {reference_image_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to load reference image for Kling: {e}")
-                
-                # Add start image if available (first frame)
+                # PRIORITY 1: Add start image if available (controls the first frame - each scene has its own)
                 if start_image_path:
                     try:
                         start_image_path_obj = Path(start_image_path)
@@ -539,11 +557,15 @@ async def _generate_with_retry(
                             start_file_handle = open(start_image_path_obj, "rb")
                             input_params["start_image"] = start_file_handle
                             file_handles_to_close.append(start_file_handle)
-                            logger.info(f"✅ Attached start image for Kling 2.5 Turbo Pro: {start_image_path}")
+                            logger.info(f"✅ Attached start image for Kling 2.5 Turbo Pro (controls first frame): {start_image_path}")
+                        else:
+                            logger.warning(f"Start image not found: {start_image_path}")
                     except Exception as e:
                         logger.warning(f"Failed to load start image for Kling: {e}")
+                else:
+                    logger.info("No start image provided - Kling will generate first frame from prompt")
                 
-                # Add end image if available (last frame)
+                # PRIORITY 2: Add end image if available (controls the last frame - each scene has its own)
                 if end_image_path:
                     try:
                         end_image_path_obj = Path(end_image_path)
@@ -551,9 +573,32 @@ async def _generate_with_retry(
                             end_file_handle = open(end_image_path_obj, "rb")
                             input_params["end_image"] = end_file_handle
                             file_handles_to_close.append(end_file_handle)
-                            logger.info(f"✅ Attached end image for Kling 2.5 Turbo Pro: {end_image_path}")
+                            logger.info(f"✅ Attached end image for Kling 2.5 Turbo Pro (controls last frame): {end_image_path}")
+                        else:
+                            logger.warning(f"End image not found: {end_image_path}")
                     except Exception as e:
                         logger.warning(f"Failed to load end image for Kling: {e}")
+                else:
+                    logger.info("No end image provided - Kling will generate last frame from prompt")
+                
+                # PRIORITY 3: Add reference image if available (for style/character consistency, but doesn't override start/end frames)
+                # Only use reference image if start/end images are NOT available, or as a style guide
+                # Note: When start_image is provided, it controls the first frame, but reference_image can still help with style consistency
+                if reference_image_path:
+                    try:
+                        ref_image_path_obj = Path(reference_image_path)
+                        if ref_image_path_obj.exists():
+                            ref_file_handle = open(ref_image_path_obj, "rb")
+                            input_params["image"] = ref_file_handle
+                            file_handles_to_close.append(ref_file_handle)
+                            if start_image_path or end_image_path:
+                                logger.info(f"✅ Attached reference image for Kling 2.5 Turbo Pro (for style consistency, start/end images control frames): {reference_image_path}")
+                            else:
+                                logger.info(f"✅ Attached reference image for Kling 2.5 Turbo Pro (no start/end images, using as main reference): {reference_image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load reference image for Kling: {e}")
+                else:
+                    logger.info("No reference image provided - Kling will generate from prompt only")
                 
                 # Log what images are being used
                 scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"

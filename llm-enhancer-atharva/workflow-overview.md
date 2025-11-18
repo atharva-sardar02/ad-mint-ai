@@ -109,11 +109,12 @@ STEP 2: Image Generation (Nano Banana - Sequential)
     - Image 4: Enhanced prompt (detailed prompt + markers) + Image 3 reference
     - Enhanced prompts stored in storyboard plan for display
     ↓
-STEP 3: Video Generation (Sora-2/Veo-3/PixVerse - Parallel)
-    - Video 1: Detailed prompt + markers + Image 1 reference
-    - Video 2: Detailed prompt + markers + Image 2 reference
-    - Video 3: Detailed prompt + markers + Image 3 reference
-    - Video 4: Detailed prompt + markers + Image 4 reference
+STEP 3: Video Generation (Kling 2.5 Turbo Pro - Parallel)
+    - Video 1: Detailed prompt + markers + Start image (UNIQUE first frame) + End image (UNIQUE last frame) + Reference (style only)
+    - Video 2: Detailed prompt + markers + Start image (DIFFERENT first frame) + End image (DIFFERENT last frame) + Reference (style only)
+    - Video 3: Detailed prompt + markers + Start image (DIFFERENT first frame) + End image (DIFFERENT last frame) + Reference (style only)
+    - Video 4: Detailed prompt + markers + Start image (DIFFERENT first frame) + End image (DIFFERENT last frame) + Reference (style only)
+    - CRITICAL: Each scene has UNIQUE start/end frames (different moments/poses), but shares subject/style via reference images and consistency markers
     ↓
 STEP 4: Video Assembly
     - Stitch clips with transitions

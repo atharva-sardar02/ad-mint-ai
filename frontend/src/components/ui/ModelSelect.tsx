@@ -4,7 +4,7 @@
 import React, { useId, useState } from "react";
 import { Select } from "./Select";
 import type { VideoModel } from "../../lib/models/videoModels";
-import { DEFAULT_MODEL } from "../../lib/models/videoModels";
+import { DEFAULT_MODEL, getDefaultModelLabel } from "../../lib/models/videoModels";
 
 export interface ModelSelectProps
   extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "options"> {
@@ -79,7 +79,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
   onChange,
   disabled = false,
   required = false,
-  placeholder = "Auto (use default)",
+  placeholder,
   className = "",
   id,
   ...props
@@ -93,9 +93,12 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
     label: model.label,
   }));
 
+  // Get default placeholder if not provided
+  const defaultPlaceholder = placeholder || `${getDefaultModelLabel()} (default)`;
+  
   // Add placeholder option
   const allOptions = [
-    { value: "", label: placeholder },
+    { value: "", label: defaultPlaceholder },
     ...options,
   ];
 

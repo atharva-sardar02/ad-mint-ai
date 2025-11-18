@@ -104,9 +104,17 @@ export const VIDEO_MODELS: VideoModel[] = [
 ];
 
 /**
- * Get the default model (Sora 2).
+ * Get the default model (Kling 2.5 Turbo Pro).
  */
-export const DEFAULT_MODEL = "openai/sora-2";
+export const DEFAULT_MODEL = "kwaivgi/kling-v2.5-turbo-pro";
+
+/**
+ * Get the default model label for display.
+ */
+export const getDefaultModelLabel = (): string => {
+  const defaultModel = VIDEO_MODELS.find((m) => m.value === DEFAULT_MODEL);
+  return defaultModel ? defaultModel.label : "Kling 2.5 Turbo Pro";
+};
 
 /**
  * Get model information by value.

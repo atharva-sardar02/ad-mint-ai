@@ -48,8 +48,17 @@ class GenerateRequest(BaseModel):
         description="Optional coherence technique settings. If not provided, defaults will be applied."
     )
     model: Optional[str] = Field(None, description="Specific model to use (optional, uses default fallback chain if not specified)")
-    num_clips: Optional[int] = Field(None, ge=1, le=10, description="Number of clips to generate (optional, uses scene plan if not specified)")
+    target_duration: Optional[int] = Field(None, ge=9, le=60, description="Target total video duration in seconds (default: 15). LLM will decide number of scenes and duration per scene (max 7s per scene)")
     use_llm: Optional[bool] = Field(True, description="Whether to use LLM enhancement (default: True)")
+    refinement_instructions: Optional[dict] = Field(
+        default=None,
+        description="Optional refinement instructions for storyboard. Dict mapping scene_number (int) to refinement instruction (str), or 'all' to refine all scenes. Example: {1: 'make lighting more dramatic', 2: 'add more product details', 'all': 'increase visual detail'}"
+    )
+    brand_name: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Optional brand name to display at the end of the video. If not provided, the system will attempt to extract it from the prompt."
+    )
 
 
 class StatusResponse(BaseModel):

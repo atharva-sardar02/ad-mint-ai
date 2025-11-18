@@ -97,10 +97,10 @@ flowchart LR
         Img3File --> VideoGen
         Img4File --> VideoGen
         
-        VideoGen -->|Parallel| V1["Video 1<br/>Sora-2/Veo-3<br/>Prompt 1 + Markers<br/>Ref: Img1"]
-        VideoGen -->|Parallel| V2["Video 2<br/>Sora-2/Veo-3<br/>Prompt 2 + Markers<br/>Ref: Img2"]
-        VideoGen -->|Parallel| V3["Video 3<br/>Sora-2/Veo-3<br/>Prompt 3 + Markers<br/>Ref: Img3"]
-        VideoGen -->|Parallel| V4["Video 4<br/>Sora-2/Veo-3<br/>Prompt 4 + Markers<br/>Ref: Img4"]
+        VideoGen -->|Parallel| V1["Video 1: Kling 2.5 Turbo Pro<br/>Prompt 1 + Markers<br/>Start: scene_1_start.png (UNIQUE frame)<br/>End: scene_1_end.png (UNIQUE frame)<br/>Ref: scene_1_ref.png (style only)"]
+        VideoGen -->|Parallel| V2["Video 2: Kling 2.5 Turbo Pro<br/>Prompt 2 + Markers<br/>Start: scene_2_start.png (DIFFERENT frame)<br/>End: scene_2_end.png (DIFFERENT frame)<br/>Ref: scene_2_ref.png (style only)"]
+        VideoGen -->|Parallel| V3["Video 3: Kling 2.5 Turbo Pro<br/>Prompt 3 + Markers<br/>Start: scene_3_start.png (DIFFERENT frame)<br/>End: scene_3_end.png (DIFFERENT frame)<br/>Ref: scene_3_ref.png (style only)"]
+        VideoGen -->|Parallel| V4["Video 4: Kling 2.5 Turbo Pro<br/>Prompt 4 + Markers<br/>Start: scene_4_start.png (DIFFERENT frame)<br/>End: scene_4_end.png (DIFFERENT frame)<br/>Ref: scene_4_ref.png (style only)"]
         
         V1 --> V1File[scene_1.mp4]
         V2 --> V2File[scene_2.mp4]
@@ -256,7 +256,12 @@ graph TB
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 3: Video Generation (Parallel with References)
+### Phase 3: Video Generation (Parallel with Start/End Images)
+
+**IMPORTANT**: For Kling 2.5 Turbo Pro (default model), each scene uses:
+- **Start Image**: Controls the FIRST FRAME (UNIQUE per scene - different starting moment)
+- **End Image**: Controls the LAST FRAME (UNIQUE per scene - different ending moment)
+- **Reference Image**: For style/character consistency (shared subject/style, but doesn't override frames)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -267,8 +272,10 @@ graph TB
 │  │ following their movement, vibrant colors, energetic   │  │
 │  │ atmosphere..." (from storyboard)                      │  │
 │  │ + Consistency Markers                                  │  │
-│  │ Reference: scene_1.png (generated reference image)    │  │
-│  │ Model: Sora-2 / Veo-3 / PixVerse                      │  │
+│  │ Start Image: scene_1_start.png (UNIQUE first frame)   │  │
+│  │ End Image: scene_1_end.png (UNIQUE last frame)        │  │
+│  │ Reference: scene_1_ref.png (style consistency only)   │  │
+│  │ Model: Kling 2.5 Turbo Pro (default)                 │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  Output: scene_1.mp4                                       │
 └─────────────────────────────────────────────────────────────┘
@@ -280,8 +287,10 @@ graph TB
 │  │ phone while jogging, close-up shot showing the        │  │
 │  │ fitness app interface, rule of thirds composition..." │  │
 │  │ + Consistency Markers                                  │  │
-│  │ Reference: scene_2.png (generated reference image)    │  │
-│  │ Model: Sora-2 / Veo-3 / PixVerse                      │  │
+│  │ Start Image: scene_2_start.png (DIFFERENT first frame) │  │
+│  │ End Image: scene_2_end.png (DIFFERENT last frame)     │  │
+│  │ Reference: scene_2_ref.png (style consistency only)   │  │
+│  │ Model: Kling 2.5 Turbo Pro (default)                 │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  Output: scene_2.mp4                                       │
 └─────────────────────────────────────────────────────────────┘
@@ -293,8 +302,10 @@ graph TB
 │  │ using fitness equipment, wide angle showing the        │  │
 │  │ environment, maintaining visual style..."              │  │
 │  │ + Consistency Markers                                  │  │
-│  │ Reference: scene_3.png (generated reference image)    │  │
-│  │ Model: Sora-2 / Veo-3 / PixVerse                      │  │
+│  │ Start Image: scene_3_start.png (DIFFERENT first frame) │  │
+│  │ End Image: scene_3_end.png (DIFFERENT last frame)     │  │
+│  │ Reference: scene_3_ref.png (style consistency only)   │  │
+│  │ Model: Kling 2.5 Turbo Pro (default)                 │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  Output: scene_3.mp4                                       │
 └─────────────────────────────────────────────────────────────┘

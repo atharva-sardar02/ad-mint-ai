@@ -2,7 +2,7 @@
 Scene planning module that processes LLM output and generates enriched scene plans.
 """
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.schemas.generation import AdSpecification, Scene, ScenePlan, TextOverlay
 
@@ -177,7 +177,7 @@ def _adjust_durations(scenes: List[Scene], target_duration: int) -> List[Scene]:
 def create_basic_scene_plan_from_prompt(
     prompt: str, 
     target_duration: int = 15,
-    num_scenes: int = 3
+    num_scenes: Optional[int] = None
 ) -> ScenePlan:
     """
     Create a basic scene plan directly from user prompt without LLM enhancement.
@@ -186,17 +186,26 @@ def create_basic_scene_plan_from_prompt(
     Args:
         prompt: User's text prompt
         target_duration: Target total duration in seconds (default: 15)
-        num_scenes: Number of scenes to create (default: 3, max 5)
+        num_scenes: Number of scenes to create (optional, will be calculated from target_duration if None)
     
     Returns:
         ScenePlan: Basic scene plan with scenes generated from prompt
     """
     logger.info(f"Creating basic scene plan from prompt (no LLM): {prompt[:100]}...")
     
-    # Limit num_scenes to valid range
-    num_scenes = max(3, min(5, num_scenes))
+    # If num_scenes not provided, calculate based on target_duration
+    # Aim for 4-5 seconds per scene on average, but respect max 7s per scene
+    if num_scenes is None:
+        # Calculate optimal number of scenes
+        # Try to use 4-5 seconds per scene, but can go up to 7s if needed
+        avg_duration = 4.5  # Target average duration per scene
+        num_scenes = max(3, min(8, round(target_duration / avg_duration)))
+        logger.info(f"Calculated {num_scenes} scenes for target duration {target_duration}s")
     
-    # Calculate duration per scene
+    # Limit num_scenes to valid range
+    num_scenes = max(3, min(8, num_scenes))
+    
+    # Calculate duration per scene (max 7 seconds per scene)
     duration_per_scene = max(3, min(7, target_duration // num_scenes))
     remaining_duration = target_duration - (duration_per_scene * (num_scenes - 1))
     
