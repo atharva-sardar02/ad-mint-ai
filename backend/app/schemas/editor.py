@@ -158,3 +158,11 @@ class UpdateClipPositionResponse(BaseModel):
     start_time: float = Field(..., description="New start time")
     track_index: int = Field(..., description="New track index")
     updated_state: dict = Field(..., description="Updated editing state")
+
+
+class DeleteClipResponse(BaseModel):
+    """Response schema for DELETE /api/editor/{generation_id}/clips/{clip_id} endpoint."""
+
+    message: str = Field(..., description="Success message")
+    clip_id: str = Field(..., description="ID of the deleted clip")
+    updated_state: dict = Field(..., description="Updated editing state")

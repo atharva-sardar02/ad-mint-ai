@@ -612,6 +612,80 @@ export async function saveEditingSession(
 }
 
 /**
+ * Delete a clip from the editing session.
+ *
+ * @param generationId - Generation ID to edit
+ * @param clipId - ID of the clip to delete
+ * @returns Promise resolving to delete response with updated state
+ * @throws {AuthError} If user is not authenticated (401)
+ * @throws {ForbiddenError} If user doesn't own the generation (403)
+ * @throws {NotFoundError} If generation/clip not found (404)
+ * @throws {NetworkError} If network request fails
+ */
+export async function deleteClip(
+  generationId: string,
+  clipId: string
+): Promise<{
+  message: string;
+  clip_id: string;
+  updated_state: any;
+}> {
+  try {
+    const response = await apiClient.delete<{
+      message: string;
+      clip_id: string;
+      updated_state: any;
+    }>(`/api/editor/${generationId}/clips/${clipId}`);
+
+    return response.data;
+  } catch (error: any) {
+    // Handle specific error cases
+    if (error.response) {
+      const status = error.response.status;
+      const apiError = error.response.data;
+
+      if (status === 401) {
+        throw new AuthError("Your session has expired. Please log in again.");
+      }
+
+      if (status === 403) {
+        throw new Error(
+          apiError?.error?.message || "You don't have permission to edit this video"
+        );
+      }
+
+      if (status === 404) {
+        throw new Error(
+          apiError?.error?.message || "Clip not found"
+        );
+      }
+
+      if (status === 400) {
+        throw new Error(
+          apiError?.error?.message || "Invalid clip deletion request"
+        );
+      }
+
+      // Other API errors
+      throw new Error(
+        apiError?.error?.message || "Failed to delete clip"
+      );
+    }
+
+    // Network errors
+    if (error instanceof NetworkError) {
+      throw error;
+    }
+
+    // Unknown errors
+    throw new NetworkError(
+      "Network error - please check your connection",
+      error
+    );
+  }
+}
+
+/**
  * Export edited video with all edits applied.
  *
  * @param generationId - Generation ID to export

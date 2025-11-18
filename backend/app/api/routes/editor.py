@@ -29,6 +29,7 @@ from app.schemas.editor import (
     ExportStatusResponse,
     UpdateClipPositionRequest,
     UpdateClipPositionResponse,
+    DeleteClipResponse,
     ClipInfo,
     EditingSessionListResponse,
     EditingSessionListItem,
@@ -42,6 +43,7 @@ from app.services.editor.trim_service import apply_trim_to_editing_session
 from app.services.editor.split_service import apply_split_to_editing_session
 from app.services.editor.merge_service import apply_merge_to_editing_session
 from app.services.editor.position_service import update_clip_position
+from app.services.editor.delete_service import delete_clip_from_editing_session
 from app.services.editor.save_service import save_editing_session
 from app.services.editor.export_service import export_edited_video, EXPORT_STAGES
 from app.services.pipeline.progress_tracking import update_generation_progress, update_generation_status
@@ -870,6 +872,119 @@ async def update_clip_position_endpoint(
             detail={
                 "error": {
                     "code": "INVALID_POSITION",
+                    "message": str(e)
+                }
+            }
+        )
+
+
+@router.delete("/editor/{generation_id}/clips/{clip_id}", response_model=DeleteClipResponse, status_code=status.HTTP_200_OK)
+async def delete_clip_endpoint(
+    generation_id: str,
+    clip_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> DeleteClipResponse:
+    """
+    Delete a clip from the editing session.
+    
+    This endpoint:
+    - Verifies user ownership of the generation
+    - Removes the specified clip from the editing session
+    - Returns updated editing state
+    
+    Args:
+        generation_id: UUID of the generation to edit
+        clip_id: ID of the clip to delete
+        current_user: Authenticated user (from JWT)
+        db: Database session
+        
+    Returns:
+        DeleteClipResponse with updated editing state
+        
+    Raises:
+        HTTPException: 404 if generation or clip not found
+        HTTPException: 403 if user doesn't own the generation
+    """
+    logger.info(
+        f"User {current_user.id} requesting deletion of clip {clip_id} "
+        f"in generation {generation_id}"
+    )
+    
+    # Load generation record
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    
+    if not generation:
+        logger.warning(f"Generation {generation_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "GENERATION_NOT_FOUND",
+                    "message": "Generation not found"
+                }
+            }
+        )
+    
+    # Verify user ownership
+    if generation.user_id != current_user.id:
+        logger.warning(
+            f"User {current_user.id} attempted to delete clip in generation {generation_id} "
+            f"owned by {generation.user_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You don't have permission to edit this generation"
+                }
+            }
+        )
+    
+    # Require an existing editing session
+    editing_session = (
+        db.query(EditingSession)
+        .filter(EditingSession.generation_id == generation_id)
+        .filter(EditingSession.user_id == current_user.id)
+        .first()
+    )
+    
+    if not editing_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "EDITING_SESSION_NOT_FOUND",
+                    "message": "Editing session not found"
+                }
+            },
+        )
+    
+    try:
+        # Delete the clip
+        updated_state = delete_clip_from_editing_session(
+            editing_session=editing_session,
+            clip_id=clip_id,
+            db=db
+        )
+        
+        logger.info(
+            f"Successfully deleted clip {clip_id} from generation {generation_id}"
+        )
+        
+        return DeleteClipResponse(
+            message="Clip deleted successfully",
+            clip_id=clip_id,
+            updated_state=updated_state,
+        )
+    except ValueError as e:
+        logger.warning(f"Invalid delete request for clip {clip_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "INVALID_CLIP",
                     "message": str(e)
                 }
             }

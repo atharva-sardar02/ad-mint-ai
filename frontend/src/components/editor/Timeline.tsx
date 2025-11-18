@@ -59,6 +59,8 @@ export interface TimelineProps {
   canUndo?: boolean;
   /** Whether redo is available */
   canRedo?: boolean;
+  /** Callback when clip is deleted */
+  onClipDelete?: (clipId: string) => void;
 }
 
 interface ClipPosition {
@@ -99,6 +101,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   trackAssignments = {},
   clipPositionOverrides = {},
   onAddTrack,
+  onClipDelete,
   onDeleteTrack,
   onClipTrackChange,
   onClipPositionChange,
@@ -921,6 +924,38 @@ export const Timeline: React.FC<TimelineProps> = ({
                     >
                       Scene {pos.clip.scene_number}
                     </text>
+                  )}
+
+                  {/* Delete Button - Show when selected */}
+                  {onClipDelete && effectiveSelectedClipIds.includes(pos.clip.clip_id) && pos.width > 40 && (
+                    <g
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClipDelete(pos.clip.clip_id);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {/* Delete button background circle */}
+                      <circle
+                        cx={pos.x + pos.width - 16}
+                        cy={clipY + 16}
+                        r={10}
+                        fill="#ef4444"
+                        stroke="#ffffff"
+                        strokeWidth={1.5}
+                      />
+                      {/* X icon */}
+                      <text
+                        x={pos.x + pos.width - 16}
+                        y={clipY + 21}
+                        fill="#ffffff"
+                        fontSize="14"
+                        fontWeight="bold"
+                        textAnchor="middle"
+                      >
+                        ×
+                      </text>
+                    </g>
                   )}
                 </g>
               );
