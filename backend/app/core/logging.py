@@ -52,16 +52,41 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO"):
     # Clear existing handlers
     root_logger.handlers.clear()
     
-    # Create formatter for structured logging
-    formatter = logging.Formatter(
+    # Create formatter for structured logging with colors
+    class ColoredFormatter(logging.Formatter):
+        """Custom formatter that adds colors to log levels."""
+        # ANSI color codes
+        COLORS = {
+            'DEBUG': '\033[36m',      # Cyan
+            'INFO': '\033[32m',       # Green
+            'WARNING': '\033[33m',    # Yellow
+            'ERROR': '\033[31m',      # Red
+            'CRITICAL': '\033[35m',   # Magenta
+        }
+        RESET = '\033[0m'
+        
+        def format(self, record):
+            # Add color to levelname
+            levelname = record.levelname
+            if levelname in self.COLORS:
+                record.levelname = f"{self.COLORS[levelname]}{levelname}{self.RESET}"
+            return super().format(record)
+    
+    # Use colored formatter for console, plain for file
+    console_formatter = ColoredFormatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # Console handler (always enabled)
+    plain_formatter = logging.Formatter(
+        fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Console handler (always enabled) with colors
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
     
     # File handler (production only)
@@ -75,7 +100,7 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO"):
             encoding='utf-8'
         )
         file_handler.setLevel(getattr(logging, log_level.upper()))
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(plain_formatter)  # No colors in file logs
         root_logger.addHandler(file_handler)
         
         logging.info(f"Logging to file: {log_file}")
@@ -87,6 +112,13 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO"):
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("boto3").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
+    
+    # HTTP client logging - suppress all HTTP request/response logs (even in verbose mode)
+    # Only show actual errors/warnings, not normal GET/POST requests
+    logging.getLogger("httpx").setLevel(logging.ERROR)  # Only errors, no GET/POST logs
+    logging.getLogger("httpcore").setLevel(logging.ERROR)  # Only errors, no GET/POST logs
+    logging.getLogger("httpcore.http11").setLevel(logging.ERROR)
+    logging.getLogger("httpcore.http2").setLevel(logging.ERROR)
     
     logging.info("Logging configured successfully")
 

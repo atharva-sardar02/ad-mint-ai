@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 # Default model: Sora 2 (OpenAI) - State-of-the-art realism with exceptional physics
 # Top models ranked by quality: Sora 2, Veo 3, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
-    "default": "openai/sora-2",  # Sora 2 - Recommended default
+    "default": "kwaivgi/kling-v2.1",  # Kling v2.1 - Default for image-to-video support
     "veo_3": "google/veo-3",
     "pixverse_v5": "pixverse/pixverse-v5",
-    "kling_2_5": "klingai/kling-2.5-turbo",
+    "kling_v2_1": "kwaivgi/kling-v2.1",
+    "kling_2_5": "klingai/kling-2.5-turbo",  # Legacy - may not be available
     "hailuo_02": "minimax-ai/hailuo-02",
     "seedance_1": "bytedance/seedance-1",
     # Legacy models (kept for backward compatibility)
@@ -40,7 +41,8 @@ MODEL_COSTS = {
     "openai/sora-2": 0.10,  # Default - state-of-the-art
     "google/veo-3": 0.12,  # Premium cinematic quality
     "pixverse/pixverse-v5": 0.06,  # Balanced quality & cost
-    "klingai/kling-2.5-turbo": 0.07,  # Fast cinematic
+    "kwaivgi/kling-v2.1": 0.07,  # Image-to-video support, 720p/1080p
+    "klingai/kling-2.5-turbo": 0.07,  # Legacy - may not be available
     "minimax-ai/hailuo-02": 0.09,  # Physics proficiency
     "bytedance/seedance-1": 0.05,  # Multi-shot specialist
     # Legacy models
@@ -85,7 +87,10 @@ async def generate_video_clip_with_model(
     generation_id: str,
     model_name: str,
     cancellation_check: Optional[callable] = None,
-    clip_index: Optional[int] = None
+    clip_index: Optional[int] = None,
+    image_input: Optional[str] = None,
+    end_image_input: Optional[str] = None,
+    negative_prompt: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     Generate a single video clip with a specific model (bypasses pipeline).
@@ -98,6 +103,9 @@ async def generate_video_clip_with_model(
         model_name: Specific model to use (must be in REPLICATE_MODELS or MODEL_COSTS)
         cancellation_check: Optional function to check if generation should be cancelled
         clip_index: Optional index for multiple clips (used in filename)
+        image_input: Optional path to image file for image-to-video generation
+        end_image_input: Optional path to end image file (for Kling v2.1 storyboard mode)
+        negative_prompt: Optional negative prompt text
     
     Returns:
         tuple[str, str]: (Path to the generated video clip file, Model name used)
@@ -139,7 +147,10 @@ async def generate_video_clip_with_model(
             model_name=model_name,
             prompt=prompt,
             duration=duration,
-            cancellation_check=cancellation_check
+            cancellation_check=cancellation_check,
+            image_input=image_input,
+            end_image_input=end_image_input,
+            negative_prompt=negative_prompt,
         )
         
         # Download video clip
@@ -310,7 +321,10 @@ async def _generate_with_retry(
     prompt: str,
     duration: int,
     cancellation_check: Optional[callable] = None,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    image_input: Optional[str] = None,
+    end_image_input: Optional[str] = None,
+    negative_prompt: Optional[str] = None,
 ) -> str:
     """
     Generate video with retry logic and exponential backoff.
@@ -373,6 +387,25 @@ async def _generate_with_retry(
                     "aspect_ratio": "9:16",  # Vertical for MVP
                     "quality": "1080p",  # Use resolution string instead of "high"
                 }
+            elif model_name == "kwaivgi/kling-v2.1":
+                # Kling v2.1 requires start_image for image-to-video
+                # Duration must be 5 or 10 seconds
+                kling_duration = 5 if duration <= 5 else 10
+                if kling_duration != duration:
+                    logger.debug(f"Kling v2.1: Adjusting duration from {duration}s to {kling_duration}s (valid values: 5, 10)")
+                input_params = {
+                    "prompt": prompt,
+                    "duration": kling_duration,
+                    "mode": "pro",  # Use pro mode for 1080p (standard is 720p)
+                    "negative_prompt": negative_prompt or "",  # Kling v2.1 supports negative_prompt
+                }
+            elif model_name.startswith("klingai/"):
+                # Legacy Kling models (may not be available)
+                input_params = {
+                    "prompt": prompt,
+                    "duration": duration,
+                    "aspect_ratio": "9:16",  # Vertical for MVP
+                }
             else:
                 # Other models use aspect ratio as ratio string
                 input_params = {
@@ -381,6 +414,67 @@ async def _generate_with_retry(
                     "aspect_ratio": "9:16",  # Vertical for MVP
                 }
                 # Don't add quality parameter for unknown models - let API handle defaults
+            
+            # Add image input if provided (for image-to-video generation)
+            # Replicate SDK automatically uploads file objects when passed in input
+            if image_input:
+                image_path = Path(image_input)
+                if image_path.exists():
+                    try:
+                        # Open file object - Replicate SDK will auto-upload and handle file closure
+                        # The file will be closed after the API call completes
+                        image_file = open(image_path, "rb")
+                        # Model-specific parameter names for image input
+                        if model_name == "kwaivgi/kling-v2.1":
+                            # Kling v2.1 uses "start_image" parameter (required for image-to-video)
+                            input_params["start_image"] = image_file
+                            logger.info(f"Using start_image for Kling v2.1: {image_input}")
+                        elif model_name.startswith("klingai/"):
+                            # Legacy Kling models may use "image"
+                            input_params["image"] = image_file
+                            logger.info(f"Using image input for Kling model: {image_input}")
+                        else:
+                            # Try "image" first (most common), some models may use "reference_image"
+                            input_params["image"] = image_file
+                            logger.info(f"Using image input for {model_name}: {image_input}")
+                    except Exception as e:
+                        logger.error(f"Failed to open image file {image_input}: {e}")
+                        raise
+                elif image_input.startswith(("http://", "https://")):
+                    # Already a URL, use directly
+                    if model_name == "kwaivgi/kling-v2.1":
+                        input_params["start_image"] = image_input
+                    elif model_name.startswith("klingai/"):
+                        input_params["image"] = image_input
+                    else:
+                        input_params["image"] = image_input
+                    logger.info(f"Using image URL for {model_name}: {image_input}")
+                else:
+                    logger.warning(f"Image input not found or invalid: {image_input}")
+                    raise FileNotFoundError(f"Image input not found: {image_input}")
+            
+            # Add end_image if provided (DEFAULT BEHAVIOR for storyboard mode - Kling v2.1 supports this)
+            # Using both start_image and end_image ensures smooth transitions between clips
+            if end_image_input and model_name == "kwaivgi/kling-v2.1":
+                end_image_path = Path(end_image_input)
+                if end_image_path.exists():
+                    try:
+                        end_image_file = open(end_image_path, "rb")
+                        input_params["end_image"] = end_image_file
+                        # End image requires pro mode (1080p)
+                        input_params["mode"] = "pro"
+                        logger.info(f"✅ Using end_image for Kling v2.1 (smooth transition): {end_image_input}")
+                    except Exception as e:
+                        logger.error(f"Failed to open end_image file {end_image_input}: {e}")
+                        logger.warning("Continuing without end_image - using start_image only")
+                elif end_image_input.startswith(("http://", "https://")):
+                    input_params["end_image"] = end_image_input
+                    input_params["mode"] = "pro"
+                    logger.info(f"✅ Using end_image URL for Kling v2.1 (smooth transition): {end_image_input}")
+                else:
+                    logger.warning(f"End image path invalid, using start_image only: {end_image_input}")
+            elif end_image_input and model_name != "kwaivgi/kling-v2.1":
+                logger.warning(f"End image provided but model {model_name} doesn't support it - ignoring end_image")
             
             # Add seed parameter if provided and not disabled (for visual consistency)
             # Note: Not all Replicate models support seed parameter - API will ignore if unsupported
