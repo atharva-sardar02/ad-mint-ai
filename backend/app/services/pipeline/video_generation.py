@@ -581,10 +581,16 @@ async def _generate_with_retry(
                 else:
                     logger.info("No end image provided - Kling will generate last frame from prompt")
                 
-                # PRIORITY 3: Add reference image if available (for style/character consistency, but doesn't override start/end frames)
-                # Only use reference image if start/end images are NOT available, or as a style guide
-                # Note: When start_image is provided, it controls the first frame, but reference_image can still help with style consistency
-                if reference_image_path:
+                # PRIORITY 3: Add reference image if available (for style/character consistency)
+                # CRITICAL FIX: If we have BOTH start and end images, DO NOT send the reference image.
+                # Sending all three (start + end + reference) causes Kling to sometimes ignore the end image.
+                # Start and end images already provide sufficient visual context for the model.
+                should_include_reference = True
+                if start_image_path and end_image_path:
+                    should_include_reference = False
+                    logger.info(f"ℹ️ Skipping reference image for Kling because BOTH start and end images are provided (ensures end_image is respected)")
+                
+                if reference_image_path and should_include_reference:
                     try:
                         ref_image_path_obj = Path(reference_image_path)
                         if ref_image_path_obj.exists():
@@ -597,6 +603,8 @@ async def _generate_with_retry(
                                 logger.info(f"✅ Attached reference image for Kling 2.5 Turbo Pro (no start/end images, using as main reference): {reference_image_path}")
                     except Exception as e:
                         logger.warning(f"Failed to load reference image for Kling: {e}")
+                elif reference_image_path and not should_include_reference:
+                    logger.info(f"ℹ️ Reference image available but skipped to prioritize start/end frame control: {reference_image_path}")
                 else:
                     logger.info("No reference image provided - Kling will generate from prompt only")
                 

@@ -119,7 +119,13 @@ Think of this like you're briefing a cinematographer and visual effects team. Yo
 
 Here's what I need from you:
 
-First, decide on the storyboard structure:
+First, DEVELOP A CINEMATIC STORY CONCEPT:
+- Create a cohesive narrative arc or script that runs through the entire video
+- This "overarching story" should guide the scene breakdown
+- Think about the beginning, middle, and end flow
+- Establish the emotional journey and key message
+
+Then, decide on the storyboard structure:
 - Determine the optimal number of scenes (based on the story needs and target duration of {target_duration} seconds)
 - Assign a duration to each scene - **MUST be between 3-7 seconds (MINIMUM 3, MAXIMUM 7)**
 - Ensure the total duration is close to {target_duration} seconds
@@ -274,6 +280,12 @@ Remember: Write all prompts in natural, descriptive language. Think like a filmm
 Now, I need you to return this in a structured JSON format so we can process it programmatically. Here's the structure:
 
 {{
+  "video_script": {{
+    "story_concept": "A compelling 1-2 sentence high-level concept (logline)",
+    "narrative_arc": "A paragraph describing the complete story flow from beginning to end. This should be written FIRST to guide the scene breakdown.",
+    "key_message": "The core message or emotion the video should convey",
+    "pacing": "Description of the pacing and rhythm (e.g., slow build to fast climax)"
+  }},
   "consistency_markers": {{
     "style": "Describe the overall visual style in natural language",
     "color_palette": "Describe the color scheme naturally",
