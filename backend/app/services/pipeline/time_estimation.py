@@ -7,6 +7,7 @@ Calculates estimated generation time based on:
 - Model selection
 - Coherence settings (LLM, quality control, etc.)
 """
+
 import logging
 from typing import List, Optional
 from app.schemas.generation import GenerateRequest
@@ -95,7 +96,7 @@ def _estimate_single_generation_time(variation: GenerateRequest) -> float:
     use_single_clip = False
     if hasattr(variation, 'use_single_clip'):
         use_single_clip = variation.use_single_clip
-    elif variation.num_clips == 1 and not use_llm:
+    elif hasattr(variation, 'num_clips') and variation.num_clips == 1 and not use_llm:
         use_single_clip = True
     
     if use_llm and not use_single_clip:
@@ -105,7 +106,7 @@ def _estimate_single_generation_time(variation: GenerateRequest) -> float:
     # Determine number of clips
     if use_single_clip:
         num_clips = 1
-    elif variation.num_clips:
+    elif hasattr(variation, 'num_clips') and variation.num_clips:
         num_clips = variation.num_clips
     else:
         # Default: estimate based on typical scene plan (3-5 scenes)

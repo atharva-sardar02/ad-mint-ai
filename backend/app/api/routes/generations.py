@@ -1,6 +1,7 @@
 """
 Video generation route handlers.
 """
+
 import asyncio
 import logging
 import os
@@ -62,9 +63,11 @@ from app.services.pipeline.stitching import stitch_video_clips
 from app.services.pipeline.audio import add_audio_layer
 from app.services.pipeline.export import export_final_video
 from app.services.pipeline.cache import get_cached_clip, cache_clip, should_cache_prompt
-from app.services.video_generation_standalone import (
+from app.services.pipeline.video_generation import (
     generate_video_clip,
     generate_video_clip_with_model,
+)
+from app.services.video_generation_standalone import (
     MODEL_COSTS,
     REPLICATE_MODELS
 )
