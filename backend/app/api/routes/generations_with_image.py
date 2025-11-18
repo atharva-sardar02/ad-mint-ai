@@ -27,7 +27,9 @@ async def create_generation_with_image(
     prompt: str = Form(..., min_length=10, max_length=2000),  # Match /api/generate endpoint
     image: UploadFile = File(...),
     model: Optional[str] = Form(None),
-    num_clips: Optional[int] = Form(None, ge=1, le=10),  # Number of scenes/clips to generate (1-10)
+    target_duration: Optional[int] = Form(None, ge=9, le=60),  # Target total video duration in seconds (default: 15). LLM will decide number of scenes and duration per scene (max 7s per scene)
+    refinement_instructions: Optional[str] = Form(None),  # JSON string of refinement instructions
+    brand_name: Optional[str] = Form(None, max_length=50),  # Optional brand name
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -101,14 +103,25 @@ async def create_generation_with_image(
     else:
         logger.info(f"[{generation_id}] No model specified, will use default fallback chain")
     
+    # Parse refinement_instructions if provided (JSON string)
+    refinement_instructions_dict = None
+    if refinement_instructions:
+        try:
+            import json
+            refinement_instructions_dict = json.loads(refinement_instructions)
+        except json.JSONDecodeError:
+            logger.warning(f"[{generation_id}] Invalid JSON in refinement_instructions, ignoring")
+    
     background_tasks.add_task(
         process_generation,
         generation_id,
         prompt,
         model,  # Pass the selected model (e.g., "openai/sora-2")
-        num_clips,  # Pass num_clips if specified
+        target_duration,  # Pass target_duration if specified
         True,   # use_llm
         str(image_path),
+        refinement_instructions_dict,  # Pass refinement instructions
+        brand_name,  # Pass brand name if provided
     )
 
     # Initial status update

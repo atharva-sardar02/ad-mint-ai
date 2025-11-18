@@ -71,6 +71,16 @@ export const Storyboard: React.FC = () => {
           } else {
             setPrompt("Video generation storyboard");
           }
+          
+          // Debug: Log image URLs
+          if (statusData.storyboard_plan?.scenes) {
+            console.log("Storyboard scenes with image URLs:", statusData.storyboard_plan.scenes.map(scene => ({
+              scene_number: scene.scene_number,
+              reference_image_url: scene.reference_image_url,
+              start_image_url: scene.start_image_url,
+              end_image_url: scene.end_image_url,
+            })));
+          }
         }
       } catch (err) {
         if (!isMounted) return;

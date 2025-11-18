@@ -480,14 +480,58 @@ def extract_brand_name(prompt: str) -> Optional[str]:
     # Pattern: word(s) that are capitalized and might be a brand
     words = re.findall(r'\b[A-Z][a-z]+\b', prompt)
     
-    # Filter out common words that aren't brands
-    common_words = {"The", "This", "That", "These", "Those", "A", "An", "And", "Or", "But", "For", "With", "From", "About"}
+    # Filter out common words that aren't brands (expanded list)
+    # This includes action verbs, adjectives, common nouns, and video-related terms
+    common_words = {
+        # Articles and pronouns
+        "The", "This", "That", "These", "Those", "A", "An", "And", "Or", "But", "For", "With", "From", "About",
+        # Adjectives
+        "Slow", "Fast", "Quick", "Easy", "Hard", "New", "Old", "Big", "Small", "High", "Low", "Hot", "Cold",
+        "Good", "Bad", "Best", "Worst", "First", "Last", "Next", "Previous", "Same", "Different", "Similar",
+        "More", "Less", "Most", "Least", "Many", "Few", "Some", "Any", "All", "Each", "Every", "Other",
+        # Action verbs
+        "Create", "Make", "Show", "Display", "Present", "Feature", "Highlight", "Showcase", "Demonstrate",
+        "Start", "Begin", "End", "Stop", "Finish", "Complete", "Continue", "Pause", "Play", "Run", "Walk",
+        # Video/media terms
+        "Video", "Image", "Picture", "Photo", "Scene", "Shot", "Frame", "Clip", "Movie", "Film",
+        # Product terms
+        "Product", "Item", "Object", "Thing", "Piece", "Part", "Element", "Component",
+        # Marketing terms
+        "Ad", "Advertisement", "Commercial", "Promo", "Promotion", "Marketing", "Campaign",
+        # Style descriptors
+        "Cinematic", "Professional", "Modern", "Classic", "Vintage", "Retro", "Contemporary",
+        # Quality descriptors
+        "Beautiful", "Stunning", "Amazing", "Incredible", "Wonderful", "Fantastic", "Perfect",
+        # Common verbs
+        "Get", "Take", "Give", "Put", "Set", "Let", "Try", "Use", "See", "Look", "Watch", "Find",
+        # Time/sequence words
+        "Now", "Then", "When", "While", "During", "After", "Before", "During",
+        # Common nouns
+        "Day", "Night", "Time", "Place", "Way", "Thing", "Person", "People", "Man", "Woman", "Child"
+    }
+    
     potential_brands = [w for w in words if w not in common_words]
     
-    # Return first potential brand, or None
-    if potential_brands:
-        return potential_brands[0]
+    # Additional validation: brand names are typically 3-20 characters
+    # Filter out very short words (likely not brands) and common descriptive words
+    # Also filter out words that are too generic
+    filtered_brands = [
+        w for w in potential_brands 
+        if len(w) >= 3 and len(w) <= 20  # Brand names are usually at least 3 characters
+        and w.lower() not in ["slow", "fast", "new", "old", "big", "small", "start", "end", "stop"]
+        and not w.lower().endswith("ing")  # Filter out gerunds like "running", "walking"
+        and not w.lower().endswith("ed")   # Filter out past tense like "started", "ended"
+    ]
     
+    # If we found potential brands, return the first one
+    # But be conservative - only return if we're reasonably confident
+    if filtered_brands:
+        # Prefer longer words (more likely to be brand names)
+        filtered_brands.sort(key=len, reverse=True)
+        return filtered_brands[0]
+    
+    # If no confident brand name found, return None
+    # User should provide brand name explicitly if they want it displayed
     return None
 
 
@@ -520,10 +564,14 @@ def add_brand_overlay_to_final_video(
         video_duration = video.duration
         
         # If no brand name provided, skip overlay
-        if not brand_name:
-            logger.info("No brand name provided, skipping brand overlay")
+        # Validate brand name - must be non-empty and not just whitespace
+        if not brand_name or not brand_name.strip():
+            logger.info("No valid brand name provided, skipping brand overlay")
             video.close()
             return video_path
+        
+        # Clean the brand name (remove extra whitespace)
+        brand_name = brand_name.strip()
         
         # Create brand overlay text
         brand_text = brand_name.upper()  # Display brand in uppercase

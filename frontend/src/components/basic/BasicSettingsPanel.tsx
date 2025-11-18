@@ -11,7 +11,7 @@ export interface BasicSettings {
   useSingleClip: boolean;
   useLlm: boolean;
   model: string;
-  numClips: number;
+  targetDuration: number;
 }
 
 export interface BasicSettingsPanelProps {
@@ -83,11 +83,11 @@ export const BasicSettingsPanel: React.FC<BasicSettingsPanelProps> = ({
     });
   };
 
-  const handleNumClipsChange = (value: number) => {
+  const handleTargetDurationChange = (value: number) => {
     if (disabled) return;
     onChange({
       ...settings,
-      numClips: value,
+      targetDuration: value,
     });
   };
 
@@ -187,25 +187,35 @@ export const BasicSettingsPanel: React.FC<BasicSettingsPanelProps> = ({
               onChange={(e) => handleModelChange(e.target.value)}
               disabled={disabled}
               required={settings.useSingleClip}
-              placeholder={settings.useSingleClip ? "Select a model (required)" : "Auto (use default)"}
+              placeholder={settings.useSingleClip ? "Select a model (required)" : undefined}
             />
           </div>
 
-          {/* Number of Clips */}
+          {/* Target Duration */}
           <div>
             <Select
-              label="Number of Clips"
-              id="basic-numClips"
-              value={settings.numClips.toString()}
+              label="Target Duration (seconds)"
+              id="basic-targetDuration"
+              value={settings.targetDuration.toString()}
               onChange={(e) =>
-                handleNumClipsChange(parseInt(e.target.value, 10))
+                handleTargetDurationChange(parseInt(e.target.value, 10))
               }
               disabled={disabled}
-              options={Array.from({ length: 10 }, (_, i) => ({
-                value: (i + 1).toString(),
-                label: (i + 1).toString(),
-              }))}
+              options={[
+                { value: "9", label: "9 seconds" },
+                { value: "12", label: "12 seconds" },
+                { value: "15", label: "15 seconds (default)" },
+                { value: "18", label: "18 seconds" },
+                { value: "21", label: "21 seconds" },
+                { value: "24", label: "24 seconds" },
+                { value: "30", label: "30 seconds" },
+                { value: "45", label: "45 seconds" },
+                { value: "60", label: "60 seconds" },
+              ]}
             />
+            <p className="mt-1 text-xs text-gray-500">
+              LLM will decide number of scenes and duration per scene (max 7s per scene)
+            </p>
           </div>
         </div>
       )}

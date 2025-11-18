@@ -35,6 +35,7 @@ export const Dashboard: React.FC = () => {
 
   const [prompt, setPrompt] = useState("");
   const [title, setTitle] = useState("");
+  const [brandName, setBrandName] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [apiError, setApiError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +59,7 @@ export const Dashboard: React.FC = () => {
     useSingleClip: false,
     useLlm: true,
     model: "",
-    numClips: 1,
+    targetDuration: 15,
   });
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
@@ -342,7 +343,8 @@ export const Dashboard: React.FC = () => {
           prompt,
           referenceImage,
           basicSettings.model || undefined,
-          basicSettings.numClips > 1 ? basicSettings.numClips : undefined
+          basicSettings.targetDuration || undefined,
+          brandName || undefined
         );
       } else if (basicSettings.useSingleClip) {
         if (!basicSettings.model) {
@@ -353,22 +355,24 @@ export const Dashboard: React.FC = () => {
         await generationService.startSingleClipGeneration(
           prompt,
           basicSettings.model,
-          basicSettings.numClips
+          basicSettings.targetDuration
         );
       } else {
         await generationService.startGeneration(
           prompt,
           basicSettings.model || undefined,
-          basicSettings.numClips > 1 ? basicSettings.numClips : undefined,
+          basicSettings.targetDuration || undefined,
           basicSettings.useLlm,
           coherenceSettings,
-          title || undefined
+          title || undefined,
+          brandName || undefined
         );
       }
       
       // Clear prompt and title immediately after successful submission
       setPrompt("");
       setTitle("");
+      setBrandName("");
       setReferenceImage(null);
       if (referenceImagePreview) {
         URL.revokeObjectURL(referenceImagePreview);
@@ -623,23 +627,43 @@ export const Dashboard: React.FC = () => {
           {/* Single Generation Form (hidden when parallel mode is active or active generation is processing) */}
           {!parallelMode && (!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-                  Video Title (Optional)
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., Luxury Watch Ad - Instagram"
-                  maxLength={200}
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Give your video a name to easily identify it later
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                    Video Title (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g., Luxury Watch Ad - Instagram"
+                    maxLength={200}
+                    disabled={isLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Give your video a name to easily identify it later
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="brand-name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Brand Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="brand-name"
+                    value={brandName}
+                    onChange={(e) => setBrandName(e.target.value)}
+                    placeholder="e.g., Nike, Apple (optional)"
+                    maxLength={50}
+                    disabled={isLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    If not provided, the system will attempt to extract it from your prompt.
+                  </p>
+                </div>
               </div>
 
               <Textarea

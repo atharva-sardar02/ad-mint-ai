@@ -130,33 +130,71 @@ flowchart TD
     Start([User Prompt]) --> LLM[Storyboard Planner<br/>GPT-4o]
     
     LLM --> Storyboard[Storyboard Plan]
-    Storyboard --> |4 Scenes| Scene[Scene Processing]
+    Storyboard --> |Scene 1-4 Prompts| RefChain[Reference Image Chain]
+    Storyboard --> |Start Frame Prompts| StartChain[Start Image Chain]
+    Storyboard --> |End Frame Prompts| EndChain[End Image Chain]
     
-    Scene --> |For each scene| ImgGen[Image Generation<br/>Nano Banana]
+    RefChain --> RefImg1[Ref Image 1<br/>No Reference]
+    RefImg1 --> RefImg2[Ref Image 2<br/>Ref: Img 1]
+    RefImg2 --> RefImg3[Ref Image 3<br/>Ref: Img 2]
+    RefImg3 --> RefImg4[Ref Image 4<br/>Ref: Img 3]
     
-    ImgGen --> RefImg[Reference Image]
-    ImgGen --> StartImg[Start Image<br/>First Frame]
-    ImgGen --> EndImg[End Image<br/>Last Frame]
+    StartChain --> StartImg1[Start Image 1<br/>Ref: Ref Img 1]
+    StartImg1 --> StartImg2[Start Image 2<br/>Ref: Start Img 1]
+    StartImg2 --> StartImg3[Start Image 3<br/>Ref: Start Img 2]
+    StartImg3 --> StartImg4[Start Image 4<br/>Ref: Start Img 3]
     
-    RefImg --> Kling[Kling 2.5 Turbo Pro<br/>Video Generation]
-    StartImg --> Kling
-    EndImg --> Kling
-    Storyboard --> |Detailed Prompt| Kling
-    Storyboard --> |Consistency Markers| Kling
+    EndChain --> EndImg1[End Image 1<br/>Ref: Ref Img 1]
+    EndImg1 --> EndImg2[End Image 2<br/>Ref: End Img 1]
+    EndImg2 --> EndImg3[End Image 3<br/>Ref: End Img 2]
+    EndImg3 --> EndImg4[End Image 4<br/>Ref: End Img 3]
     
-    Kling --> Video[Generated Video Clip<br/>Precise Frame Control]
+    RefImg1 --> Kling1[Kling 2.5 Turbo Pro<br/>Scene 1]
+    StartImg1 --> Kling1
+    EndImg1 --> Kling1
     
-    Video --> Assembly[Video Assembly]
+    RefImg2 --> Kling2[Kling 2.5 Turbo Pro<br/>Scene 2]
+    StartImg2 --> Kling2
+    EndImg2 --> Kling2
+    
+    RefImg3 --> Kling3[Kling 2.5 Turbo Pro<br/>Scene 3]
+    StartImg3 --> Kling3
+    EndImg3 --> Kling3
+    
+    RefImg4 --> Kling4[Kling 2.5 Turbo Pro<br/>Scene 4]
+    StartImg4 --> Kling4
+    EndImg4 --> Kling4
+    
+    Storyboard --> |Detailed Prompts| Kling1
+    Storyboard --> |Detailed Prompts| Kling2
+    Storyboard --> |Detailed Prompts| Kling3
+    Storyboard --> |Detailed Prompts| Kling4
+    
+    Kling1 --> Assembly[Video Assembly]
+    Kling2 --> Assembly
+    Kling3 --> Assembly
+    Kling4 --> Assembly
+    
     Assembly --> Final([Final Video])
     
     style Start fill:#e1f5ff
     style LLM fill:#fff4e1
-    style ImgGen fill:#e8f5e9
-    style RefImg fill:#c8e6c9
-    style StartImg fill:#c8e6c9
-    style EndImg fill:#c8e6c9
-    style Kling fill:#f3e5f5
-    style Video fill:#f3e5f5
+    style RefImg1 fill:#c8e6c9
+    style RefImg2 fill:#c8e6c9
+    style RefImg3 fill:#c8e6c9
+    style RefImg4 fill:#c8e6c9
+    style StartImg1 fill:#b2dfdb
+    style StartImg2 fill:#b2dfdb
+    style StartImg3 fill:#b2dfdb
+    style StartImg4 fill:#b2dfdb
+    style EndImg1 fill:#b2dfdb
+    style EndImg2 fill:#b2dfdb
+    style EndImg3 fill:#b2dfdb
+    style EndImg4 fill:#b2dfdb
+    style Kling1 fill:#f3e5f5
+    style Kling2 fill:#f3e5f5
+    style Kling3 fill:#f3e5f5
+    style Kling4 fill:#f3e5f5
     style Final fill:#c8e6c9
 ```
 
