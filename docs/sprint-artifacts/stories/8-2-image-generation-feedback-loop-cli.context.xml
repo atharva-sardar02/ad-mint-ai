@@ -1,0 +1,214 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>8</epicId>
+    <storyId>2</storyId>
+    <title>Image Generation Feedback Loop CLI</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-17T18:30:00Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/8-2-image-generation-feedback-loop-cli.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>a CLI tool for generating images with automatic quality scoring</iWant>
+    <soThat>I can rapidly iterate on image generation and select the best candidates</soThat>
+    <tasks>
+      <task id="1" title="Create image generation service">
+        - Create `app/services/pipeline/image_generation.py` service
+        - Integrate Replicate API for text-to-image generation (SDXL or similar models)
+        - Implement image generation function with enhanced prompt, num_variations, aspect_ratio, seed
+        - Call Replicate API to generate multiple image variations
+        - Download generated images from URLs
+        - Save images to organized directory structure
+        - Track generation metadata (prompt, model, seed, timestamps, cost)
+        - Implement retry logic with exponential backoff (reuse pattern from `video_generation.py`)
+        - Implement fallback models if primary model fails
+        - Support aspect ratio control (1:1, 4:3, 16:9, 9:16)
+        - Support seed control for reproducibility
+        - Unit tests: Replicate API integration (mocked), image download, file organization, metadata generation, error handling
+      </task>
+      <task id="2" title="Create image quality scoring service">
+        - Create `app/services/pipeline/image_quality_scoring.py` service
+        - Implement PickScore computation (primary metric): Load PickScore model (Stability AI open-source via Hugging Face), compute human preference prediction (0-100 scale), handle model loading and caching (load once, reuse across images)
+        - Implement CLIP-Score computation: Use Hugging Face transformers (OpenAI CLIP), compute image-text alignment (0-100 scale)
+        - Implement VQAScore computation (if available): Load VQAScore model (if available via Hugging Face), compute compositional semantic alignment (0-100 scale)
+        - Implement Aesthetic Predictor (LAION): Load LAION Aesthetic Predictor model, compute aesthetic quality (1-10 scale)
+        - Calculate overall quality score (weighted combination): PickScore: 50% weight, CLIP-Score: 25% weight, VQAScore: 15% weight (if available, else 0%), Aesthetic: 10% weight (normalized to 0-100 scale)
+        - Rank images by overall quality score (best first)
+        - Unit tests: Each scoring metric with sample images, overall score calculation, ranking logic, model loading and caching
+      </task>
+      <task id="3" title="Create CLI tool for image generation">
+        - Create `backend/generate_images.py` CLI script
+        - Implement argument parsing (argparse or click): Input enhanced prompt file path, `--num-variations N` (default: 8, range: 4-8), `--aspect-ratio R` (default: 16:9, options: 1:1, 4:3, 16:9, 9:16), `--seed N` (optional, for reproducibility), `--output-dir DIR` (default: output/image_generations/), `--model M` (default: stability-ai/sdxl), `--verbose` flag
+        - Implement prompt file loading
+        - Implement output directory creation with timestamp
+        - Integrate image generation service
+        - Integrate quality scoring service (score all generated images)
+        - Implement image ranking and renaming by quality rank
+        - Implement metadata JSON generation for each image: Scores (PickScore, CLIP-Score, VQAScore, Aesthetic, overall), prompt used, model name, seed value, timestamp
+        - Implement generation trace JSON: All prompts used, all images with file paths, all quality scores per image, model settings, seeds, timestamps, cost tracking (API costs)
+        - Implement console output formatting: Ranked list with scores, top 3 images highlighted, score breakdown per image, file paths for manual viewing, best candidate selection summary
+        - Unit tests: Argument parsing, file I/O, error handling
+        - Integration test: End-to-end CLI run with sample prompt, verify images generated, verify quality scoring, verify ranking, verify trace files
+      </task>
+      <task id="4" title="Documentation and testing">
+        - Update `backend/requirements.txt` with new dependencies: `replicate>=0.25.0` (if not already present), `transformers>=4.30.0` (for CLIP model), `torch>=2.0.0` (for PickScore and CLIP models, if GPU available), `pillow>=10.0.0` (for image processing), `numpy>=1.24.0` (for numerical operations), `requests>=2.31.0` (for downloading images)
+        - Create README or usage documentation for CLI tool
+        - Add integration tests to `backend/tests/test_image_generation.py`
+        - Add integration tests to `backend/tests/test_image_quality_scoring.py`
+        - Verify error handling for API failures, invalid inputs, missing files, model loading failures
+        - Performance test: Verify image generation completes within &lt;5 minutes for 8 images, quality scoring completes within &lt;2 minutes for 8 images
+        - Document model setup requirements (PickScore, CLIP model downloads)
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <given>I have an enhanced image prompt (from Story 8.1)</given>
+      <when>I run `python generate_images.py enhanced_prompt.txt --num-variations 8`</when>
+      <then>
+        - Calls a text-to-image model (e.g., SDXL on Replicate) to generate multiple image variations (4-8 default)
+        - All images share the specified aspect ratio
+        - All follow the enhanced prompt
+        - Automatically scores each image using multiple benchmarks: PickScore (primary): Human preference prediction (0-100, higher = better), CLIP-Score: Image-text alignment (0-100, higher = better), VQAScore: Compositional semantic alignment (0-100, higher = better), Aesthetic Predictor (LAION): Aesthetic quality (1-10 scale), Overall Quality Score: Weighted combination of all metrics
+        - Saves all generated images to `output/image_generations/{timestamp}/`: `image_001.png`, `image_002.png`, etc. (numbered by quality rank), `image_001_metadata.json`, `image_002_metadata.json` (scores, prompt, model, seed)
+        - Saves generation trace to `output/image_generations/{timestamp}/generation_trace.json`: All prompts used (original, enhanced), all images generated with file paths, all quality scores per image, model settings, seeds, timestamps, cost tracking
+        - Prints results to console: Ranked list of images by overall quality score, top 3 images highlighted, score breakdown per image (PickScore, CLIP-Score, VQAScore, Aesthetic), file paths for manual viewing
+        - Supports custom output directory: `--output-dir ./my_images`
+        - Supports aspect ratio control: `--aspect-ratio 16:9`
+        - Supports seed control: `--seed 12345` (for reproducibility)
+        - Automatically selects the top-scoring image as "best candidate"
+        - Provides comparison summary showing why top image scored highest
+        - Logs all API calls and costs for transparency
+      </then>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document">
+        <section>Hero-Frame Iteration Plan &amp; Timeline (Section 23.0)</section>
+        <snippet>CLI MVP strategy for rapid validation of feedback loops and scoring mechanisms before UI development. Image generation with automatic quality scoring enables developers to quickly test and refine image generation workflows.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-8.md" title="Epic 8 Technical Specification">
+        <section>Detailed Design → Services → image_generation.py, image_quality_scoring.py, Workflows → Workflow 2</section>
+        <snippet>Comprehensive design for image generation service using Replicate API (SDXL) and automatic quality scoring service with PickScore, CLIP-Score, VQAScore, and Aesthetic Predictor. Includes acceptance criteria, traceability mapping, and non-functional requirements.</snippet>
+      </doc>
+      <doc path="docs/Prompt_Scoring_and_Optimization_Guide.md" title="Prompt Scoring and Optimization Guide">
+        <section>Quantitative Metrics and Frameworks for Prompt Output Quality, Learned Preference and Aesthetic Metrics</section>
+        <snippet>PickScore achieves about 70.2% accuracy in predicting human preferences, outperforms zero-shot CLIP-based scoring. Stability AI has open-sourced the PickScore model. CLIP-Score uses OpenAI's CLIP model to compute similarity between image and prompt. VQAScore uses generative Visual QA model for compositional alignment. LAION Aesthetic Predictor rates images on 1-10 scale.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document">
+        <section>Project Structure, Implementation Patterns</section>
+        <snippet>Service organization in `app/services/pipeline/`. Configuration management via `app/core/config.py`. Output directory structure: `backend/output/` for organizing outputs. Follows existing service patterns and CLI tool patterns.</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epics Document">
+        <section>Epic 8: CLI MVP - Image Generation Feedback Loops, Story 8.2</section>
+        <snippet>Original story acceptance criteria. Prerequisites: Story 8.1 (Image Prompt Enhancement), Story 3.2 (Generation Infrastructure). Technical notes on Replicate API integration and quality scoring using PickScore, CLIP-Score, VQAScore, LAION Aesthetic Predictor.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/8-1-image-prompt-feedback-loop-cli.md" title="Story 8.1">
+        <section>Dev Notes → Learnings from Previous Story</section>
+        <snippet>CLI Tool Pattern Established: Follow pattern from `backend/enhance_image_prompt.py` for CLI structure, argument parsing, trace directory creation, console output formatting. Output Directory Structure: Use `backend/output/` directory structure with timestamp-based subdirectories. Trace File Pattern: Save comprehensive trace files (JSON metadata) for transparency.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_video_clip" lines="166-307" reason="Replicate API integration pattern to reuse: client initialization, retry logic with exponential backoff, fallback models, cost tracking, error handling. Adapt for text-to-image generation instead of video." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="_generate_with_retry" lines="308-506" reason="Retry logic implementation with exponential backoff, error handling for API failures, seed parameter support. Adapt for image generation API calls." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="REPLICATE_MODELS" lines="21-34" reason="Model configuration dictionary pattern. Create similar mapping for text-to-image models (SDXL, etc.) on Replicate." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="MODEL_COSTS" lines="38-51" reason="Cost tracking pattern per model. Adapt for image generation model costs." />
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="MAX_RETRIES" lines="54-56" reason="Retry configuration constants. Reuse same retry logic pattern for image generation." />
+      <artifact path="backend/enhance_prompt.py" kind="cli" symbol="main" lines="85-204" reason="CLI tool pattern to follow: argparse argument parsing, trace directory creation, console output formatting, error handling. Adapt for image generation CLI." />
+      <artifact path="backend/enhance_image_prompt.py" kind="cli" symbol="main" reason="CLI tool pattern established in Story 8.1: standalone script structure, argument parsing, output directory creation, trace file saving, console output formatting." />
+      <artifact path="backend/app/core/config.py" kind="config" symbol="Settings" lines="12-70" reason="Configuration management pattern: access Replicate API token via `settings.REPLICATE_API_TOKEN`, environment variable loading via dotenv." />
+      <artifact path="backend/app/services/pipeline/quality_control.py" kind="service" symbol="evaluate_vbench" lines="45-91" reason="Quality evaluation service pattern. Follow similar structure for image quality scoring service with multiple metrics (PickScore, CLIP-Score, VQAScore, Aesthetic)." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="replicate" version="&gt;=0.25.0" reason="Replicate API client for text-to-image generation (SDXL or similar models)" />
+        <package name="transformers" version="&gt;=4.30.0" reason="Hugging Face transformers for CLIP model (image-text alignment scoring)" />
+        <package name="torch" version="&gt;=2.0.0" reason="PyTorch for PickScore and CLIP models (if GPU available)" />
+        <package name="pillow" version="&gt;=10.0.0" reason="Image processing for quality scoring (loading, preprocessing images)" />
+        <package name="numpy" version="&gt;=1.24.0" reason="Numerical operations for scoring calculations and metric combinations" />
+        <package name="requests" version="&gt;=2.31.0" reason="HTTP requests for downloading generated images from Replicate API URLs" />
+        <package name="python-dotenv" version="&gt;=1.0.0" reason="Environment variable loading from .env file" />
+        <package name="pytest" version="&gt;=7.4.0" reason="Testing framework for unit and integration tests" />
+        <package name="pytest-asyncio" version="&gt;=0.21.0" reason="Async test support for async service functions" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Replicate API Integration Pattern: Must reuse pattern from `app/services/pipeline/video_generation.py`: Replicate client initialization with API token, retry logic with exponential backoff, fallback models if primary fails, cost tracking per generation, error handling for API failures. Adapt for text-to-image models (SDXL) instead of video models.</constraint>
+    <constraint>CLI Tool Pattern: Follow pattern established by `backend/enhance_prompt.py` and `backend/enhance_image_prompt.py`: standalone Python script in `backend/` directory, uses argparse for argument parsing, saves outputs to `backend/output/` directory structure, prints formatted console output, supports verbose logging mode.</constraint>
+    <constraint>Configuration Management: Use `app/core/config.py` for API keys. Access Replicate API token via `settings.REPLICATE_API_TOKEN`. Follow existing pattern for environment variable loading.</constraint>
+    <constraint>Output Directory Structure: Follow existing pattern: `backend/output/image_generations/{timestamp}/` for generated images and metadata. Timestamp format: `YYYYMMDD_HHMMSS`. Images numbered by quality rank: `image_001.png` (best), `image_002.png` (second-best), etc. Metadata JSON for each image: `image_001_metadata.json`. Generation trace JSON: `generation_trace.json`.</constraint>
+    <constraint>Quality Scoring Model Loading: Load models once and reuse across multiple images to minimize memory overhead. PickScore model: Load on first use, cache in memory. CLIP model: Load on first use, cache in memory. VQAScore model: Load on first use if available, cache in memory. Aesthetic Predictor: Load on first use, cache in memory. Consider GPU acceleration if available.</constraint>
+    <constraint>Project Structure: New service files `app/services/pipeline/image_generation.py` and `app/services/pipeline/image_quality_scoring.py` follow existing service structure in `app/services/pipeline/`. Use async/await pattern for API calls. Imports from `app.core.config` for settings.</constraint>
+    <constraint>CLI Tool Location: New CLI tool `backend/generate_images.py` is standalone script (not part of FastAPI app). Can be run independently: `python generate_images.py enhanced_prompt.txt`. Uses relative imports to access services: `from app.services.pipeline.image_generation import ...`, `from app.services.pipeline.image_quality_scoring import ...`</constraint>
+    <constraint>Quality Score Weights: Overall quality score calculation uses weighted combination: PickScore 50%, CLIP-Score 25%, VQAScore 15% (if available, else 0%), Aesthetic 10% (normalized to 0-100 scale). These weights should be configurable but default to these values.</constraint>
+    <constraint>Performance Targets: Image generation should complete within &lt;5 minutes for 8 images. Quality scoring should complete within &lt;2 minutes for 8 images. Log timing information for each major operation (generation, scoring, file I/O).</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="generate_images CLI" kind="CLI command">
+      <signature>generate_images.py &lt;prompt_file&gt; [--num-variations N] [--aspect-ratio R] [--seed N] [--output-dir DIR] [--model M] [--verbose]</signature>
+      <path>backend/generate_images.py</path>
+      <description>Standalone CLI tool for text-to-image generation with automatic quality scoring. Input: enhanced prompt file path. Options: num-variations (default: 8, range: 4-8), aspect-ratio (default: 16:9, options: 1:1, 4:3, 16:9, 9:16), seed (optional, for reproducibility), output-dir (default: output/image_generations/), model (default: stability-ai/sdxl), verbose flag.</description>
+    </interface>
+    <interface name="image_generation service" kind="Python async function">
+      <signature>async def generate_images(prompt: str, num_variations: int = 8, aspect_ratio: str = "16:9", seed: Optional[int] = None, model_name: str = "stability-ai/sdxl") -&gt; List[ImageGenerationResult]</signature>
+      <path>app/services/pipeline/image_generation.py</path>
+      <description>Text-to-image generation service using Replicate API. Generates multiple image variations from enhanced prompt. Supports aspect ratio control, seed control for reproducibility. Downloads images from URLs and saves to organized directory structure. Tracks generation metadata (prompt, model, seed, timestamps, cost). Implements retry logic with exponential backoff and fallback models.</description>
+    </interface>
+    <interface name="image_quality_scoring service" kind="Python async function">
+      <signature>async def score_image(image_path: str, prompt_text: str) -&gt; Dict[str, float]</signature>
+      <path>app/services/pipeline/image_quality_scoring.py</path>
+      <description>Automatic quality scoring service for generated images. Computes PickScore (primary, 0-100), CLIP-Score (0-100), VQAScore (0-100, if available), Aesthetic Predictor (1-10 scale), and overall quality score (weighted combination). Loads models once and caches in memory for reuse across multiple images.</description>
+    </interface>
+    <interface name="ImageGenerationResult class" kind="Python dataclass">
+      <signature>class ImageGenerationResult: image_path: str, rank: int, quality_scores: Dict[str, float], generation_params: Dict</signature>
+      <path>app/services/pipeline/image_generation.py</path>
+      <description>Result class containing generated image file path, quality rank (by overall score), quality scores dictionary (pickscore, clip_score, vqa_score, aesthetic, overall), and generation parameters (prompt, model, seed, aspect_ratio, timestamp).</description>
+    </interface>
+    <interface name="Replicate API" kind="REST API">
+      <signature>replicate.run(model="stability-ai/sdxl", input={"prompt": str, "aspect_ratio": str, "seed": int})</signature>
+      <path>External API (Replicate)</path>
+      <description>Replicate API for text-to-image generation. Used with SDXL or similar models. Requires REPLICATE_API_TOKEN from settings. Returns image URL (download required). Supports aspect ratio control and seed control for reproducibility.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest framework (matches existing backend test structure). Test service functions with mocked Replicate API. Test quality scoring service with sample images. Test CLI argument parsing, file I/O, error handling. Test scoring calculation, ranking logic. Target: &gt;80% code coverage. Integration tests: End-to-end CLI execution with sample prompt, verify images generated and saved correctly, verify quality scoring computed for all images, verify ranking by overall score, verify trace files created with correct structure, verify console output format. Performance tests: Measure latency, target &lt;5 minutes for 8 image generations, target &lt;2 minutes for quality scoring 8 images, log timing information for each major operation.
+    </standards>
+    <locations>
+      Unit tests: `backend/tests/test_image_generation.py`, `backend/tests/test_image_quality_scoring.py`. Integration tests: `backend/tests/integration/test_generate_images_cli.py` (or similar). Test data: Sample prompts in `backend/tests/fixtures/` or inline test data. Pre-generated test images for quality scoring tests (avoid generating during tests).
+    </locations>
+    <ideas>
+      <test id="AC1" mappedTo="AC1">
+        <idea>Unit test: Replicate API integration - test Replicate client initialization, test API call with prompt, aspect_ratio, seed, test image URL retrieval, test error handling and retry logic, test fallback models if primary fails.</idea>
+        <idea>Unit test: Image download - test downloading image from URL, test saving to file system, test file naming by quality rank, test image validation (format, size).</idea>
+        <idea>Unit test: File organization - test output directory creation with timestamp, test image file naming (image_001.png, image_002.png, etc.), test metadata JSON file creation, test generation trace JSON creation.</idea>
+        <idea>Unit test: Metadata generation - test metadata JSON structure (scores, prompt, model, seed, timestamp), test generation trace JSON structure (all prompts, images, scores, costs, timestamps).</idea>
+        <idea>Unit test: PickScore computation - test PickScore model loading, test human preference prediction (0-100 scale), test model caching (load once, reuse), test with sample images.</idea>
+        <idea>Unit test: CLIP-Score computation - test CLIP model loading, test image-text alignment (0-100 scale), test model caching, test with sample images and prompts.</idea>
+        <idea>Unit test: VQAScore computation - test VQAScore model loading (if available), test compositional semantic alignment (0-100 scale), test graceful degradation if model unavailable.</idea>
+        <idea>Unit test: Aesthetic Predictor computation - test LAION Aesthetic Predictor model loading, test aesthetic quality (1-10 scale), test normalization to 0-100 scale.</idea>
+        <idea>Unit test: Overall quality score calculation - test weighted combination (PickScore 50%, CLIP-Score 25%, VQAScore 15%, Aesthetic 10%), test handling missing VQAScore (adjust weights), test score normalization.</idea>
+        <idea>Unit test: Image ranking - test ranking by overall quality score (best first), test renaming images by rank (image_001 = best, image_002 = second-best), test handling ties in scores.</idea>
+        <idea>Unit test: CLI argument parsing - test all arguments (prompt_file, num-variations, aspect-ratio, seed, output-dir, model, verbose), test default values, test invalid arguments, test range validation (num-variations 4-8).</idea>
+        <idea>Unit test: File I/O - test prompt file loading, test output directory creation, test image file saving, test JSON metadata file creation, test error handling for missing files.</idea>
+        <idea>Integration test: End-to-end CLI run - run CLI with sample enhanced prompt file, verify images generated and saved correctly, verify quality scoring computed for all images, verify ranking by overall score, verify trace files created with correct structure, verify console output format (ranked list, top 3 highlighted, score breakdown, file paths).</idea>
+        <idea>Integration test: Best candidate selection - verify top-scoring image automatically selected, verify comparison summary showing why top image scored highest, verify console output includes best candidate information.</idea>
+        <idea>Integration test: Cost tracking - verify API costs logged in generation trace JSON, verify cost tracking in console output, verify cost per image calculation.</idea>
+        <idea>Error handling test: API failures - test Replicate API failure handling, test retry logic with exponential backoff, test fallback models if primary fails, test graceful error messages, test partial failure recovery (save what was completed).</idea>
+        <idea>Error handling test: Invalid inputs - test empty prompt file, test invalid aspect ratio, test invalid seed value, test missing API key, test model loading failures.</idea>
+        <idea>Performance test: Latency measurement - measure image generation time for 8 images, verify &lt;5 minutes target, measure quality scoring time for 8 images, verify &lt;2 minutes target, log timing for each major operation (generation, scoring, file I/O).</idea>
+        <idea>Performance test: Model loading optimization - verify models loaded once and cached, verify reuse across multiple images, measure model loading time (should be one-time cost).</idea>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

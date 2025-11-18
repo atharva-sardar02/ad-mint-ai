@@ -1336,17 +1336,28 @@ So that I can compare different outputs and select the best result for my needs.
 
 ---
 
-### Story 7.3: LLM-Guided Multi-Scene Planning (VideoDirectorGPT-style) [MVP]
+### Story 7.3: Two-Agent Prompt Enhancement + LLM-Guided Multi-Scene Planning (VideoDirectorGPT-style) [MVP]
 
 As a developer,
-I want to enhance scene planning with VideoDirectorGPT-style consistency groupings and entity descriptions,
-So that the LLM generates explicit consistency markers and shot lists that ensure coherent multi-scene narratives.
+I want a two-phase prompt enhancement and planning system that first iteratively refines user prompts using specialized agents, then applies VideoDirectorGPT-style planning with consistency groupings and entity descriptions,
+So that any user prompt (regardless of quality) gets transformed into a professional, production-ready specification with explicit consistency markers and shot lists.
 
 **Acceptance Criteria:**
 
-**Enhanced Scene Planning:**
-**Given** a user prompt is processed by the LLM
-**When** the scene planning module generates the video plan
+**Phase 1: Two-Agent Prompt Enhancement**
+**Given** a user prompt (of any quality) is submitted
+**When** the prompt enhancement service processes it
+**Then** it:
+- Uses Agent 1 (Creative Director) to enhance the prompt with cinematography, brand elements, and professional advertising language
+- Uses Agent 2 (Prompt Engineer) to critique and score the enhanced prompt
+- Iterates between agents (max 3 rounds) until score threshold is met or convergence detected
+- Scores prompts on multiple dimensions: completeness, specificity, professionalism, cinematography, brand alignment
+- Stops early if score ≥ 85 or if improvement < 2 points between iterations
+- Produces a professionally enhanced prompt ready for planning phase
+
+**Phase 2: VideoDirectorGPT-Style Planning**
+**Given** an enhanced prompt from Phase 1
+**When** the VideoDirectorGPT planning module processes it
 **Then** it includes:
 - Explicit consistency groupings for entities (e.g., "Character A must look the same in Scene 1 and Scene 3")
 - Entity descriptions with consistency requirements (product appearance, character identity, brand colors)
@@ -1362,7 +1373,7 @@ So that the LLM generates explicit consistency markers and shot lists that ensur
 - Consistency markers indicating which entities must remain consistent across scenes
 
 **Consistency Groupings:**
-**Given** the LLM has analyzed the prompt
+**Given** the LLM has analyzed the enhanced prompt
 **When** it generates the video plan
 **Then** it:
 - Identifies all entities that appear in multiple scenes (characters, products, brand elements)
@@ -1379,28 +1390,111 @@ So that the LLM generates explicit consistency markers and shot lists that ensur
 - Applies framing and composition details from shot list
 - Maintains consistency based on shot list specifications
 
+**Prompt Transparency & Debugging:**
+**Given** prompt enhancement and planning are running
+**When** a generation is processed
+**Then** the system:
+- Saves all prompt versions to versioned files in `output/prompt_traces/{generation_id}/`
+- File structure:
+  - `00_original_prompt.txt` - Original user input
+  - `01_agent1_iteration_1.txt` - First Creative Director enhancement
+  - `02_agent2_iteration_1.txt` - First Prompt Engineer critique + score
+  - `03_agent1_iteration_2.txt` - Second Creative Director refinement (if iterated)
+  - `04_agent2_iteration_2.txt` - Second Prompt Engineer critique (if iterated)
+  - `05_final_enhanced_prompt.txt` - Final enhanced prompt after all iterations
+  - `06_videodirectorgpt_plan.json` - Complete VideoDirectorGPT planning output
+  - `07_final_scene_prompts.json` - Final prompts sent to video generation (per scene)
+  - `prompt_trace_summary.json` - Metadata: scores, iterations, timestamps
+- Provides standalone CLI tool: `python enhance_prompt.py <input_file>` for terminal-based prompt enhancement
+- CLI supports: file input, stdin input, custom output directories, iteration control, model selection
+- All files are human-readable and versioned for debugging and analysis
+- CLI can be used independently of the main pipeline for testing and experimentation
+
 **Integration:**
-**Given** enhanced scene planning is implemented
+**Given** the two-phase enhancement system is implemented
 **When** a video generation is initiated
 **Then** the system:
-- Checks if enhanced planning is enabled in coherence settings (default: enabled)
-- Uses enhanced planning output for all subsequent generation steps (if enabled)
-- Falls back to basic planning if disabled
+- Checks if two-agent enhancement is enabled in coherence settings (default: enabled)
+- Checks if VideoDirectorGPT planning is enabled in coherence settings (default: enabled)
+- Runs Phase 1 (two-agent enhancement) if enabled, otherwise uses original prompt
+- Runs Phase 2 (VideoDirectorGPT planning) on enhanced prompt
+- Falls back to basic planning if both phases disabled
 - Passes consistency markers to video generation service
-- Uses entity descriptions for IP-Adapter (Story 7.3) and seed control (Story 7.1)
-- Stores complete planning output in generation record
+- Uses entity descriptions for IP-Adapter (Story 7.4) and seed control (Story 7.1)
+- Stores complete enhancement and planning output in generation record
+- Saves all prompt versions to trace files for transparency
 
 **Prerequisites:** Story 3.1 (Prompt Processing)
 
+**Status:**
+- ✅ **Phase 1 (Two-Agent Prompt Enhancement): COMPLETED**
+  - `prompt_enhancement.py` service implemented with two-agent iterative refinement
+  - Standalone CLI tool `enhance_prompt.py` created for terminal-based usage
+  - Prompt scoring mechanism implemented (hybrid: rule-based + LLM-based)
+  - File-based trace system saves all versions for transparency
+- ⚠️ **Phase 2 (VideoDirectorGPT Planning): NOT YET IMPLEMENTED**
+  - Needs enhancement to `scene_planning.py` with VideoDirectorGPT-style planning
+  - Needs LLM prompt template updates for consistency groupings and shot lists
+  - Needs schema expansion for consistency_groups, shot_list, entity_descriptions
+- ⚠️ **Integration: NOT YET IMPLEMENTED**
+  - Needs integration into main pipeline (`llm_enhancement.py`)
+  - Needs UI integration for coherence settings
+  - Needs database schema updates for storing enhanced planning output
+- ⚠️ **Pipeline Cleanup & Fixes: REQUIRED**
+  - Fix `num_clips` determinism: When user specifies num_clips, pass it to LLM so it creates exactly that many scenes (currently LLM creates 3-5, then code limits after)
+  - Fix clip persistence: Save individual clips permanently to `output/clips/{generation_id}/` instead of only in temp directory
+  - Update `temp_clip_paths` to point to permanent clip locations
+  - Ensure clips remain accessible after final video generation (currently they may be in temp and could be cleaned up)
+  - Verify editor's drag-and-drop reordering uses permanent clips, not cached/temp files
+
 **Technical Notes:**
-- Enhance LLM prompt template to include VideoDirectorGPT-style planning instructions
-- Expand scene planning JSON schema to include:
-  - `consistency_groups`: Array of entities with scene appearances
-  - `shot_list`: Array of shots with camera metadata
-  - `entity_descriptions`: Detailed descriptions of entities requiring consistency
-- Update scene planner module to parse and utilize new planning structure
-- Integrate shot list metadata into visual prompt generation
-- Store enhanced planning output in database for analysis and debugging
+- **Phase 1 Implementation (✅ COMPLETED):**
+  - ✅ Created `app/services/pipeline/prompt_enhancement.py` service with two-agent iterative refinement
+  - ✅ Agent 1: Creative Director (GPT-4 Turbo) - enhances with cinematography, brand, style
+  - ✅ Agent 2: Prompt Engineer (GPT-4 Turbo) - critiques and scores prompts
+  - ✅ Implemented prompt scoring mechanism (hybrid: rule-based + LLM-based)
+  - ✅ Max 3 iterations, early stopping on score threshold (85) or convergence (<2 point improvement)
+  - ✅ Cost optimization: Only runs if initial prompt score < 75
+  - ✅ Created standalone CLI tool: `enhance_prompt.py` for terminal-based usage
+  - ✅ CLI supports: `python enhance_prompt.py <input_file> [options]` with file/stdin input
+  - ✅ File structure: `output/prompt_traces/{timestamp}/` with numbered versions
+  - ✅ Saves JSON metadata with scores, timestamps, iteration history
+  - ✅ All trace files are human-readable for debugging and analysis
+- **Phase 2 Implementation (⚠️ TODO):**
+  - ⚠️ Enhance existing `scene_planning.py` with VideoDirectorGPT-style planning
+  - ⚠️ Enhance LLM prompt template in `llm_enhancement.py` to include VideoDirectorGPT-style planning instructions
+  - ⚠️ Expand `AdSpecification` schema to include:
+    - `consistency_groups`: Array of entities with scene appearances
+    - `shot_list`: Array of shots with camera metadata (camera movement, shot size, perspective, lens type)
+    - `entity_descriptions`: Detailed descriptions of entities requiring consistency
+  - ⚠️ Update scene planner to parse and utilize new planning structure
+  - ⚠️ Integrate shot list metadata into visual prompt generation for video clips
+- **Integration (⚠️ TODO):**
+  - ⚠️ Update `llm_enhancement.py` to call `prompt_enhancement.py` service first (Phase 1)
+  - ⚠️ Update `llm_enhancement.py` to use enhanced prompt for VideoDirectorGPT planning (Phase 2)
+  - ⚠️ Update `scene_planning.py` to use enhanced prompt from Phase 1
+  - ⚠️ Integrate shot list metadata into `video_generation.py` for visual prompts
+  - ⚠️ Add coherence settings UI controls for enabling/disabling two-agent enhancement
+  - ⚠️ Store complete enhancement and planning output in generation record
+  - ⚠️ Save all prompt versions to trace files during pipeline execution
+  - ⚠️ Update frontend to show prompt enhancement status and scores
+- **Pipeline Cleanup & Fixes (⚠️ REQUIRED):**
+  - ⚠️ **Fix num_clips determinism** in `generations.py`:
+    - When `num_clips` is specified AND `use_llm=True`: Pass `num_clips` to LLM prompt so it creates exactly that many scenes (currently LLM creates 3-5, then code limits after)
+    - When `num_clips` is specified AND `use_llm=False`: Use `num_clips` directly (already works)
+    - When `num_clips` is NOT specified: Let LLM decide (3-5 scenes, current behavior)
+    - Update `SYSTEM_PROMPT` in `llm_enhancement.py` to accept and respect `num_clips` parameter
+  - ⚠️ **Fix clip persistence** in `generations.py` and `video_generation.py`:
+    - Create permanent clip storage: `output/clips/{generation_id}/` directory
+    - After each clip is generated, copy/move it from temp to permanent location: `output/clips/{generation_id}/clip_{scene_number}.mp4`
+    - After overlays are added, save overlay clips to permanent location: `output/clips/{generation_id}/clip_{scene_number}_overlay.mp4`
+    - Update `generation.temp_clip_paths` to store permanent paths (or add new `clip_paths` field for permanent storage)
+    - Ensure clips remain accessible after final video generation completes
+    - Update editor service to use permanent clip paths instead of temp paths
+  - ⚠️ **Verify editor clip handling**:
+    - Confirm editor's drag-and-drop reordering uses permanent clips, not cached/temp files
+    - Ensure clips persist even if temp directory is cleaned up
+    - Test that clips are accessible long after generation completes
 
 ---
 
@@ -1892,322 +1986,504 @@ So that the system continuously improves prompt optimization and consistency tec
 
 ---
 
-## Epic 8: Hero-Frame Generation (Text → Photo)
+## Epic 8: CLI MVP - Image Generation Feedback Loops
 
-**Goal:** Provide a professional, hero-frame-first entry point where users (especially power users) can generate and curate cinematic still frames that become the visual anchor for downstream video ads.
-
-**Status:** Not started.
-
-### Story 8.1: Cinematographer Prompt Enhancement Service (FR-037)
-
-As a **user who cares about visual quality**,  
-I want an optional “cinematographer enhancement” for my hero-frame prompt,  
-So that I can quickly get a film-grade prompt without needing cinematography expertise.
-
-**Acceptance Criteria:**
-
-**Given** I enter a basic hero-frame prompt  
-**When** I click “Enhance Prompt (Cinematographer Mode)”  
-**Then** the system calls an LLM and returns an enriched prompt including:
-- Camera body and lens details
-- Lighting direction and quality
-- Composition notes (framing, depth, rule of thirds)
-- Film stock/color science references
-- Mood and atmosphere descriptors
-- Aspect ratio and stylization hints
-
-**And** the UI displays:
-- Original prompt and enhanced prompt side-by-side
-- A short explanation of what changed and why
-- Buttons: **Use Enhanced**, **Edit Enhanced**, **Revert to Original**
-
-**And** if the LLM call fails, the system:
-- Shows a user-friendly error message
-- Falls back to the original prompt without blocking hero-frame generation.
-
-**Prerequisites:** Story 3.1 (Prompt Processing).
-
-**Technical Notes:** Reuse existing LLM client; add a dedicated prompt template for cinematographer-style enrichment; schema-align output so it can feed directly into hero-frame generation.
-
----
-
-### Story 8.2: Hero-Frame Generation Backend & Storage (FR-036)
-
-As a **user**,  
-I want to generate multiple hero-frame candidates from a cinematography-focused prompt,  
-So that I can pick the best frame to anchor my video.
-
-**Acceptance Criteria:**
-
-**Given** I submit a hero-frame generation request  
-**When** the backend processes it  
-**Then** it calls a text-to-image model (e.g., SDXL on Replicate) and generates **4–8 hero frames**:
-- All share the specified aspect ratio
-- All follow the enriched (or original) prompt
-
-**And** the system:
-- Stores each hero frame image in a persistent location (e.g., `/output/hero_frames/…`)
-- Persists metadata: prompt, enhanced_prompt (if used), model, seed, aspect_ratio, user_id, created_at
-- Links hero frames to a logical “hero-frame request” or group ID.
-
-**And** the API returns:
-- List of hero frame IDs
-- URLs for thumbnails/full-size images
-- Associated metadata.
-
-**Prerequisites:** Story 8.1 (for enriched prompt path), Story 1.2 (database), Story 3.2 (generation infra).
-
-**Technical Notes:** Add `hero_frames` table and storage conventions; ensure seeds are stored to support later reuse (e.g., for consistency experiments).
-
----
-
-### Story 8.3: Hero-Frame Gallery UI & Selection (FR-036, FR-038)
-
-As a **user**,  
-I want a gallery UI for hero-frame candidates where I can inspect, favorite, and select one as the primary hero frame,  
-So that I can confidently choose the frame that best represents my ad.
-
-**Acceptance Criteria:**
-
-**Given** hero frames exist for a request  
-**When** I open the Hero Frame gallery  
-**Then** I see:
-- A grid of hero-frame thumbnails (4–8 items)
-- Ability to click a thumbnail to open a zoomed view
-- Basic metadata (created time, aspect ratio, prompt snippet)
-
-**And** I can:
-- Mark one hero frame as **Primary Hero Frame**
-- Mark multiple hero frames as **Favorites**
-- Clear or change the primary selection at any time before moving forward.
-
-**And** once a primary hero frame is selected:
-- The selection is clearly highlighted in the UI
-- The backend stores `is_primary` flag on that hero frame
-- The selected hero frame ID becomes required input for the image-to-video workflow (Epic 9).
-
-**Prerequisites:** Story 8.2, Story 4.1 (Gallery patterns).
-
-**Technical Notes:** Add simple state machine to ensure exactly one primary hero frame per hero-frame request; reuse existing card/grid components where possible.
-
----
-
-### Story 8.4: Hero-Frame Iteration & Mutation Controls (FR-038)
-
-As a **power user**,  
-I want “slot-machine” style iteration and light prompt mutation controls for hero frames,  
-So that I can quickly explore variations around a promising idea.
-
-**Acceptance Criteria:**
-
-**Given** I have hero-frame results visible  
-**When** I click “Regenerate Set”  
-**Then** the system regenerates a new batch of 4–8 hero frames with the **same prompt** and updates the gallery with a new “generation round” (preserving previous rounds).
-
-**Given** I click “Mutate Prompt” for a hero frame  
-**When** I tweak a small set of controls (e.g., lighting, composition, mood dropdowns)  
-**Then** the system:
-- Generates a slightly modified prompt (via LLM or templating)
-- Regenerates a new hero-frame batch based on that mutated prompt
-
-**And** the UI:
-- Shows all rounds in a timeline or grouped list
-- Allows me to favorite frames across rounds
-- Clearly indicates which hero frame is **currently** selected as the canonical anchor.
-
-**Prerequisites:** Story 8.3.
-
-**Technical Notes:** Keep round history lightweight; store round index and mutated prompt; avoid exploding storage by setting a max number of rounds or retention policy.
-
----
-
-## Epic 9: Hero-Frame Iteration & Image-to-Video Workflow
-
-**Goal:** Turn a selected hero frame into high-quality motion through automated multi-attempt generation, VBench-based selection, and a professional Iteration Workspace with history, versioning, and quality dashboards.
+**Goal:** Provide rapid-iteration CLI tools for image prompt enhancement and image generation with automatic quality scoring, enabling developers to quickly test and refine image generation workflows before building UI.
 
 **Status:** Not started.
 
-### Story 9.1: Image-to-Video Service & Motion/Negative Prompt Schema (FR-039)
+### Story 8.1: Image Prompt Feedback Loop CLI (FR-037)
 
-As a **user**,  
-I want to generate motion from my selected hero frame using motion and negative prompts,  
-So that I can see my hero frame come alive as a video.
+As a **developer**,  
+I want a CLI tool for iterative image prompt enhancement using two-agent feedback loops,  
+So that I can rapidly refine prompts for image generation without UI overhead.
 
 **Acceptance Criteria:**
 
-**Given** I have selected a primary hero frame  
-**When** I configure a motion prompt (camera movement, motion intensity, frame rate) and optional negative prompt  
-**Then** I can start an image-to-video generation request.
+**Given** I have a basic image prompt  
+**When** I run `python enhance_image_prompt.py prompt.txt`  
+**Then** the CLI tool:
+- Uses Agent 1 (Cinematographer/Creative Director) to enhance the prompt with:
+  - Camera body and lens details (e.g., "Canon EOS R5, 85mm f/1.2 lens")
+  - Lighting direction and quality (e.g., "soft golden morning light", "dramatic side lighting")
+  - Composition notes (framing, depth, rule of thirds)
+  - Film stock/color science references
+  - Mood and atmosphere descriptors
+  - Aspect ratio and stylization hints
+- Uses Agent 2 (Prompt Engineer) to critique and score the enhanced prompt
+- Iterates between agents (max 3 rounds) until score threshold is met or convergence detected
+- Scores prompts on multiple dimensions based on Prompt Scoring Guide:
+  - Completeness (0-100): Does it have all necessary elements?
+  - Specificity (0-100): Are visual details clear and unambiguous?
+  - Professionalism (0-100): Is it ad-quality language?
+  - Cinematography (0-100): Does it include camera/composition details?
+  - Brand alignment (0-100): Are brand guidelines present and clear?
+  - Overall score (weighted average)
 
-**And** the backend:
-- Accepts `hero_frame_id`, `motion_prompt`, `negative_prompt`, and duration
-- Calls an image-to-video model (e.g., Kling/Wan/PixVerse) via a dedicated service
-- Produces at least one video attempt stored with a `generation_group_id`
-- Links attempts back to the hero frame and user.
+**And** the CLI:
+- Saves all prompt versions to `output/image_prompt_traces/{timestamp}/`:
+  - `00_original_prompt.txt` - Original user input
+  - `01_agent1_iteration_1.txt` - First Cinematographer enhancement
+  - `02_agent2_iteration_1.txt` - First Prompt Engineer critique + score
+  - `03_agent1_iteration_2.txt` - Second enhancement (if iterated)
+  - `04_agent2_iteration_2.txt` - Second critique (if iterated)
+  - `05_final_enhanced_prompt.txt` - Final enhanced prompt
+  - `prompt_trace_summary.json` - Metadata: scores, iterations, timestamps
+- Prints enhancement results to console with scores and iteration history
+- Supports stdin input: `echo "prompt" | python enhance_image_prompt.py -`
+- Supports custom output directories: `--output-dir ./my_traces`
+- Supports iteration control: `--max-iterations 5 --threshold 90`
+- Follows guidelines from Prompt Scoring Guide (structure like scene description, camera cues, lighting cues)
 
-**And** errors are surfaced via standard JSON error schema.
+**And** prompt enhancement follows best practices from Prompt Scoring Guide:
+- Structure prompts like scene descriptions (who/what → action → where/when → style)
+- Use camera cues: "wide aerial shot", "close-up portrait", "telephoto shot", "macro photograph"
+- Use lighting cues: "soft golden morning light", "harsh neon glow", "dramatic side lighting"
+- Limit to one scene or idea per prompt
+- Use natural language, not keyword stuffing
 
-**Prerequisites:** Story 8.3, Story 3.2 (video generation infra).
+**Prerequisites:** Story 7.3 Phase 1 (Two-Agent Prompt Enhancement pattern).
 
-**Technical Notes:** Introduce `generation_groups` and `video_attempts` (or reuse Epic 7 parallel structures) to group attempts; ensure hero-frame image is passed correctly to the chosen model.
+**Technical Notes:**
+- Reuse `prompt_enhancement.py` service pattern from Story 7.3
+- Create `enhance_image_prompt.py` CLI tool similar to `enhance_prompt.py`
+- Adapt agent prompts for image-specific enhancement (cinematography focus)
+- Integrate Prompt Scoring Guide guidelines into agent system prompts
+- Use same scoring mechanism (hybrid: rule-based + LLM-based)
+- Save trace files for transparency and debugging
 
 ---
 
-### Story 9.2: Automated 3-Attempt Generation & VBench Evaluation (FR-040)
+### Story 8.2: Image Generation Feedback Loop CLI (FR-036)
 
-As a **pro user**,  
-I want a “3-attempt automatic mode” that generates and scores multiple attempts from a hero frame,  
-So that the system can pre-rank candidates for me using objective quality metrics.
-
-**Acceptance Criteria:**
-
-**Given** I enable “Auto 3-Attempt Mode”  
-**When** I submit an image-to-video request  
-**Then** the system:
-- Automatically generates exactly 3 attempts in the background
-- Stores them under a shared `generation_group_id`
-- Tracks per-attempt metadata (duration, model, settings, cost).
-
-**And** after all attempts finish, the system:
-- Runs VBench (or equivalent) on each attempt
-- Computes per-attempt metrics (temporal consistency, aesthetics, prompt alignment, etc.)
-- Computes an overall score and selects the **system-selected best** attempt
-- Marks that attempt with a flag (e.g., `is_system_selected_best = true`).
-
-**And** the API and UI expose:
-- List of attempts for a group
-- Per-attempt VBench metrics
-- Which attempt was auto-selected and why (score breakdown).
-
-**Prerequisites:** Story 9.1, Story 7.6 (VBench integration).
-
-**Technical Notes:** Reuse VBench infra from Epic 7; add group-level endpoints `/api/generation-groups/{group_id}`; store metrics in a normalized `quality_metrics` table.
-
----
-
-### Story 9.3: Iteration Workspace UI (FR-041)
-
-As a **professional user**,  
-I want a dedicated Iteration Workspace to compare attempts side-by-side with metrics,  
-So that I can choose, override, and refine the best motion version.
+As a **developer**,  
+I want a CLI tool for generating images with automatic quality scoring,  
+So that I can rapidly iterate on image generation and select the best candidates.
 
 **Acceptance Criteria:**
 
-**Given** a generation group with ≥1 attempts  
-**When** I open the Iteration Workspace for that group  
-**Then** I see:
-- All attempts in a grid or side-by-side layout
-- Inline video players (play/pause, scrub) for each attempt
-- Key metrics (overall score + a few key dimensions)
-- A clear highlight on the system-selected best attempt.
+**Given** I have an enhanced image prompt (from Story 8.1)  
+**When** I run `python generate_images.py enhanced_prompt.txt --num-variations 8`  
+**Then** the CLI tool:
+- Calls a text-to-image model (e.g., SDXL on Replicate) to generate multiple image variations (4-8 default)
+- All images share the specified aspect ratio
+- All follow the enhanced prompt
 
-**And** I can:
-- Manually mark a different attempt as the **user-selected best**
-- Trigger a fresh set of attempts from updated motion/negative prompts
-- View a short LLM-suggested “prompt improvement” snippet based on low-scoring metrics or my feedback (“too chaotic”, etc.).
+**And** after generation, the system automatically scores each image using multiple benchmarks:
+- **PickScore** (primary): Human preference prediction (0-100, higher = better)
+- **CLIP-Score**: Image-text alignment (0-100, higher = better)
+- **VQAScore**: Compositional semantic alignment (0-100, higher = better)
+- **Aesthetic Predictor** (LAION): Aesthetic quality (1-10 scale)
+- **Overall Quality Score**: Weighted combination of all metrics
 
-**And** the backend:
-- Stores `is_user_selected_best` per attempt
-- Logs each regeneration as a new attempt in the same group
-- Preserves full history.
-
-**Prerequisites:** Story 9.2.
-
-**Technical Notes:** Reuse comparison concepts from Epic 7 (Parallel Generation Tool); ensure UX clearly distinguishes auto vs user selection and iteration numbers.
-
----
-
-### Story 9.4: Iteration History & Final Version Pointer (FR-042)
-
-As a **user**,  
-I want a clear iteration history and a final version pointer,  
-So that I understand how my video evolved and which version is used downstream.
-
-**Acceptance Criteria:**
-
-**Given** multiple iterations of a generation group exist  
-**When** I open the iteration history view  
-**Then** I see a timeline listing for each iteration:
-- Iteration index (1, 2, 3, …)
-- Which attempt was selected that round (system vs user)
-- Key prompt changes and settings deltas
-- VBench score trend (delta vs previous iteration).
+**And** the CLI:
+- Saves all generated images to `output/image_generations/{timestamp}/`:
+  - `image_001.png`, `image_002.png`, etc. (numbered by quality rank)
+  - `image_001_metadata.json`, `image_002_metadata.json` (scores, prompt, model, seed)
+- Saves generation trace to `output/image_generations/{timestamp}/generation_trace.json`:
+  - All prompts used (original, enhanced)
+  - All images generated with file paths
+  - All quality scores per image
+  - Model settings, seeds, timestamps
+  - Cost tracking
+- Prints results to console:
+  - Ranked list of images by overall quality score
+  - Top 3 images highlighted
+  - Score breakdown per image (PickScore, CLIP-Score, VQAScore, Aesthetic)
+  - File paths for manual viewing
+- Supports custom output directory: `--output-dir ./my_images`
+- Supports aspect ratio control: `--aspect-ratio 16:9`
+- Supports seed control: `--seed 12345` (for reproducibility)
 
 **And** the system:
-- Maintains a `final_version` pointer per ad (points to a specific attempt)
-- Uses `final_version` for:
-  - Export & download
-  - Editor entry (Epic 6)
-  - Analytics and dashboards.
+- Automatically selects the top-scoring image as "best candidate"
+- Provides comparison summary showing why top image scored highest
+- Logs all API calls and costs for transparency
 
-**And** I can:
-- Change which attempt is marked as final (with a confirmation)
-- Compare any two versions side-by-side (player + metrics).
+**Prerequisites:** Story 8.1 (Image Prompt Enhancement), Story 3.2 (Generation Infrastructure).
 
-**Prerequisites:** Story 9.3.
-
-**Technical Notes:** Add `generation_groups.final_attempt_id` or equivalent; be careful with referential integrity when attempts are deleted; add basic diff representation for prompt/settings between iterations.
-
----
-
-### Story 9.5: Quality Dashboard & Benchmarks (FR-043)
-
-As a **product owner or advanced user**,  
-I want a Quality Dashboard summarizing VBench and iteration behavior across videos,  
-So that I can see how quality is trending and where the hero-frame workflow is paying off.
-
-**Acceptance Criteria:**
-
-**Given** VBench and iteration data exist  
-**When** I open the Quality Dashboard  
-**Then** I see:
-- Distribution of VBench scores across attempts and final videos
-- Average number of iterations per final video
-- Agreement rate between auto-selected best and user-selected final
-- Trends in quality over time.
-
-**And** I can filter by:
-- Date range
-- Model used (Kling/Wan/PixVerse/etc.)
-- (Future) Campaign/tag.
-
-**And** for an individual video, the dashboard shows:
-- Per-attempt scores (bar/line chart)
-- Iteration timeline and which iteration produced the final version.
-
-**Prerequisites:** Story 9.2, Story 9.4, Story 7.10 (Quality Feedback Loop).
-
-**Technical Notes:** Start with backend aggregation endpoints and simple charts; use existing quality_metrics; keep v1 read-only/observational.
+**Technical Notes:**
+- Create `generate_images.py` CLI tool
+- Integrate Replicate SDXL API (or other text-to-image model)
+- Implement automatic scoring using:
+  - PickScore model (Stability AI open-source)
+  - CLIP-Score (Hugging Face transformers)
+  - VQAScore (if available)
+  - LAION Aesthetic Predictor
+- Create `image_quality_scoring.py` service to compute all metrics
+- Store images and metadata in organized directory structure
+- Support manual file opening (images saved to disk, user opens manually)
+- Log all operations for transparency
 
 ---
 
-### Story 9.6: Pipeline Integration with Existing Epics (FR-044)
+### Story 8.3: Storyboard Creation CLI (Start/End Frames for Video Clips)
 
-As a **system architect**,  
-I want the hero-frame and iteration workflow to integrate cleanly with the existing pipeline,  
-So that we reuse Epic 3, 6, and 7 capabilities instead of creating a parallel system.
+As a **developer**,  
+I want a CLI tool to create storyboards (start and end frames) for individual video clips,  
+So that I can visualize the motion arc before generating video.
 
 **Acceptance Criteria:**
 
-**Given** a final hero-frame-based video version is selected  
-**When** it is marked as `final_version`  
-**Then**:
-- The existing generation pipeline (Epic 3) still provides stitching, audio, and export capabilities as usual (or is re-used where appropriate in the image-to-video path).
-- Epic 7 coherence techniques (seed control, IP-Adapter, VBench, etc.) are available and configurable for hero-frame flows.
-- Epic 6 editor can be launched from any final version produced by this workflow.
+**Given** I have a video clip prompt (or enhanced prompt from Story 8.1)  
+**When** I run `python create_storyboard.py clip_prompt.txt --num-clips 3`  
+**Then** the CLI tool:
+- Uses VideoDirectorGPT-style planning to break the prompt into individual video clips
+- For each clip, generates:
+  - **Start frame**: The initial frame of the video clip
+  - **End frame**: The final frame of the video clip
+  - **Motion description**: What happens between start and end (camera movement, subject motion)
+- Uses enhanced image generation (Story 8.2) to create start/end frames
 
-**And** the hero-frame flow:
-- Does **not** remove or break the simple prompt-to-video path
-- Is exposed as an “Advanced / Pro Mode” entry point in the UI
-- Reuses data models where possible (no unnecessary duplication of concepts).
+**And** the CLI:
+- Saves storyboard to `output/storyboards/{timestamp}/`:
+  - `clip_001_start.png`, `clip_001_end.png`
+  - `clip_002_start.png`, `clip_002_end.png`
+  - `clip_003_start.png`, `clip_003_end.png`
+  - `storyboard_metadata.json`:
+    - Clip descriptions
+    - Start/end frame prompts
+    - Motion descriptions
+    - Camera movements
+    - Shot list metadata (from VideoDirectorGPT planning)
+- Prints storyboard summary to console:
+  - List of clips with start/end frame descriptions
+  - Motion arcs for each clip
+  - File paths for manual viewing
+- Supports custom output directory: `--output-dir ./my_storyboard`
+- Integrates with Story 8.1 for prompt enhancement (optional flag: `--enhance-prompts`)
 
-**And** documentation makes clear:
-- Where the hero-frame path plugs into the existing pipeline
-- Which epics and services it depends on.
+**And** storyboard creation includes:
+- VideoDirectorGPT-style planning with:
+  - Shot list with camera metadata (camera movement, shot size, perspective, lens type)
+  - Scene dependencies and narrative flow
+  - Consistency groupings (if applicable)
+- Start/end frame prompts derived from shot list
+- Motion descriptions for image-to-video generation
 
-**Prerequisites:** Story 9.4, Epic 3, Epic 6, Epic 7 core stories.
+**Prerequisites:** Story 8.1 (Image Prompt Enhancement), Story 8.2 (Image Generation), Story 7.3 Phase 2 (VideoDirectorGPT Planning - if available, otherwise basic planning).
 
-**Technical Notes:** This is mostly glue/config and documentation: update architecture docs, confirm routing flows, and ensure all generation paths share consistent cost tracking, status, and storage patterns.
+**Technical Notes:**
+- Create `create_storyboard.py` CLI tool
+- Integrate VideoDirectorGPT planning (or basic scene planning if Phase 2 not complete)
+- For each clip, generate two images (start + end) using Story 8.2
+- Store storyboard as organized directory with metadata
+- Support manual file opening for visual review
+- Log all operations for transparency
+
+---
+
+### Story 8.4: Unified Narrative Generation for Storyboard Enhancement
+
+As a **developer**,  
+I want the storyboard enhancement service to generate a unified narrative document that describes the overall ad story,  
+So that individual scene prompts are guided by a cohesive narrative and video generation can maintain story coherence across all scenes.
+
+**Acceptance Criteria:**
+
+1. **Given** I have a reference image and enhanced prompt (from Stories 8.1 and 8.2)  
+   **When** the storyboard prompt enhancement service processes them  
+   **Then** the service generates a unified narrative document BEFORE creating individual scene prompts that includes:
+   - Overall Ad Story (2-3 paragraph narrative following Sensory Journey framework)
+   - Emotional Arc (how emotions progress across scenes)
+   - Scene Connections (how scenes transition narratively and visually)
+   - Visual Progression (how visuals evolve across scenes)
+   - Product Reveal Strategy (hidden → partial → full)
+   - Brand Narrative (how brand identity is woven throughout)
+
+2. **Given** the unified narrative document is generated  
+   **When** individual scene prompts are created  
+   **Then** the Cinematic Creative agent uses the narrative document as context to ensure:
+   - Each scene contributes to the overall story
+   - Narrative coherence between scenes
+   - Emotional arc progression
+   - Visual progression strategy
+   - Product reveal strategy execution
+
+3. **Given** the storyboard enhancement completes  
+   **When** the service saves outputs  
+   **Then** it saves the unified narrative document as:
+   - `unified_narrative.md` (human-readable markdown)
+   - `unified_narrative.json` (structured JSON for programmatic use)
+   - Both saved to `output/storyboards/{timestamp}/storyboard_enhancement_trace/`
+
+4. **Given** the unified narrative document exists  
+   **When** Epic 9 video generation processes the storyboard  
+   **Then** video generation can use the narrative document to:
+   - Guide video prompt enhancement with narrative context
+   - Ensure video clips maintain story coherence
+   - Apply consistent emotional tone across scenes
+   - Maintain visual progression throughout the video
+   - Create smooth narrative transitions between clips
+
+**Prerequisites:** Story 8.3 (Storyboard Creation CLI with prompt enhancement)
+
+**Technical Notes:**
+- Add narrative generation as Step 0 in `enhance_storyboard_prompts()` function
+- Use two-agent iterative feedback loop (Creative Director + Editor) similar to scene prompt generation
+- Agent 1 (Creative Director): Generates narrative document with full context (original prompt, visual elements, intent, framework)
+- Agent 2 (Editor): Critiques and scores narrative on 6 dimensions (coherence, emotional arc, scene connections, visual progression, brand integration, framework alignment)
+- Iterative loop: Max 3 rounds, threshold 85.0, convergence detection
+- Generate both markdown and JSON formats from final narrative
+- Update `StoryboardEnhancementResult` dataclass to include narrative paths, content, and iteration history
+- Pass narrative document as context to Cinematic Creative agent during scene prompt generation
+- Narrative document enables Epic 9 to maintain story coherence during video generation
+- LLM API: OpenAI GPT-4 Turbo (same API as existing agents, but specialized system prompts for narrative)
+
+---
+
+## Epic 9: CLI MVP - Video Generation Feedback Loops
+
+**Goal:** Provide rapid-iteration CLI tools for video prompt enhancement and video generation with automatic VBench quality scoring, enabling developers to quickly test and refine video generation workflows before building UI.
+
+**Status:** Not started.
+
+### Story 9.1: Video Prompt Feedback Loop CLI (FR-039)
+
+As a **developer**,  
+I want a CLI tool for iterative video prompt enhancement using two-agent feedback loops with VideoDirectorGPT enhancements,  
+So that I can rapidly refine prompts for video generation without UI overhead.
+
+**Acceptance Criteria:**
+
+**Given** I have a basic video prompt (or motion prompt for image-to-video)  
+**When** I run `python enhance_video_prompt.py prompt.txt --video-mode`  
+**Then** the CLI tool:
+- Uses Agent 1 (Video Director/Creative Director) to enhance the prompt with:
+  - Camera framing and movement (e.g., "wide aerial shot", "steady tracking shot", "low-angle view")
+  - Action beats and timing cues
+  - Lighting and color palette
+  - Motion intensity and style
+  - Temporal continuity hints
+- Uses Agent 2 (Prompt Engineer) to critique and score the enhanced prompt
+- Iterates between agents (max 3 rounds) until score threshold is met or convergence detected
+- Applies VideoDirectorGPT-style enhancements (if Story 7.3 Phase 2 available):
+  - Shot list with camera metadata (camera movement, shot size, perspective, lens type)
+  - Scene dependencies and narrative flow
+  - Consistency groupings for entities
+  - Entity descriptions with consistency requirements
+- Scores prompts on multiple dimensions based on Prompt Scoring Guide:
+  - Completeness (0-100): Does it have all necessary elements?
+  - Specificity (0-100): Are visual and motion details clear?
+  - Professionalism (0-100): Is it ad-quality language?
+  - Cinematography (0-100): Does it include camera/motion details?
+  - Temporal coherence (0-100): Does it describe smooth, plausible motion?
+  - Brand alignment (0-100): Are brand guidelines present?
+  - Overall score (weighted average)
+
+**And** the CLI:
+- Saves all prompt versions to `output/video_prompt_traces/{timestamp}/`:
+  - `00_original_prompt.txt` - Original user input
+  - `01_agent1_iteration_1.txt` - First Video Director enhancement
+  - `02_agent2_iteration_1.txt` - First Prompt Engineer critique + score
+  - `03_agent1_iteration_2.txt` - Second enhancement (if iterated)
+  - `04_agent2_iteration_2.txt` - Second critique (if iterated)
+  - `05_final_enhanced_prompt.txt` - Final enhanced prompt
+  - `06_videodirectorgpt_plan.json` - VideoDirectorGPT planning output (if available)
+  - `prompt_trace_summary.json` - Metadata: scores, iterations, timestamps
+- Prints enhancement results to console with scores and iteration history
+- Supports stdin input: `echo "prompt" | python enhance_video_prompt.py -`
+- Supports custom output directories: `--output-dir ./my_traces`
+- Supports iteration control: `--max-iterations 5 --threshold 90`
+- Follows guidelines from Prompt Scoring Guide:
+  - Structure like one-sentence screenplay (subject → action → setting → style → mood)
+  - Use film terminology for clarity
+  - Limit to one scene or action per prompt
+  - Use visual language (describe what camera sees)
+  - Specify camera framing, depth of field, action beats, lighting, palette
+
+**And** for image-to-video prompts (motion prompts):
+- Enhances motion descriptions with:
+  - Camera movement (pan, tilt, dolly, static, tracking)
+  - Motion intensity (subtle, moderate, dynamic)
+  - Frame rate considerations
+  - Negative prompts for unwanted motion (e.g., "jerky, flicker, inconsistent")
+
+**And** for storyboard processing (building upon Epic 8.3/8.4):
+- **Given** I have a storyboard JSON file from Story 8.3 (`storyboard_metadata.json`)
+- **When** I run `python enhance_video_prompt.py --storyboard storyboard_metadata.json`
+- **Then** the CLI tool:
+  - Loads the storyboard JSON file and parses clip information
+  - **Loads the unified narrative document** (from `unified_narrative_path` in storyboard metadata) to use as narrative context for maintaining story coherence across clips
+  - For each clip in the storyboard:
+    - Extracts the clip's `motion_description` as the base motion prompt
+    - Extracts camera metadata: `camera_movement`, `shot_size`, `perspective`, `lens_type`
+    - Uses start/end frame paths as context (for image-to-video generation)
+    - **Uses unified narrative document as context** to ensure motion prompts:
+      - Maintain story coherence with overall narrative
+      - Follow the emotional arc progression from the narrative
+      - Apply consistent visual progression strategy
+      - Create smooth narrative transitions between clips
+    - Enhances the motion prompt using **two-agent feedback loop** (per clip):
+      - Agent 1 (Video Director): Enhances motion description with detailed camera movement specifications, motion intensity, frame rate considerations, temporal continuity hints, and **narrative context integration** (emotional arc, visual progression, scene connections from unified narrative)
+      - Agent 2 (Prompt Engineer): Critiques and scores the enhanced motion prompt
+      - Iterates (max 3 rounds) until score threshold met or convergence detected
+    - Generates negative prompts for unwanted motion
+  - Saves enhanced motion prompts per clip with per-clip trace files
+  - Saves `storyboard_enhanced_motion_prompts.json` with all clips' enhanced prompts and scores
+
+**Prerequisites:** Story 7.3 Phase 1 (Two-Agent Prompt Enhancement), Story 8.1 (Image Prompt Enhancement pattern), Story 8.3 (Storyboard Creation), Story 8.4 (Unified Narrative Generation).
+
+**Technical Notes:**
+- Create `enhance_video_prompt.py` CLI tool
+- Reuse `prompt_enhancement.py` service pattern from Story 7.3
+- Adapt agent prompts for video-specific enhancement (motion, temporal coherence focus)
+- Integrate VideoDirectorGPT planning (if Story 7.3 Phase 2 available)
+- Integrate Prompt Scoring Guide guidelines into agent system prompts
+- Use same scoring mechanism (hybrid: rule-based + LLM-based) with video-specific dimensions
+- Save trace files for transparency and debugging
+
+---
+
+### Story 9.2: Video Generation Feedback Loop CLI (FR-040)
+
+As a **developer**,  
+I want a CLI tool for generating videos with automatic VBench quality scoring,  
+So that I can rapidly iterate on video generation and select the best candidates.
+
+**Acceptance Criteria:**
+
+**Given** I have:
+- An enhanced video prompt (from Story 9.1), OR
+- A hero frame image + motion prompt (from Epic 8), OR
+- Storyboard start/end frames (from Story 8.3)
+
+**When** I run `python generate_videos.py enhanced_prompt.txt --num-attempts 3`  
+**Then** the CLI tool:
+- For text-to-video: Calls a text-to-video model (e.g., Kling/Wan/PixVerse on Replicate)
+- For image-to-video: Calls an image-to-video model with hero frame + motion prompt
+- Generates multiple video attempts (default: 3, configurable)
+- All videos follow the enhanced prompt and settings
+
+**And** after generation, the system automatically scores each video using VBench:
+- **Temporal Quality**:
+  - Subject identity consistency (0-100)
+  - Background consistency (0-100)
+  - Motion smoothness (0-100)
+  - Dynamic degree (0-100)
+- **Frame-wise Quality**:
+  - Aesthetic quality (0-100)
+  - Imaging quality (0-100)
+  - Object class alignment (0-100)
+- **Text-Video Alignment**:
+  - Prompt adherence (0-100)
+- **Overall Quality Score**: Weighted combination of all VBench dimensions
+
+**And** the CLI:
+- Saves all generated videos to `output/video_generations/{timestamp}/`:
+  - `video_001.mp4`, `video_002.mp4`, etc. (numbered by quality rank)
+  - `video_001_metadata.json`, `video_002_metadata.json` (scores, prompt, model, settings)
+- Saves generation trace to `output/video_generations/{timestamp}/generation_trace.json`:
+  - All prompts used (original, enhanced, motion, negative)
+  - All videos generated with file paths
+  - All VBench scores per video (all 16 dimensions)
+  - Model settings, seeds, timestamps, costs
+  - Hero frame path (if image-to-video)
+  - Storyboard references (if used)
+- Prints results to console:
+  - Ranked list of videos by overall quality score
+  - Top video highlighted as "system-selected best"
+  - VBench score breakdown per video (key dimensions)
+  - File paths for manual viewing
+  - Cost summary
+- Supports custom output directory: `--output-dir ./my_videos`
+- Supports image-to-video mode: `--image-to-video --hero-frame path/to/image.png --motion-prompt "camera pans left"`
+- Supports storyboard mode: `--storyboard path/to/storyboard.json`
+- Supports negative prompts: `--negative-prompt "jerky, flicker, inconsistent"`
+
+**And** the system:
+- Automatically selects the top-scoring video as "system-selected best"
+- Provides comparison summary showing why top video scored highest
+- Logs all API calls and costs for transparency
+- Supports human feedback: After viewing videos manually, user can provide feedback via CLI for next iteration
+
+**Prerequisites:** Story 9.1 (Video Prompt Enhancement), Story 7.6 (VBench Integration), Story 3.2 (Video Generation Infrastructure).
+
+**Technical Notes:**
+- Create `generate_videos.py` CLI tool
+- Integrate Replicate image-to-video APIs (Kling, Wan, PixVerse) or text-to-video APIs
+- Reuse VBench integration from Story 7.6 (`quality_control.py`)
+- Store videos and metadata in organized directory structure
+- Support manual file opening (videos saved to disk, user opens manually)
+- Log all operations for transparency
+- Support feedback loop: After human review, incorporate feedback into next iteration
+
+---
+
+### Story 9.3: Integrated Feedback Loop CLI (Complete Workflow)
+
+As a **developer**,  
+I want a unified CLI tool that orchestrates the complete feedback loop workflow,  
+So that I can rapidly iterate through the entire pipeline: image prompt → image generation → video prompt → video generation.
+
+**Acceptance Criteria:**
+
+**Given** I have a starting prompt (text or image)  
+**When** I run `python feedback_loop.py start_prompt.txt --workflow full`  
+**Then** the CLI tool orchestrates the complete workflow:
+1. **Image Prompt Feedback Loop** (Story 8.1):
+   - Enhances prompt using two-agent approach
+   - Saves trace files
+   - Outputs final enhanced image prompt
+2. **Image Generation Feedback Loop** (Story 8.2):
+   - Generates multiple image variations
+   - Scores images using PickScore, CLIP-Score, VQAScore, Aesthetic
+   - Selects best image candidate
+   - Saves images and scores
+3. **Storyboard Creation** (Story 8.3, optional):
+   - Creates start/end frames for video clips (if multi-clip)
+   - Saves storyboard
+4. **Video Prompt Feedback Loop** (Story 9.1):
+   - Enhances video/motion prompt using two-agent approach + VideoDirectorGPT
+   - Saves trace files
+   - Outputs final enhanced video prompt
+5. **Video Generation Feedback Loop** (Story 9.2):
+   - Generates multiple video attempts
+   - Scores videos using VBench
+   - Selects best video candidate
+   - Saves videos and scores
+
+**And** the CLI:
+- Saves complete workflow trace to `output/feedback_loops/{timestamp}/`:
+  - All intermediate outputs (prompts, images, videos)
+  - All scores and metrics
+  - Complete iteration history
+  - `workflow_summary.json` with end-to-end metrics
+- Prints workflow summary to console:
+  - Final outputs (best image, best video)
+  - Quality scores at each stage
+  - Cost breakdown
+  - File paths for manual review
+- Supports partial workflows:
+  - `--workflow image-only` (stops after image generation)
+  - `--workflow video-only` (starts from existing image)
+  - `--workflow prompt-only` (just prompt enhancement)
+- Supports iteration control:
+  - `--max-iterations-image 3` (image prompt iterations)
+  - `--max-iterations-video 3` (video prompt iterations)
+  - `--num-image-variations 8` (image generation count)
+  - `--num-video-attempts 3` (video generation count)
+- Supports human feedback at each stage:
+  - Pauses after image generation for manual review
+  - Pauses after video generation for manual review
+  - Accepts feedback via CLI prompts
+  - Incorporates feedback into next iteration
+
+**And** the workflow provides transparency:
+- All prompts, scores, and outputs are logged
+- All files are saved for manual review
+- Complete trace of decision-making process
+- Cost tracking at each stage
+
+**Prerequisites:** Story 8.1, Story 8.2, Story 8.3, Story 9.1, Story 9.2.
+
+**Technical Notes:**
+- Create `feedback_loop.py` CLI tool that orchestrates all previous CLI tools
+- Chain together: `enhance_image_prompt.py` → `generate_images.py` → `enhance_video_prompt.py` → `generate_videos.py`
+- Support interactive mode for human feedback
+- Create unified trace format for end-to-end workflow
+- Support resume from checkpoints (if workflow interrupted)
+- Log all operations for full transparency
 
 ---
 
@@ -2248,15 +2524,15 @@ So that we reuse Epic 3, 6, and 7 capabilities instead of creating a parallel sy
 - **FR-033:** Quality Feedback Loop → Epic 7, Story 7.10
 - **FR-034:** Profile Display → Epic 5, Story 5.1 (duplicate of FR-022)
 - **FR-035:** User Stats Update → Epic 5, Story 5.2 (duplicate of FR-023)
- - **FR-036:** Hero Frame Generation (Text → Photo) → Epic 8, Stories 8.2, 8.3
- - **FR-037:** Cinematographer-Level Prompt Enhancement for Images → Epic 8, Story 8.1
- - **FR-038:** Hero Frame Iteration & Selection → Epic 8, Stories 8.3, 8.4
- - **FR-039:** Image-to-Video Generation (Photo → Video) from Hero Frame → Epic 9, Story 9.1
- - **FR-040:** Automated Multi-Attempt Generation with VBench-Based Selection → Epic 9, Story 9.2
- - **FR-041:** Iteration Workspace & Human-in-the-Loop Refinement → Epic 9, Story 9.3
- - **FR-042:** Iterative Refinement Workflow & Versioning → Epic 9, Story 9.4
- - **FR-043:** Quality Dashboard & Benchmarks → Epic 9, Story 9.5
- - **FR-044:** Integration with Existing Pipeline & Epics → Epic 9, Story 9.6
+ - **FR-036:** Hero Frame Generation (Text → Photo) → Epic 8, Story 8.2 (CLI MVP)
+ - **FR-037:** Cinematographer-Level Prompt Enhancement for Images → Epic 8, Story 8.1 (CLI MVP)
+ - **FR-038:** Hero Frame Iteration & Selection → Epic 8, Story 8.2 (CLI MVP with automatic scoring)
+ - **FR-039:** Image-to-Video Generation (Photo → Video) from Hero Frame → Epic 9, Story 9.2 (CLI MVP)
+ - **FR-040:** Automated Multi-Attempt Generation with VBench-Based Selection → Epic 9, Story 9.2 (CLI MVP)
+ - **FR-041:** Iteration Workspace & Human-in-the-Loop Refinement → Epic 9, Story 9.3 (CLI MVP - integrated workflow)
+ - **FR-042:** Iterative Refinement Workflow & Versioning → Epic 9, Story 9.3 (CLI MVP - complete feedback loop)
+ - **FR-043:** Quality Dashboard & Benchmarks → Epic 9, Story 9.2 (CLI MVP - VBench scoring)
+ - **FR-044:** Integration with Existing Pipeline & Epics → Epic 9, Story 9.3 (CLI MVP - workflow orchestration)
 
 ---
 
@@ -2272,6 +2548,8 @@ This epic breakdown decomposes all 35 functional requirements from the PRD into 
 5. **Epic 5 (User Profile)** ✅ COMPLETED - Provides usage tracking and account information (2 stories)
 6. **Epic 6 (Video Editing)** - Enables users to edit generated videos with timeline-based editor (6 stories)
 7. **Epic 7 (Multi-Scene Coherence & Quality Optimization)** [MVP: Stories 7.0-7.4] - Implements state-of-the-art generation-time consistency techniques (seed control, IP-Adapter, LoRA training with infrastructure setup, VideoDirectorGPT-style planning) to ensure professional multi-scene coherence. MVP includes dev tool for testing coherence settings (Story 7.0), seed control (7.1), parallel generation comparison tool (7.2), enhanced LLM planning (7.3), IP-Adapter (7.4), and LoRA training pipeline (7.5). Growth phase (7.6-7.10) includes advanced quality control (VBench, CSFD, ControlNet) and feedback loops. Quality is priority; cost and generation time are not constraints.
+8. **Epic 8 (CLI MVP - Image Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for image prompt enhancement and image generation with automatic quality scoring (PickScore, CLIP-Score, VQAScore, Aesthetic Predictor). Includes: image prompt feedback loop using two-agent approach (8.1), image generation with automatic scoring (8.2), and storyboard creation with start/end frames (8.3). Enables developers to quickly test and refine image generation workflows before building UI.
+9. **Epic 9 (CLI MVP - Video Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for video prompt enhancement and video generation with automatic VBench quality scoring. Includes: video prompt feedback loop using two-agent approach + VideoDirectorGPT (9.1), video generation with VBench scoring (9.2), and integrated complete workflow orchestrator (9.3). Enables developers to rapidly iterate through entire pipeline: image prompt → image generation → video prompt → video generation.
 
 **Next Steps in BMad Method:**
 1. **UX Design** (if UI exists) - Run: `*create-ux-design` workflow

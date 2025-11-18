@@ -185,3 +185,5 @@ __pycache__/
 *.rpm
 
 ClipForge/
+backend/output/prompt_traces/
+backend/output/

@@ -1,0 +1,180 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>8</epicId>
+    <storyId>4</storyId>
+    <title>Unified Narrative Generation for Storyboard Enhancement</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-17</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/8-4-unified-narrative-generation.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>the storyboard enhancement service to generate a unified narrative document that describes the overall ad story</iWant>
+    <soThat>individual scene prompts are guided by a cohesive narrative and video generation can maintain story coherence across all scenes</soThat>
+    <tasks>
+- [ ] Task 1: Add unified narrative generation to storyboard enhancement service
+  - [ ] Create narrative generation function `_generate_unified_narrative()` in `storyboard_prompt_enhancement.py`
+  - [ ] Create Agent 1 (Creative Director) system prompt for narrative generation
+  - [ ] Create Agent 2 (Editor) system prompt for narrative critique and scoring
+  - [ ] Implement two-agent iterative feedback loop (max 3 iterations, threshold 85.0)
+  - [ ] Generate unified narrative BEFORE individual scene prompt generation (Step 0)
+  - [ ] Use GPT-4 Turbo LLM for both agents (same API, different system prompts)
+  - [ ] Incorporate ALL context: original prompt, visual elements, framework structure, intent
+  - [ ] Follow Sensory Journey framework structure in narrative
+  - [ ] Score narrative on 6 dimensions: coherence, emotional arc, scene connections, visual progression, brand integration, framework alignment
+  - [ ] Generate both markdown and JSON formats from final narrative
+  - [ ] Parse and validate narrative document structure
+  - [ ] Save iteration trace files (similar to scene prompt enhancement)
+  - [ ] Unit tests: Narrative generation logic, two-agent loop, format validation, LLM response parsing
+
+- [ ] Task 2: Integrate narrative document into scene prompt generation
+  - [ ] Pass unified narrative as context to Cinematic Creative agent
+  - [ ] Update agent system prompt to use narrative for guidance
+  - [ ] Ensure scene prompts align with narrative document
+  - [ ] Verify narrative coherence across all generated prompts
+  - [ ] Unit tests: Narrative context integration, prompt alignment
+
+- [ ] Task 3: Save narrative documents to output directory
+  - [ ] Save `unified_narrative.md` to trace directory
+  - [ ] Save `unified_narrative.json` to trace directory
+  - [ ] Include narrative references in storyboard metadata
+  - [ ] Update storyboard service to include narrative paths in metadata
+  - [ ] Unit tests: File saving, path references
+
+- [ ] Task 4: Update storyboard metadata to reference narrative
+  - [ ] Add `unified_narrative_path` to storyboard metadata JSON
+  - [ ] Include narrative summary in metadata
+  - [ ] Update CLI output to mention narrative document
+  - [ ] Integration tests: Metadata structure, file references
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Given** I have a reference image and enhanced prompt (from Stories 8.1 and 8.2)  
+   **When** the storyboard prompt enhancement service processes them  
+   **Then** the service generates a unified narrative document BEFORE creating individual scene prompts that includes:
+   - **Overall Ad Story**: A 2-3 paragraph narrative describing the complete ad story following the Sensory Journey framework
+   - **Emotional Arc**: How emotions progress across scenes (Anticipation → Recognition → Connection → Aspiration)
+   - **Scene Connections**: How each scene transitions to the next narratively and visually
+   - **Visual Progression**: How visuals evolve across scenes (abstract → product-focused → lifestyle)
+   - **Product Reveal Strategy**: How the product is revealed progressively (hidden → partial → full)
+   - **Brand Narrative**: How brand identity, colors, and style are woven throughout the story
+
+2. **Given** the unified narrative document is generated  
+   **When** individual scene prompts are created  
+   **Then** the Cinematic Creative agent uses the narrative document as context to:
+   - Ensure each scene contributes to the overall story
+   - Maintain narrative coherence between scenes
+   - Follow the emotional arc progression
+   - Implement the visual progression strategy
+   - Execute the product reveal strategy
+
+3. **Given** the storyboard enhancement completes  
+   **When** the service saves outputs  
+   **Then** it saves the unified narrative document as:
+   - `unified_narrative.md` (human-readable markdown format)
+   - `unified_narrative.json` (structured JSON format for programmatic use)
+   - Both files saved to `output/storyboards/{timestamp}/storyboard_enhancement_trace/`
+
+4. **Given** the unified narrative document exists  
+   **When** Epic 9 video generation processes the storyboard  
+   **Then** video generation can use the narrative document to:
+   - Guide video prompt enhancement with narrative context
+   - Ensure video clips maintain story coherence
+   - Apply consistent emotional tone across scenes
+   - Maintain visual progression throughout the video
+   - Create smooth narrative transitions between clips
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="Hero-Frame Iteration Plan & Timeline">
+        The PRD outlines the CLI MVP strategy for rapid iteration tools, establishing the foundation for Epic 8's image generation feedback loops. Section 23.0 describes the Hero-Frame Iteration Plan which validates feedback loops before UI development.
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-8.md" title="Epic 8 Technical Specification" section="Detailed Design">
+        Comprehensive technical specification for Epic 8 CLI tools including storyboard creation service. Documents the storyboard service architecture, data models (StoryboardResult, ClipStoryboard), and integration patterns with image generation and prompt enhancement services.
+      </doc>
+      <doc path="docs/sprint-artifacts/epic-8-9-architecture-flow.md" title="Epic 8 & 9 Architecture Flow" section="Complete Flow Architecture">
+        Visualizes the complete workflow from image prompt generation through video assembly. Shows how Epic 8 storyboard creation feeds into Epic 9 video generation, establishing the narrative document's role in maintaining coherence across the pipeline.
+      </doc>
+      <doc path="docs/sprint-artifacts/storyboard-prompt-enhancement-spec.md" title="Storyboard Prompt Enhancement Specification" section="Architecture">
+        Detailed specification for the storyboard prompt enhancement service. Documents the two-agent system (Cinematic Creative + Storyboard Engineer), Sensory Journey framework structure, visual element extraction, and integration with storyboard service. This spec provides the foundation for adding narrative generation as Step 0.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/storyboard_prompt_enhancement.py" kind="service" symbol="enhance_storyboard_prompts" lines="176-656" reason="Main service function that needs modification to add narrative generation as Step 0. Currently implements visual element extraction (Step 1) and scene prompt generation (Step 2). Must add unified narrative generation before these steps.">
+      </artifact>
+      <artifact path="backend/app/services/pipeline/storyboard_prompt_enhancement.py" kind="dataclass" symbol="StoryboardEnhancementResult" lines="164-173" reason="Result dataclass that needs extension to include unified narrative fields: unified_narrative_md, unified_narrative_json, unified_narrative_path, narrative_iterations">
+      </artifact>
+      <artifact path="backend/app/services/pipeline/storyboard_prompt_enhancement.py" kind="function" symbol="_cinematic_creative_enhance" lines="350-450" reason="Agent 1 function that generates scene prompts. Must be updated to accept unified narrative document as context parameter and use it to guide prompt generation.">
+      </artifact>
+      <artifact path="backend/app/services/pipeline/storyboard_service.py" kind="service" symbol="create_storyboard" lines="51-200" reason="Storyboard service that calls enhance_storyboard_prompts. Must be updated to handle narrative document in StoryboardEnhancementResult and include narrative paths in metadata.">
+      </artifact>
+      <artifact path="backend/app/services/pipeline/storyboard_service.py" kind="dataclass" symbol="StoryboardResult" lines="42-49" reason="Storyboard result dataclass that should include narrative document references in metadata for Epic 9 integration.">
+      </artifact>
+      <artifact path="backend/app/services/pipeline/image_prompt_enhancement.py" kind="service" symbol="enhance_prompt_iterative" lines="127-300" reason="Reference implementation for two-agent iterative feedback loop pattern. Use as template for narrative generation two-agent loop implementation.">
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="openai" version=">=1.0.0" reason="OpenAI API client for GPT-4 Turbo LLM calls (narrative generation agents)"/>
+        <package name="pillow" version=">=10.0.0" reason="Image processing for reference image handling"/>
+        <package name="pydantic" version=">=2.0.0" reason="Data validation for narrative document structure"/>
+        <package name="pytest" version=">=7.4.0" reason="Testing framework for unit and integration tests"/>
+        <package name="pytest-asyncio" version=">=0.21.0" reason="Async test support for service functions"/>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Two-Agent Pattern: Must follow existing two-agent iterative feedback loop pattern from image_prompt_enhancement.py. Agent 1 (Creative Director) generates narrative, Agent 2 (Editor) critiques and scores. Max 3 iterations, threshold 85.0, convergence detection (improvement &lt; 2 points).</constraint>
+    <constraint>Framework Hardcoding: Sensory Journey framework is hardcoded in the service. Narrative generation must follow the same framework structure with 3 scenes (Discovery, Transformation, Desire).</constraint>
+    <constraint>Fail-Fast Behavior: Enhancement failures raise RuntimeError with fail-fast behavior (no fallback to generic prompts). This pattern must be maintained for narrative generation.</constraint>
+    <constraint>Service Integration: Narrative generation must be added as Step 0 in enhance_storyboard_prompts() function, BEFORE visual element extraction (Step 1) and scene prompt generation (Step 2).</constraint>
+    <constraint>Output Directory: Narrative files must be saved to storyboard_enhancement_trace/ directory alongside existing trace files, following existing trace file naming pattern.</constraint>
+    <constraint>LLM API: Use OpenAI GPT-4 Turbo API (same API as existing agents) via app/core/config.py settings. Create specialized system prompts for narrative generation (different from scene prompt generation prompts).</constraint>
+    <constraint>Data Structure Extension: Update StoryboardEnhancementResult dataclass to include: unified_narrative_md, unified_narrative_json, unified_narrative_path, narrative_iterations.</constraint>
+    <constraint>Testing Pattern: Follow existing comprehensive unit test and integration test patterns from storyboard service. Target: &gt;80% code coverage for narrative generation code.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="enhance_storyboard_prompts" kind="async function" signature="async def enhance_storyboard_prompts(original_prompt: str, reference_image_path: str, num_scenes: int = 3, max_iterations: int = 3, score_threshold: float = 85.0, trace_dir: Optional[Path] = None) -&gt; StoryboardEnhancementResult" path="backend/app/services/pipeline/storyboard_prompt_enhancement.py">
+      Main service function. Must be modified to add narrative generation as Step 0 before existing steps.
+    </interface>
+    <interface name="_generate_unified_narrative" kind="async function" signature="async def _generate_unified_narrative(original_prompt: str, visual_elements: Dict[str, Any], max_iterations: int = 3, score_threshold: float = 85.0, trace_dir: Optional[Path] = None) -&gt; Dict[str, Any]" path="backend/app/services/pipeline/storyboard_prompt_enhancement.py">
+      New function to be created. Generates unified narrative document using two-agent iterative loop. Returns dict with narrative_md, narrative_json, iterations, scores.
+    </interface>
+    <interface name="StoryboardEnhancementResult" kind="dataclass" signature="@dataclass\nclass StoryboardEnhancementResult:\n    original_prompt: str\n    reference_image_path: str\n    extracted_visual_elements: Dict[str, Any]\n    scene_prompts: List[ScenePromptSet]\n    iterations: List[Dict[str, Any]]\n    final_scores: Dict[str, float]\n    total_iterations: int\n    # NEW FIELDS:\n    unified_narrative_md: Optional[str]\n    unified_narrative_json: Optional[Dict[str, Any]]\n    unified_narrative_path: Optional[str]\n    narrative_iterations: Optional[List[Dict[str, Any]]]" path="backend/app/services/pipeline/storyboard_prompt_enhancement.py">
+      Result dataclass that must be extended with narrative fields.
+    </interface>
+    <interface name="create_storyboard" kind="async function" signature="async def create_storyboard(prompt: str, num_clips: int = 3, aspect_ratio: str = \"16:9\", enhance_prompts: bool = False, reference_image_path: Optional[str] = None, output_dir: Optional[Path] = None) -&gt; StoryboardResult" path="backend/app/services/pipeline/storyboard_service.py">
+      Storyboard service function that calls enhance_storyboard_prompts. Must handle narrative document in result and include in metadata.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest framework for all tests (matches existing backend test structure). Tests should use pytest-asyncio for async service functions. Follow existing test patterns from test_storyboard_service.py. Use mocked API calls for CI/CD compatibility. Target: &gt;80% code coverage for narrative generation code. Test files should be located in backend/tests/ directory following existing naming conventions.
+    </standards>
+    <locations>
+      <location>backend/tests/test_storyboard_prompt_enhancement.py</location>
+      <location>backend/tests/integration/test_storyboard_narrative_integration.py</location>
+      <location>backend/tests/test_narrative_generation.py</location>
+    </locations>
+    <ideas>
+      <test ac="1" idea="Unit test: Test _generate_unified_narrative() function with mock LLM responses. Verify narrative document structure (markdown and JSON formats), verify two-agent iterative loop (max 3 iterations, threshold 85.0), verify convergence detection, verify scoring on 6 dimensions (coherence, emotional arc, scene connections, visual progression, brand integration, framework alignment)."/>
+      <test ac="1" idea="Unit test: Test narrative document parsing and validation. Verify markdown structure matches template, verify JSON structure matches schema, verify all required sections present (Overall Ad Story, Emotional Arc, Scene Connections, Visual Progression, Product Reveal Strategy, Brand Narrative)."/>
+      <test ac="1" idea="Unit test: Test LLM response parsing for narrative generation. Verify extraction of narrative content from Agent 1 responses, verify parsing of Agent 2 critique and scores (JSON format), verify error handling for malformed responses."/>
+      <test ac="2" idea="Unit test: Test narrative context integration into scene prompt generation. Verify unified narrative passed to _cinematic_creative_enhance() function, verify agent system prompt includes narrative context, verify scene prompts align with narrative document (check for narrative coherence keywords)."/>
+      <test ac="2" idea="Integration test: Test full enhancement flow with narrative generation. Run enhance_storyboard_prompts() with reference image, verify narrative generated before scene prompts, verify scene prompts reference narrative elements, verify narrative coherence across all generated prompts."/>
+      <test ac="3" idea="Unit test: Test narrative document file saving. Verify unified_narrative.md saved to trace directory, verify unified_narrative.json saved to trace directory, verify file paths correct, verify file content matches generated narrative."/>
+      <test ac="3" idea="Integration test: Test narrative references in storyboard metadata. Verify storyboard_metadata.json includes unified_narrative_path field, verify narrative_summary included in metadata, verify CLI output mentions narrative document."/>
+      <test ac="4" idea="Integration test: Test narrative document structure for Epic 9 integration. Verify narrative document can be loaded and parsed by video generation services, verify narrative context can be extracted for video prompt enhancement, verify narrative structure supports Epic 9 requirements."/>
+      <test ac="all" idea="Performance test: Measure narrative generation latency. Target: &lt;60 seconds for narrative generation (including 2-3 iterations). Verify performance meets targets, verify no significant impact on overall storyboard enhancement time."/>
+      <test ac="all" idea="Error handling test: Test narrative generation failure scenarios. Verify RuntimeError raised on enhancement failure (fail-fast), verify error messages clear and actionable, verify no partial outputs saved on failure, verify trace files saved even on failure."/>
+    </ideas>
+  </tests>
+</story-context>
+

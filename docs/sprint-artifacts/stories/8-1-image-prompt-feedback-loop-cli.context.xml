@@ -1,0 +1,195 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>8</epicId>
+    <storyId>1</storyId>
+    <title>Image Prompt Feedback Loop CLI</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-17T18:04:00Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/8-1-image-prompt-feedback-loop-cli.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>a CLI tool for iterative image prompt enhancement using two-agent feedback loops</iWant>
+    <soThat>I can rapidly refine prompts for image generation without UI overhead</soThat>
+    <tasks>
+      <task id="1" title="Create image prompt enhancement service">
+        - Create `app/services/pipeline/image_prompt_enhancement.py` service
+        - Adapt two-agent pattern from `prompt_enhancement.py` (Story 7.3 Phase 1)
+        - Create `ImagePromptEnhancementResult` class with fields: original_prompt, final_prompt, iterations, final_score, total_iterations
+        - Implement Agent 1 (Cinematographer) system prompt with image-specific focus
+        - Implement Agent 2 (Prompt Engineer) system prompt with 5-dimension scoring
+        - Implement iterative enhancement loop (max 3 rounds, threshold-based early stopping)
+        - Integrate Prompt Scoring Guide guidelines into agent system prompts
+        - Implement trace file saving (all prompt versions, scores, metadata)
+        - Unit tests: Two-agent iteration loop, prompt enhancement logic, scoring calculation, convergence detection
+      </task>
+      <task id="2" title="Create CLI tool for image prompt enhancement">
+        - Create `backend/enhance_image_prompt.py` CLI script
+        - Implement argument parsing (argparse or click)
+        - Implement stdin input handling
+        - Implement trace directory creation with timestamp
+        - Implement trace file saving (numbered files, JSON metadata)
+        - Implement console output formatting (scores, iteration history, final prompt)
+        - Unit tests: Argument parsing, stdin input, file I/O, error handling
+        - Integration test: End-to-end CLI run with sample prompt, verify trace files and console output
+      </task>
+      <task id="3" title="Verify Prompt Scoring Guide compliance">
+        - Review Prompt Scoring Guide best practices section
+        - Verify enhanced prompts follow scene description structure
+        - Verify camera cues are included
+        - Verify lighting cues are included
+        - Verify prompts limit to one scene or idea per prompt
+        - Verify natural language usage (no keyword stuffing)
+        - Unit tests: Verify enhanced prompts include required elements from Prompt Scoring Guide
+      </task>
+      <task id="4" title="Documentation and testing">
+        - Update `backend/requirements.txt` with any new dependencies (if needed)
+        - Create README or usage documentation for CLI tool
+        - Add integration tests to `backend/tests/test_image_prompt_enhancement.py`
+        - Verify error handling for API failures, invalid inputs, missing files
+        - Performance test: Verify prompt enhancement completes within &lt;45 seconds for 2-iteration enhancement
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <given>A basic image prompt file or stdin input</given>
+      <when>I run `python enhance_image_prompt.py prompt.txt`</when>
+      <then>
+        - Uses Agent 1 (Cinematographer/Creative Director) to enhance the prompt with camera details, lighting, composition, film stock, mood, aspect ratio
+        - Uses Agent 2 (Prompt Engineer) to critique and score the enhanced prompt
+        - Iterates between agents (max 3 rounds) until score threshold is met or convergence detected
+        - Scores prompts on multiple dimensions: Completeness, Specificity, Professionalism, Cinematography, Brand Alignment (0-100 each), Overall score (weighted average)
+        - Saves all prompt versions to `output/image_prompt_traces/{timestamp}/` with numbered files
+        - Saves `prompt_trace_summary.json` with scores, iterations, timestamps
+        - Prints enhancement results to console with scores and iteration history
+        - Supports stdin input: `echo "prompt" | python enhance_image_prompt.py -`
+        - Supports custom output directories: `--output-dir ./my_traces`
+        - Supports iteration control: `--max-iterations 5 --threshold 90`
+      </then>
+    </criterion>
+    <criterion id="AC2">
+      <given>Prompt enhancement follows Prompt Scoring Guide guidelines</given>
+      <then>
+        - Structure like scene descriptions (who/what → action → where/when → style)
+        - Include camera cues: "wide aerial shot", "close-up portrait", "telephoto shot", "macro photograph"
+        - Include lighting cues: "soft golden morning light", "harsh neon glow", "dramatic side lighting"
+        - Limit to one scene or idea per prompt
+        - Use natural language, not keyword stuffing
+      </then>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document">
+        <section>Hero-Frame Iteration Plan &amp; Timeline (Section 23.0)</section>
+        <snippet>CLI MVP strategy for rapid validation of feedback loops and scoring mechanisms before UI development. Enables developers to quickly test and refine image generation workflows.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-8.md" title="Epic 8 Technical Specification">
+        <section>Detailed Design → Services → image_prompt_enhancement.py, Workflows → Workflow 1</section>
+        <snippet>Comprehensive design for image prompt enhancement service adapting two-agent pattern for cinematography focus. Includes acceptance criteria, traceability mapping, and non-functional requirements.</snippet>
+      </doc>
+      <doc path="docs/Prompt_Scoring_and_Optimization_Guide.md" title="Prompt Scoring and Optimization Guide">
+        <section>Heuristics and Best Practices for Prompt Optimization</section>
+        <snippet>Structure prompts like scene descriptions (who/what → action → where/when → style). Use camera cues: "wide aerial shot", "close-up portrait", "telephoto shot". Use lighting cues: "soft golden morning light", "harsh neon glow", "dramatic side lighting". Limit to one scene or idea per prompt. Use natural language, not keyword stuffing.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document">
+        <section>Project Structure, Implementation Patterns</section>
+        <snippet>Service organization in `app/services/pipeline/`. Configuration management via `app/core/config.py`. Output directory structure: `backend/output/` for organizing outputs. Follows existing service patterns and CLI tool patterns.</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epics Document">
+        <section>Epic 8: CLI MVP - Image Generation Feedback Loops, Story 8.1</section>
+        <snippet>Original story acceptance criteria. Prerequisites: Story 7.3 Phase 1 (Two-Agent Prompt Enhancement pattern). Technical notes on reusing `prompt_enhancement.py` service pattern.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/prompt_enhancement.py" kind="service" symbol="enhance_prompt_iterative" lines="94-241" reason="Two-agent pattern implementation to reuse and adapt for image-specific enhancement. Provides `PromptEnhancementResult` class structure and iteration loop logic." />
+      <artifact path="backend/app/services/pipeline/prompt_enhancement.py" kind="service" symbol="PromptEnhancementResult" lines="76-91" reason="Result class structure to adapt as `ImagePromptEnhancementResult` with same fields: original_prompt, final_prompt, iterations, final_score, total_iterations." />
+      <artifact path="backend/app/services/pipeline/prompt_enhancement.py" kind="service" symbol="CREATIVE_DIRECTOR_SYSTEM_PROMPT" lines="23-42" reason="Agent 1 system prompt to adapt for image-specific cinematography focus (camera details, lighting, composition, film stock, mood, aspect ratio)." />
+      <artifact path="backend/app/services/pipeline/prompt_enhancement.py" kind="service" symbol="PROMPT_ENGINEER_SYSTEM_PROMPT" lines="44-73" reason="Agent 2 system prompt to adapt for 5-dimension scoring: Completeness, Specificity, Professionalism, Cinematography, Brand Alignment." />
+      <artifact path="backend/enhance_prompt.py" kind="cli" symbol="main" lines="85-204" reason="CLI tool pattern to follow: argparse argument parsing, stdin input handling, trace directory creation, console output formatting, error handling." />
+      <artifact path="backend/enhance_prompt.py" kind="cli" symbol="load_prompt" lines="36-48" reason="Stdin input handling pattern: check for "-" argument, read from sys.stdin, validate input." />
+      <artifact path="backend/enhance_prompt.py" kind="cli" symbol="print_results" lines="51-82" reason="Console output formatting pattern: display scores, iteration history, final prompt in formatted output." />
+      <artifact path="backend/app/core/config.py" kind="config" symbol="Settings" lines="12-70" reason="Configuration management pattern: access OpenAI API key via `settings.OPENAI_API_KEY`, environment variable loading via dotenv." />
+      <artifact path="backend/PROMPT_ENHANCEMENT_README.md" kind="documentation" symbol="Output Structure" lines="64-74" reason="Trace file organization pattern: timestamp-based directories, numbered files for iteration history, JSON metadata file." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="openai" version="&gt;=1.0.0" reason="OpenAI API client for prompt enhancement agents" />
+        <package name="python-dotenv" version="&gt;=1.0.0" reason="Environment variable loading from .env file" />
+        <package name="pytest" version="&gt;=7.4.0" reason="Testing framework for unit and integration tests" />
+        <package name="pytest-asyncio" version="&gt;=0.21.0" reason="Async test support for async service functions" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Service Pattern Reuse: Must reuse two-agent prompt enhancement pattern from `app/services/pipeline/prompt_enhancement.py` (Story 7.3 Phase 1). Adapt `PromptEnhancementResult` to `ImagePromptEnhancementResult`, adapt `enhance_prompt_iterative()` for image-specific enhancement.</constraint>
+    <constraint>CLI Tool Pattern: Follow pattern established by `backend/enhance_prompt.py`: standalone Python script in `backend/` directory, uses argparse for argument parsing, supports stdin input with "-" argument, saves outputs to `backend/output/` directory structure.</constraint>
+    <constraint>Configuration Management: Use `app/core/config.py` for API keys (OpenAI API key). Access via `settings.OPENAI_API_KEY`. Follow existing pattern for environment variable loading.</constraint>
+    <constraint>Output Directory Structure: Follow existing pattern: `backend/output/image_prompt_traces/{timestamp}/` for trace files. Timestamp format: `YYYYMMDD_HHMMSS`. Numbered files for iteration history: `00_original_prompt.txt`, `01_agent1_iteration_1.txt`, etc. JSON metadata file: `prompt_trace_summary.json`.</constraint>
+    <constraint>Project Structure: New service file `app/services/pipeline/image_prompt_enhancement.py` follows existing service structure in `app/services/pipeline/`. Uses async/await pattern for OpenAI API calls. Imports from `app.core.config` for settings.</constraint>
+    <constraint>CLI Tool Location: New CLI tool `backend/enhance_image_prompt.py` is standalone script (not part of FastAPI app). Can be run independently: `python enhance_image_prompt.py prompt.txt`. Uses relative imports to access service: `from app.services.pipeline.image_prompt_enhancement import ...`</constraint>
+    <constraint>Prompt Scoring Guide Compliance: Enhanced prompts must follow guidelines: structure like scene descriptions (who/what → action → where/when → style), include camera cues, include lighting cues, limit to one scene per prompt, use natural language (no keyword stuffing).</constraint>
+    <constraint>Performance Target: Prompt enhancement should complete within &lt;45 seconds for 2-iteration enhancement. Log timing information for each major operation.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="enhance_image_prompt CLI" kind="CLI command">
+      <signature>enhance_image_prompt.py &lt;input&gt; [--max-iterations N] [--threshold F] [--output-dir DIR] [--creative-model M] [--critique-model M] [--verbose]</signature>
+      <path>backend/enhance_image_prompt.py</path>
+      <description>Standalone CLI tool for iterative image prompt enhancement. Input: file path or "-" for stdin. Options: max-iterations (default: 3), threshold (default: 85.0), output-dir (default: output/image_prompt_traces/), creative-model (default: gpt-4-turbo), critique-model (default: gpt-4-turbo), verbose flag.</description>
+    </interface>
+    <interface name="image_prompt_enhancement service" kind="Python async function">
+      <signature>async def enhance_prompt_iterative(user_prompt: str, max_iterations: int = 3, score_threshold: float = 85.0, creative_model: str = "gpt-4-turbo", critique_model: str = "gpt-4-turbo", trace_dir: Optional[Path] = None) -&gt; ImagePromptEnhancementResult</signature>
+      <path>app/services/pipeline/image_prompt_enhancement.py</path>
+      <description>Image-specific prompt enhancement service adapting two-agent pattern. Agent 1 (Cinematographer) enhances with camera details, lighting, composition, film stock, mood, aspect ratio. Agent 2 (Prompt Engineer) critiques and scores on 5 dimensions. Iterates until threshold met or convergence detected.</description>
+    </interface>
+    <interface name="ImagePromptEnhancementResult class" kind="Python dataclass">
+      <signature>class ImagePromptEnhancementResult: original_prompt: str, final_prompt: str, iterations: List[Dict], final_score: Dict[str, float], total_iterations: int</signature>
+      <path>app/services/pipeline/image_prompt_enhancement.py</path>
+      <description>Result class containing original prompt, final enhanced prompt, iteration history with scores, final scores dictionary (completeness, specificity, professionalism, cinematography, brand_alignment, overall), and total iteration count.</description>
+    </interface>
+    <interface name="OpenAI API" kind="REST API">
+      <signature>openai.ChatCompletion.create(model="gpt-4-turbo", messages=[system_prompt, user_prompt])</signature>
+      <path>External API (OpenAI)</path>
+      <description>OpenAI API for LLM-based prompt enhancement. Used by both Agent 1 (Cinematographer) and Agent 2 (Prompt Engineer). Requires OPENAI_API_KEY from settings.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest framework (matches existing backend test structure). Test service functions with mocked OpenAI API. Test CLI argument parsing, stdin input, file I/O. Test scoring calculation, convergence detection. Target: &gt;80% code coverage. Integration tests: End-to-end CLI execution with sample prompt, verify trace files created with correct structure, verify console output format, verify JSON metadata structure. Performance tests: Measure latency, target &lt;45 seconds for 2-iteration enhancement, log timing information for each major operation.
+    </standards>
+    <locations>
+      Unit tests: `backend/tests/test_image_prompt_enhancement.py`. Integration tests: `backend/tests/integration/test_enhance_image_prompt_cli.py` (or similar). Test data: Sample prompts in `backend/tests/fixtures/` or inline test data.
+    </locations>
+    <ideas>
+      <test id="AC1" mappedTo="AC1">
+        <idea>Unit test: Two-agent iteration loop - verify Agent 1 enhances prompt with camera/lighting details, verify Agent 2 scores on 5 dimensions, verify iteration stops at threshold or max iterations, verify convergence detection works.</idea>
+        <idea>Unit test: Prompt enhancement logic - verify enhanced prompts include camera details (body, lens), lighting cues, composition notes, film stock references, mood descriptors, aspect ratio hints.</idea>
+        <idea>Unit test: Scoring calculation - verify 5-dimension scoring (completeness, specificity, professionalism, cinematography, brand_alignment), verify overall weighted score calculation, verify scores are 0-100 range.</idea>
+        <idea>Unit test: Convergence detection - verify early stopping when score threshold met, verify early stopping when no improvement detected, verify max iterations respected.</idea>
+        <idea>Unit test: CLI argument parsing - test all arguments (input, max-iterations, threshold, output-dir, creative-model, critique-model, verbose), test default values, test invalid arguments.</idea>
+        <idea>Unit test: Stdin input handling - test reading from stdin with "-" argument, test empty stdin error handling, test stdin with multiline input.</idea>
+        <idea>Unit test: File I/O - test trace directory creation, test numbered file saving (00_original_prompt.txt, 01_agent1_iteration_1.txt, etc.), test JSON metadata file creation, test file encoding (UTF-8).</idea>
+        <idea>Integration test: End-to-end CLI run - run CLI with sample prompt file, verify trace files created with correct structure, verify console output format (scores, iteration history, final prompt), verify JSON metadata structure, verify all prompt versions saved.</idea>
+        <idea>Integration test: Stdin input end-to-end - run CLI with stdin input, verify same output structure as file input, verify trace files created correctly.</idea>
+        <idea>Integration test: Custom output directory - test --output-dir option, verify files saved to custom location, verify directory creation if doesn't exist.</idea>
+        <idea>Integration test: Iteration control - test --max-iterations option, test --threshold option, verify early stopping works correctly, verify max iterations respected.</idea>
+        <idea>Error handling test: API failures - test OpenAI API failure handling, test retry logic, test graceful error messages, test partial failure recovery (save what was completed).</idea>
+        <idea>Error handling test: Invalid inputs - test empty prompt, test very long prompt, test invalid file path, test missing API key.</idea>
+        <idea>Performance test: Latency measurement - measure prompt enhancement time for 2-iteration enhancement, verify &lt;45 seconds target, log timing for each major operation (Agent 1 call, Agent 2 call, file I/O).</idea>
+      </test>
+      <test id="AC2" mappedTo="AC2">
+        <idea>Unit test: Prompt Scoring Guide compliance - verify enhanced prompts follow scene description structure (who/what → action → where/when → style), verify camera cues included ("wide aerial shot", "close-up portrait", "telephoto shot", "macro photograph"), verify lighting cues included ("soft golden morning light", "harsh neon glow", "dramatic side lighting"), verify prompts limit to one scene per prompt, verify natural language usage (no keyword stuffing).</idea>
+        <idea>Integration test: Prompt Scoring Guide compliance end-to-end - run CLI with various sample prompts, verify all enhanced prompts comply with Prompt Scoring Guide guidelines, verify camera and lighting cues present in enhanced prompts.</idea>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

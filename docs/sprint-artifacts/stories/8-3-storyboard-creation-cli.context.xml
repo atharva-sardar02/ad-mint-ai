@@ -1,0 +1,316 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>8</epicId>
+    <storyId>3</storyId>
+    <title>Storyboard Creation CLI</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-17T18:45:00Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/8-3-storyboard-creation-cli.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>a CLI tool to create storyboards (start and end frames) for individual video clips</iWant>
+    <soThat>I can visualize the motion arc before generating video</soThat>
+    <tasks>
+      <task id="1" title="Create storyboard service">
+        - Create `app/services/pipeline/storyboard_service.py` service
+        - Implement planning function:
+          - Use VideoDirectorGPT-style planning if available (Story 7.3 Phase 2)
+          - Or use basic scene planning from `scene_planning.py` as fallback
+          - Break prompt into individual video clips (3-5 clips)
+          - Generate shot list with camera metadata (movement, shot size, perspective, lens type)
+          - Generate scene dependencies and narrative flow
+          - Generate consistency groupings (if applicable)
+        - Implement start/end frame prompt generation:
+          - Derive start frame prompt from shot list (initial state)
+          - Derive end frame prompt from shot list (final state)
+          - Generate motion description (camera movement, subject motion) between start/end
+        - Integrate with image generation service (Story 8.2):
+          - Call `image_generation.py` service to generate start frame image
+          - Call `image_generation.py` service to generate end frame image
+          - Use same aspect ratio for both frames
+        - Implement storyboard result structure:
+          - `StoryboardResult` class with clips list and metadata
+          - `ClipStoryboard` class with clip_number, start_frame_path, end_frame_path, motion_description, camera_movement, prompts
+        - Unit tests: Planning logic (clip breakdown), start/end frame prompt generation, motion description generation, integration with image generation service
+      </task>
+      <task id="2" title="Integrate optional prompt enhancement">
+        - Add optional prompt enhancement flag support
+        - Integrate with `image_prompt_enhancement.py` service (Story 8.1):
+          - If `--enhance-prompts` flag is set, enhance prompt before planning
+          - Use enhanced prompt for VideoDirectorGPT planning
+          - Pass enhanced prompt to image generation for start/end frames
+        - Unit tests: Prompt enhancement integration, flag handling
+      </task>
+      <task id="3" title="Create CLI tool for storyboard creation">
+        - Create `backend/create_storyboard.py` CLI script
+        - Implement argument parsing (argparse or click):
+          - Input: video clip prompt file path
+          - `--num-clips N` (default: 3, range: 3-5)
+          - `--enhance-prompts` (optional flag, default: false)
+          - `--output-dir DIR` (default: output/storyboards/)
+          - `--verbose` flag
+        - Implement prompt file loading
+        - Implement output directory creation with timestamp
+        - Integrate storyboard service
+        - Implement storyboard file saving:
+          - Save start/end frame images: `clip_001_start.png`, `clip_001_end.png`, etc.
+          - Save `storyboard_metadata.json` with clip descriptions, prompts, motion descriptions, shot list
+        - Implement console output formatting:
+          - List of clips with start/end frame descriptions
+          - Motion arcs for each clip
+          - File paths for manual viewing
+        - Unit tests: Argument parsing, file I/O, error handling
+        - Integration test: End-to-end CLI run with sample prompt, verify storyboard created, verify start/end frames generated, verify metadata
+      </task>
+      <task id="4" title="Documentation and testing">
+        - Update `backend/requirements.txt` with any new dependencies (if needed)
+        - Create README or usage documentation for CLI tool
+        - Add integration tests to `backend/tests/test_storyboard_service.py`
+        - Verify error handling for API failures, invalid inputs, missing files, planning failures
+        - Performance test: Verify storyboard creation completes within &lt;15 minutes for 3 clips with start/end frames (including optional prompt enhancement)
+        - Document VideoDirectorGPT planning integration (if available) vs basic planning fallback
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <given>I have a video clip prompt (or enhanced prompt from Story 8.1)</given>
+      <when>I run `python create_storyboard.py clip_prompt.txt --num-clips 3`</when>
+      <then>
+        - Uses VideoDirectorGPT-style planning to break the prompt into individual video clips
+        - For each clip, generates:
+          - Start frame: The initial frame of the video clip
+          - End frame: The final frame of the video clip
+          - Motion description: What happens between start and end (camera movement, subject motion)
+        - Uses enhanced image generation (Story 8.2) to create start/end frames
+        - Saves storyboard to `output/storyboards/{timestamp}/`:
+          - `clip_001_start.png`, `clip_001_end.png`
+          - `clip_002_start.png`, `clip_002_end.png`
+          - `clip_003_start.png`, `clip_003_end.png`
+          - `storyboard_metadata.json`:
+            - Clip descriptions
+            - Start/end frame prompts
+            - Motion descriptions
+            - Camera movements
+            - Shot list metadata (from VideoDirectorGPT planning)
+        - Prints storyboard summary to console:
+          - List of clips with start/end frame descriptions
+          - Motion arcs for each clip
+          - File paths for manual viewing
+        - Supports custom output directory: `--output-dir ./my_storyboard`
+        - Integrates with Story 8.1 for prompt enhancement (optional flag: `--enhance-prompts`)
+      </then>
+    </criterion>
+    <criterion id="2">
+      <given>storyboard creation includes VideoDirectorGPT-style planning</given>
+      <then>
+        - Shot list with camera metadata (camera movement, shot size, perspective, lens type)
+        - Scene dependencies and narrative flow
+        - Consistency groupings (if applicable)
+        - Start/end frame prompts derived from shot list
+        - Motion descriptions for image-to-video generation
+      </then>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic 8: CLI MVP - Image Generation Feedback Loops" section="Story 8.3: Storyboard Creation CLI">
+        Story 8.3 defines the storyboard creation CLI tool that generates start and end frames for video clips. The story uses VideoDirectorGPT-style planning (or basic planning fallback) to break prompts into clips, then generates start/end frame images using the image generation service from Story 8.2. Prerequisites include Story 8.1 (Image Prompt Enhancement), Story 8.2 (Image Generation), and Story 7.3 Phase 2 (VideoDirectorGPT Planning - if available).
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-8.md" title="Epic 8 Technical Specification" section="Storyboard Service Design">
+        Detailed design for `storyboard_service.py` including planning function, start/end frame prompt generation, motion descriptions, and integration with image generation service. Defines `StoryboardResult` and `ClipStoryboard` data structures, workflow for storyboard creation, and integration points with Story 8.1 and Story 8.2.
+      </doc>
+      <doc path="docs/sprint-artifacts/8-3-storyboard-creation-cli.md" title="Story 8.3 Story File" section="Dev Notes">
+        Comprehensive development notes including learnings from Stories 8.1 and 8.2, architecture patterns (scene planning, VideoDirectorGPT planning, image generation service integration), CLI tool patterns, configuration management, output directory structure, project structure notes, and testing standards.
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Project Structure">
+        Project structure patterns showing service organization in `app/services/pipeline/`, configuration management via `app/core/config.py`, and CLI tool patterns in `backend/` directory.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/image_generation.py" kind="service" symbol="generate_images" lines="67-119" reason="Image generation service for generating start/end frame images. Function `generate_images()` accepts prompt, num_variations, aspect_ratio, seed, and returns list of ImageGenerationResult. Integrates with Replicate API (SDXL or similar models).">
+        <interface>
+          <name>generate_images</name>
+          <kind>async function</kind>
+          <signature>async def generate_images(prompt: str, num_variations: int = 8, aspect_ratio: str = "16:9", seed: Optional[int] = None, model_name: str = "stability-ai/sdxl", output_dir: Optional[Path] = None) -&gt; List[ImageGenerationResult]</signature>
+          <path>backend/app/services/pipeline/image_generation.py</path>
+        </interface>
+      </artifact>
+      <artifact path="backend/app/services/pipeline/image_prompt_enhancement.py" kind="service" symbol="enhance_prompt_iterative" lines="127-219" reason="Image prompt enhancement service for optional prompt enhancement before planning. Function `enhance_prompt_iterative()` uses two-agent pattern (Cinematographer + Prompt Engineer) to enhance prompts with camera details, lighting, composition, film stock, mood, aspect ratio.">
+        <interface>
+          <name>enhance_prompt_iterative</name>
+          <kind>async function</kind>
+          <signature>async def enhance_prompt_iterative(user_prompt: str, max_iterations: int = 3, score_threshold: float = 85.0, creative_model: str = "gpt-4-turbo", critique_model: str = "gpt-4-turbo", trace_dir: Optional[Path] = None) -&gt; ImagePromptEnhancementResult</signature>
+          <path>backend/app/services/pipeline/image_prompt_enhancement.py</path>
+        </interface>
+      </artifact>
+      <artifact path="backend/app/services/pipeline/scene_planning.py" kind="service" symbol="plan_scenes" lines="32-80" reason="Scene planning service for breaking prompts into video clips. Function `plan_scenes()` processes AdSpecification and generates ScenePlan with visual prompts. Can be adapted for storyboard planning to break prompt into clips. Also includes `create_basic_scene_plan_from_prompt()` for basic planning without LLM.">
+        <interface>
+          <name>plan_scenes</name>
+          <kind>function</kind>
+          <signature>def plan_scenes(ad_spec: AdSpecification, target_duration: int = 15) -&gt; ScenePlan</signature>
+          <path>backend/app/services/pipeline/scene_planning.py</path>
+        </interface>
+        <interface>
+          <name>create_basic_scene_plan_from_prompt</name>
+          <kind>function</kind>
+          <signature>def create_basic_scene_plan_from_prompt(prompt: str, target_duration: int = 15, num_scenes: int = 3) -&gt; ScenePlan</signature>
+          <path>backend/app/services/pipeline/scene_planning.py</path>
+        </interface>
+      </artifact>
+      <artifact path="backend/enhance_image_prompt.py" kind="cli" symbol="main" lines="1-52" reason="CLI tool pattern for standalone Python scripts. Shows argparse usage, stdin input handling, file I/O, output directory creation with timestamp, console output formatting. Follow this pattern for `create_storyboard.py`.">
+        <interface>
+          <name>CLI Pattern</name>
+          <kind>CLI script structure</kind>
+          <signature>Standalone Python script in `backend/` directory, uses argparse for argument parsing, saves outputs to `backend/output/` directory structure, prints formatted console output, supports verbose logging mode</signature>
+          <path>backend/enhance_image_prompt.py</path>
+        </interface>
+      </artifact>
+      <artifact path="backend/app/core/config.py" kind="config" symbol="Settings" lines="12-70" reason="Configuration management for API keys. Access OpenAI API key via `settings.OPENAI_API_KEY` (for prompt enhancement). Access Replicate API token via `settings.REPLICATE_API_TOKEN` (for image generation). Follow existing pattern for environment variable loading.">
+        <interface>
+          <name>Settings</name>
+          <kind>configuration class</kind>
+          <signature>class Settings: OPENAI_API_KEY: Optional[str], REPLICATE_API_TOKEN: Optional[str]</signature>
+          <path>backend/app/core/config.py</path>
+        </interface>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="openai" version=">=1.0.0" reason="OpenAI API client for prompt enhancement (Story 8.1 integration)"/>
+        <package name="replicate" version=">=0.25.0" reason="Replicate API client for image generation (Story 8.2 integration)"/>
+        <package name="pillow" version=">=10.0.0" reason="Image processing for saving generated images"/>
+        <package name="pydantic" version=">=2.0.0" reason="Data validation for StoryboardResult and ClipStoryboard classes"/>
+        <package name="asyncio" version="built-in" reason="Async/await pattern for API calls (image generation)"/>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <type>Architecture Pattern</type>
+      <description>Follow existing service structure in `app/services/pipeline/`. New service `storyboard_service.py` should use async/await pattern for API calls (image generation), import from `app.core.config` for settings, import from `app.services.pipeline.scene_planning` for planning, import from `app.services.pipeline.image_generation` for image generation, import from `app.services.pipeline.image_prompt_enhancement` for optional prompt enhancement.</description>
+    </constraint>
+    <constraint>
+      <type>CLI Tool Pattern</type>
+      <description>Follow pattern established by `backend/enhance_prompt.py` and `backend/enhance_image_prompt.py`: standalone Python script in `backend/` directory, uses argparse for argument parsing, saves outputs to `backend/output/` directory structure, prints formatted console output, supports verbose logging mode.</description>
+    </constraint>
+    <constraint>
+      <type>Output Directory Structure</type>
+      <description>Follow existing pattern: `backend/output/storyboards/{timestamp}/` for storyboard images and metadata. Timestamp format: `YYYYMMDD_HHMMSS` (e.g., `20250115_143022`). Start/end frame images: `clip_001_start.png`, `clip_001_end.png`, etc. Storyboard metadata JSON: `storyboard_metadata.json`.</description>
+    </constraint>
+    <constraint>
+      <type>Planning Integration</type>
+      <description>Use VideoDirectorGPT-style planning if available (Story 7.3 Phase 2), otherwise use basic scene planning from `scene_planning.py` as fallback. Generate shot list with camera metadata (movement, shot size, perspective, lens type), scene dependencies, narrative flow, consistency groupings (if applicable).</description>
+    </constraint>
+    <constraint>
+      <type>Image Generation Integration</type>
+      <description>Reuse `app/services/pipeline/image_generation.py` from Story 8.2. Call image generation service to generate start frame (single image, not variations) and end frame (single image, not variations). Use same aspect ratio for both frames. Skip quality scoring for storyboard frames (not needed for reference frames).</description>
+    </constraint>
+    <constraint>
+      <type>Prompt Enhancement Integration</type>
+      <description>Optionally integrate `app/services/pipeline/image_prompt_enhancement.py` from Story 8.1. If `--enhance-prompts` flag is set, enhance prompt before planning. Use enhanced prompt for VideoDirectorGPT planning. Pass enhanced prompts to image generation for start/end frames.</description>
+    </constraint>
+    <constraint>
+      <type>Configuration Management</type>
+      <description>Use `app/core/config.py` for API keys. Access OpenAI API key via `settings.OPENAI_API_KEY` (for prompt enhancement). Access Replicate API token via `settings.REPLICATE_API_TOKEN` (for image generation). Follow existing pattern for environment variable loading.</description>
+    </constraint>
+    <constraint>
+      <type>Testing Standards</type>
+      <description>Use pytest framework (matches existing backend test structure). Unit tests: Planning logic, start/end frame prompt generation, motion description generation, integration with image generation service (mocked), integration with prompt enhancement service (mocked, if flag enabled), CLI argument parsing, file I/O, error handling. Target: &gt;80% code coverage. Integration tests: End-to-end CLI execution with sample prompt, verify storyboard created, verify start/end frames generated, verify metadata JSON structure, verify console output format. Performance test: Verify storyboard creation completes within &lt;15 minutes for 3 clips with start/end frames (including optional prompt enhancement).</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Image Generation Service</name>
+      <kind>Python async function</kind>
+      <signature>async def generate_images(prompt: str, num_variations: int = 8, aspect_ratio: str = "16:9", seed: Optional[int] = None, model_name: str = "stability-ai/sdxl", output_dir: Optional[Path] = None) -&gt; List[ImageGenerationResult]</signature>
+      <path>backend/app/services/pipeline/image_generation.py</path>
+      <usage>Call this service to generate start frame image (num_variations=1) and end frame image (num_variations=1) for each clip. Use same aspect_ratio for both frames.</usage>
+    </interface>
+    <interface>
+      <name>Image Prompt Enhancement Service</name>
+      <kind>Python async function</kind>
+      <signature>async def enhance_prompt_iterative(user_prompt: str, max_iterations: int = 3, score_threshold: float = 85.0, creative_model: str = "gpt-4-turbo", critique_model: str = "gpt-4-turbo", trace_dir: Optional[Path] = None) -&gt; ImagePromptEnhancementResult</signature>
+      <path>backend/app/services/pipeline/image_prompt_enhancement.py</path>
+      <usage>Call this service if `--enhance-prompts` flag is set. Enhance prompt before planning, then use enhanced prompt for VideoDirectorGPT planning and pass to image generation for start/end frames.</usage>
+    </interface>
+    <interface>
+      <name>Scene Planning Service</name>
+      <kind>Python function</kind>
+      <signature>def plan_scenes(ad_spec: AdSpecification, target_duration: int = 15) -&gt; ScenePlan</signature>
+      <path>backend/app/services/pipeline/scene_planning.py</path>
+      <usage>Use as fallback if VideoDirectorGPT planning not available. Adapt for storyboard planning to break prompt into clips. Also see `create_basic_scene_plan_from_prompt()` for basic planning without LLM.</usage>
+    </interface>
+    <interface>
+      <name>Replicate API</name>
+      <kind>External API</kind>
+      <signature>replicate.run(model="stability-ai/sdxl", input={"prompt": str, "aspect_ratio": str, "seed": int})</signature>
+      <path>Replicate Python SDK (via image_generation.py service)</path>
+      <usage>Image generation service uses Replicate API internally. No direct API calls needed from storyboard service.</usage>
+    </interface>
+    <interface>
+      <name>OpenAI API</name>
+      <kind>External API</kind>
+      <signature>openai.ChatCompletion.create(model="gpt-4-turbo", messages=[system_prompt, user_prompt])</signature>
+      <path>OpenAI Python SDK (via image_prompt_enhancement.py service)</path>
+      <usage>Prompt enhancement service uses OpenAI API internally. No direct API calls needed from storyboard service.</usage>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest framework (matches existing backend test structure). Unit tests should cover planning logic (clip breakdown), start/end frame prompt generation, motion description generation, integration with image generation service (mocked), integration with prompt enhancement service (mocked, if flag enabled), CLI argument parsing, file I/O, error handling. Target: &gt;80% code coverage. Integration tests should cover end-to-end CLI execution with sample prompt, verify storyboard created, verify start/end frames generated, verify metadata JSON structure, verify console output format. Performance test: Verify storyboard creation completes within &lt;15 minutes for 3 clips with start/end frames (including optional prompt enhancement).
+    </standards>
+    <locations>
+      - `backend/tests/unit/test_storyboard_service.py` - Unit tests for storyboard service
+      - `backend/tests/integration/test_create_storyboard_cli.py` - Integration tests for CLI tool
+      - `backend/tests/` - General test utilities and fixtures
+    </locations>
+    <ideas>
+      <test id="ac1-planning" criterion="1">
+        Test VideoDirectorGPT-style planning (if available) or basic scene planning fallback. Verify prompt is broken into 3-5 clips, shot list generated with camera metadata, scene dependencies and narrative flow generated, consistency groupings generated (if applicable).
+      </test>
+      <test id="ac1-start-end-frames" criterion="1">
+        Test start/end frame generation for each clip. Verify start frame prompt derived from shot list (initial state), end frame prompt derived from shot list (final state), motion description generated (camera movement, subject motion) between start/end.
+      </test>
+      <test id="ac1-image-generation" criterion="1">
+        Test integration with image generation service. Verify `image_generation.py` service called to generate start frame image (single image, not variations), called to generate end frame image (single image, not variations), same aspect ratio used for both frames.
+      </test>
+      <test id="ac1-file-saving" criterion="1">
+        Test storyboard file saving. Verify start/end frame images saved: `clip_001_start.png`, `clip_001_end.png`, etc. Verify `storyboard_metadata.json` saved with clip descriptions, start/end frame prompts, motion descriptions, camera movements, shot list metadata.
+      </test>
+      <test id="ac1-console-output" criterion="1">
+        Test console output formatting. Verify storyboard summary printed: list of clips with start/end frame descriptions, motion arcs for each clip, file paths for manual viewing.
+      </test>
+      <test id="ac1-cli-options" criterion="1">
+        Test CLI options. Verify `--num-clips N` (default: 3, range: 3-5), `--enhance-prompts` (optional flag, default: false), `--output-dir DIR` (default: output/storyboards/), `--verbose` flag.
+      </test>
+      <test id="ac1-prompt-enhancement" criterion="1">
+        Test optional prompt enhancement integration. Verify if `--enhance-prompts` flag is set, prompt enhanced before planning, enhanced prompt used for VideoDirectorGPT planning, enhanced prompts passed to image generation for start/end frames.
+      </test>
+      <test id="ac2-shot-list" criterion="2">
+        Test shot list generation with camera metadata. Verify camera movement, shot size, perspective, lens type included in shot list.
+      </test>
+      <test id="ac2-scene-dependencies" criterion="2">
+        Test scene dependencies and narrative flow generation. Verify scene dependencies identified, narrative flow established between clips.
+      </test>
+      <test id="ac2-consistency-groupings" criterion="2">
+        Test consistency groupings generation (if applicable). Verify consistency groupings identified for clips that should maintain visual consistency.
+      </test>
+      <test id="error-handling">
+        Test error handling. Verify API failures handled gracefully (retry logic, fallback models), invalid inputs rejected with clear error messages, missing files handled with appropriate error messages, planning failures handled gracefully.
+      </test>
+      <test id="performance">
+        Test performance. Verify storyboard creation completes within &lt;15 minutes for 3 clips with start/end frames (including optional prompt enhancement). Log timing information for each major operation (planning, image generation, file I/O).
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

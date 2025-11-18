@@ -596,14 +596,15 @@ The system shall support a professional, hero-frame-first workflow that mirrors 
 - System shall provide a dedicated hero-frame generation flow separate from full video generation.
 - System shall accept a cinematography-focused text prompt (subject, lighting, mood, lens, composition, film stock, aspect ratio).
 - System shall call a text-to-image model (e.g., Stable Diffusion / SDXL on Replicate) and generate **4–8 hero frame candidates** per request.
-- System shall expose a gallery UI where the user can:
+- **CLI MVP:** Implemented as `generate_images.py` CLI tool that saves images to disk with automatic quality scoring (PickScore, CLIP-Score, VQAScore, Aesthetic Predictor). User manually opens files for review.
+- **UI Phase (Future):** System shall expose a gallery UI where the user can:
   - View all hero frame candidates in a grid
   - Zoom into a candidate
   - Mark one hero frame as the **primary hero frame** for downstream video generation
 - System shall store generated hero frames with metadata (prompt, model, seed, aspect ratio) linked to the user and generation request.
 
 **FR-037: Cinematographer-Level Prompt Enhancement for Images**
-- System shall offer an optional LLM-powered “cinematographer enhancement” step for hero-frame prompts.
+- System shall offer an optional LLM-powered "cinematographer enhancement" step for hero-frame prompts.
 - System shall accept a basic user prompt and return an enriched prompt that includes:
   - Camera body and lens details
   - Lighting direction and quality
@@ -611,14 +612,15 @@ The system shall support a professional, hero-frame-first workflow that mirrors 
   - Film stock/color science references
   - Mood and atmosphere descriptors
   - Aspect ratio and stylization hints
-- System shall display the enhanced prompt side-by-side with the original, with a clear explanation of what was improved.
-- System shall allow the user to accept as-is, edit, or revert to the original prompt before generating hero frames.
+- **CLI MVP:** Implemented as `enhance_image_prompt.py` CLI tool using two-agent iterative refinement (Cinematographer + Prompt Engineer). Saves all prompt versions to trace files. Follows Prompt Scoring Guide guidelines.
+- **UI Phase (Future):** System shall display the enhanced prompt side-by-side with the original, with a clear explanation of what was improved. System shall allow the user to accept as-is, edit, or revert to the original prompt before generating hero frames.
 
 **FR-038: Hero Frame Iteration & Selection**
-- System shall allow the user to:
+- **CLI MVP:** Implemented via `generate_images.py` with automatic quality scoring and ranking. User manually selects best candidate by reviewing files. Supports regeneration with same or mutated prompts via CLI flags.
+- **UI Phase (Future):** System shall allow the user to:
   - Regenerate hero frames with the same prompt (slot-machine style iteration)
   - Slightly mutate prompts (e.g., adjust lighting, composition, mood) and regenerate
-  - Save multiple “favorite” hero frames for later experiments
+  - Save multiple "favorite" hero frames for later experiments
 - System shall clearly indicate which hero frame is currently selected as the canonical anchor for video generation.
 - System shall track the iteration history for hero frame generation (prompt variants, model settings, seeds) for analytics and debugging.
 
@@ -635,28 +637,30 @@ The system shall support a professional, hero-frame-first workflow that mirrors 
 **FR-040: Automated Multi-Attempt Generation with VBench-Based Selection**
 - System shall support an **automated 3-attempt mode** for image-to-video generation:
   - Given a hero frame and motion/negative prompts, the system **automatically generates 3 video attempts** without additional user input.
-  - All 3 attempts shall be stored and linked to the same “generation group”.
+  - All 3 attempts shall be stored and linked to the same "generation group".
 - After generation completes, the system shall:
   - Run VBench (or equivalent) quality evaluation on each attempt.
   - Compute per-attempt scores (e.g., temporal consistency, aesthetics, prompt alignment) and an overall quality score.
-  - Automatically select the **highest-scoring attempt** as the “system-selected best” and mark it explicitly in the UI.
-- System shall expose an API and UI to retrieve:
+  - Automatically select the **highest-scoring attempt** as the "system-selected best".
+- **CLI MVP:** Implemented as `generate_videos.py` CLI tool. Saves all videos to disk with VBench scores. Prints ranked results to console. User manually reviews videos and selects best candidate.
+- **UI Phase (Future):** System shall mark the system-selected best attempt explicitly in the UI. System shall expose an API and UI to retrieve:
   - All attempts for a given generation group
   - VBench metrics per attempt
   - Which attempt was auto-selected as best and why (score breakdown).
 
 **FR-041: Iteration Workspace & Human-in-the-Loop Refinement**
-- System shall provide a dedicated **Iteration Workspace** UI for refining video attempts that includes:
+- **CLI MVP:** Implemented as `feedback_loop.py` CLI tool that orchestrates the complete workflow (image prompt → image generation → video prompt → video generation). Supports human feedback at each stage via CLI prompts. Saves complete trace files with all iterations, scores, and outputs.
+- **UI Phase (Future):** System shall provide a dedicated **Iteration Workspace** UI for refining video attempts that includes:
   - Side-by-side comparison of the 3 auto-generated attempts
   - Visual indication of the VBench score for each attempt
   - Ability to play videos in sync for direct comparison
 - System shall allow users to:
-  - Manually override the auto-selected best attempt (choose a different “winner”)
+  - Manually override the auto-selected best attempt (choose a different "winner")
   - Trigger manual regenerations with updated motion and/or negative prompts
   - Edit the hero-frame or motion prompts using an inline editor.
 - System shall offer LLM-powered **prompt improvement suggestions** based on:
   - VBench feedback (e.g., low temporal consistency → suggest stronger motion constraints)
-  - User feedback (e.g., “too chaotic”, “not cinematic enough”)
+  - User feedback (e.g., "too chaotic", "not cinematic enough")
 - System shall log each manual regeneration as a new attempt in the generation group, preserving full history.
 
 **FR-042: Iterative Refinement Workflow & Versioning**
@@ -672,10 +676,11 @@ The system shall support a professional, hero-frame-first workflow that mirrors 
 - System shall maintain a `final_version` pointer for each ad that is used for export, download, and reporting.
 
 **FR-043: Quality Dashboard & Benchmarks**
-- System shall provide a **Quality Dashboard** that summarizes:
+- **CLI MVP:** Quality metrics are logged to trace files and JSON summaries. Console output shows score breakdowns. All data is available for manual analysis via saved trace files.
+- **UI Phase (Future):** System shall provide a **Quality Dashboard** that summarizes:
   - VBench score distribution across attempts and final videos
   - Average number of iterations per final video
-  - Auto-selected vs. user-selected “best” agreement rate
+  - Auto-selected vs. user-selected "best" agreement rate
 - For each video, the dashboard shall visualize:
   - Per-attempt VBench scores (bar/line chart)
   - How quality changed across iterations (trend line)
@@ -2602,7 +2607,27 @@ VITE_API_URL=http://your-ec2-ip
 
 ## 23. Hero-Frame Iteration Plan & Timeline
 
-This section describes how the new hero-frame-first, iterative refinement workflow will be rolled out over time. It is designed as an additive “professional mode” that builds on top of the existing MVP pipeline and Epic 7 quality/coherence capabilities.
+This section describes how the new hero-frame-first, iterative refinement workflow will be rolled out over time. It is designed as an additive "professional mode" that builds on top of the existing MVP pipeline and Epic 7 quality/coherence capabilities.
+
+### 23.0 Implementation Strategy: CLI MVP First
+
+**Note:** The initial implementation (Epic 8 & 9) will follow a **CLI MVP approach** for rapid iteration and validation before building UI components. This allows developers to:
+- Rapidly test and refine feedback loops
+- Validate automatic scoring mechanisms (PickScore, CLIP-Score, VQAScore, VBench)
+- Iterate on prompt enhancement algorithms
+- Build transparent logging and trace systems
+- Test the complete workflow end-to-end
+
+**CLI MVP Phase (Epic 8 & 9):**
+- **FR-036, FR-037, FR-038**: Implemented as CLI tools (`enhance_image_prompt.py`, `generate_images.py`, `create_storyboard.py`)
+- **FR-039, FR-040, FR-041, FR-042, FR-043**: Implemented as CLI tools (`enhance_video_prompt.py`, `generate_videos.py`, `feedback_loop.py`)
+- All outputs saved to disk for manual review
+- Complete trace files and logs for transparency
+- Automatic quality scoring integrated at each stage
+
+**UI Phase (Future):**
+- The UI components described in FR-036 (gallery), FR-038 (selection UI), FR-041 (Iteration Workspace), and FR-043 (Quality Dashboard) will be built after the CLI MVP validates the workflow and feedback loops are proven effective.
+- The functional requirements remain valid; they describe the target UI experience that will be built once the underlying systems are validated.
 
 ### 23.1 Phase Overview (Hero Frame → Video → Iteration)
 
@@ -2657,18 +2682,20 @@ The end-to-end hero-frame iterative workflow shall operate as:
 
 This timeline focuses specifically on delivering the hero-frame and iterative refinement capabilities, assuming the core MVP pipeline and most epics are already in place.
 
-**Phase 1–2 (Weeks 1–4) – Foundation**
+**Phase 1–2 (Weeks 1–4) – CLI MVP Foundation**
 - Week 1:
-  - Backend: Hero-frame generation API (text-to-image via Replicate).
-  - Frontend: Hero-frame gallery UI and selection flow.
-  - Data: Hero frame storage and linkage to users/generations.
+  - CLI: Image prompt enhancement tool (`enhance_image_prompt.py`) with two-agent iterative refinement.
+  - CLI: Image generation tool (`generate_images.py`) with automatic quality scoring (PickScore, CLIP-Score, VQAScore, Aesthetic).
+  - Storyboard creation tool (`create_storyboard.py`) for start/end frames.
 - Week 2:
-  - LLM cinematographer prompt enhancement service (FR-037) and UI.
-  - Backend: Image-to-video service wrapper for Kling/Wan/PixVerse.
-  - Schema updates for motion and negative prompts.
+  - CLI: Video prompt enhancement tool (`enhance_video_prompt.py`) with VideoDirectorGPT enhancements.
+  - CLI: Video generation tool (`generate_videos.py`) with VBench automatic scoring.
+  - Integration with existing prompt enhancement service (Story 7.3 Phase 1).
 - Week 3–4:
-  - Integration of hero-frame-first path into existing generation flow.
-  - QA across a variety of prompts and aspect ratios.
+  - CLI: Integrated feedback loop orchestrator (`feedback_loop.py`) for complete workflow.
+  - Testing and refinement of feedback loops.
+  - Documentation and trace file analysis.
+- **Note:** UI components (gallery, iteration workspace, dashboard) will be built in a subsequent phase after CLI MVP validates the workflow.
 
 **Phase 3–4 (Weeks 5–6) – Automation & Human-in-the-Loop**
 - Week 5:
