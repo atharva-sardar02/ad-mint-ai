@@ -697,7 +697,7 @@ async def regenerate_clip(
             - success: True if any attempt passed quality thresholds, False otherwise
             - details: Dict with regeneration attempt info, quality scores, best attempt number, etc.
     """
-    from app.services.video_generation import generate_video_clip
+    from app.services.video_generation_standalone import generate_video_clip
     from app.db.models.quality_metric import QualityMetric
     import random
     
