@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from app.services.pipeline.video_generation import (
+from app.services.video_generation import (
     generate_video_clip_with_model,
     MODEL_COSTS,
     REPLICATE_MODELS,

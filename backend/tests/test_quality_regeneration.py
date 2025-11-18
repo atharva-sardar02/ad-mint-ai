@@ -92,7 +92,7 @@ async def test_regenerate_clip_successful_improvement(mock_quality_metric, sampl
     db.query.return_value.filter.return_value.first.return_value = mock_quality_metric
     db.commit = Mock()
     
-    with patch("app.services.pipeline.video_generation.generate_video_clip") as mock_gen, \
+    with patch("app.services.video_generation.generate_video_clip") as mock_gen, \
          patch("app.services.pipeline.quality_control.evaluate_vbench") as mock_eval, \
          patch("app.services.pipeline.quality_control.check_quality_thresholds") as mock_check:
         
@@ -131,7 +131,7 @@ async def test_regenerate_clip_still_below_threshold(mock_quality_metric, sample
     db.query.return_value.filter.return_value.first.return_value = mock_quality_metric
     db.commit = Mock()
     
-    with patch("app.services.pipeline.video_generation.generate_video_clip") as mock_gen, \
+    with patch("app.services.video_generation.generate_video_clip") as mock_gen, \
          patch("app.services.pipeline.quality_control.evaluate_vbench") as mock_eval, \
          patch("app.services.pipeline.quality_control.check_quality_thresholds") as mock_check:
         

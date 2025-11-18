@@ -30,7 +30,7 @@ from typing import List, Dict
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.services.pipeline.image_generation import generate_images, ImageGenerationResult
+from app.services.image_generation import generate_images, ImageGenerationResult
 from app.services.pipeline.image_quality_scoring import score_image, rank_images_by_quality
 from app.services.pipeline.image_prompt_enhancement import (
     enhance_prompt_iterative,

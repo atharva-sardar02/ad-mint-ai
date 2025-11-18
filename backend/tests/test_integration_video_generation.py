@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 from app.schemas.generation import ScenePlan, Scene, TextOverlay
-from app.services.pipeline.video_generation import generate_all_clips
+from app.services.video_generation import generate_all_clips
 from app.services.pipeline.overlays import add_overlays_to_clips
 
 
@@ -52,7 +52,7 @@ def sample_scene_plan():
 async def test_complete_flow_scene_plan_to_clips_with_overlays(sample_scene_plan, tmp_path):
     """Integration test: Complete flow from scene plan to video clips with overlays."""
     # Mock video generation
-    with patch('app.services.pipeline.video_generation.generate_video_clip') as mock_generate:
+    with patch('app.services.video_generation.generate_video_clip') as mock_generate:
         # Create mock video files
         clip_paths = []
         for i in range(len(sample_scene_plan.scenes)):
@@ -123,13 +123,13 @@ async def test_complete_flow_scene_plan_to_clips_with_overlays(sample_scene_plan
 @pytest.mark.asyncio
 async def test_error_handling_api_failures_and_fallback(sample_scene_plan, tmp_path):
     """Integration test: Error handling with API failures and fallback models."""
-    from app.services.pipeline.video_generation import generate_video_clip, REPLICATE_MODELS
+    from app.services.video_generation import generate_video_clip, REPLICATE_MODELS
     
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+    with patch('app.services.video_generation.settings') as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         # Mock Replicate client to fail primary, succeed with fallback
-        with patch('app.services.pipeline.video_generation.replicate.Client') as mock_client:
+        with patch('app.services.video_generation.replicate.Client') as mock_client:
             client = MagicMock()
             mock_client.return_value = client
             
@@ -156,13 +156,13 @@ async def test_error_handling_api_failures_and_fallback(sample_scene_plan, tmp_p
             client.predictions.get.return_value = prediction_success
             
             # Mock download
-            with patch('app.services.pipeline.video_generation._download_video') as mock_download:
-                with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
+            with patch('app.services.video_generation._download_video') as mock_download:
+                with patch('app.services.video_generation._validate_video') as mock_validate:
                     output_dir = str(tmp_path)
                     scene = sample_scene_plan.scenes[0]
                     
                     # Should succeed with fallback model
-                    from app.services.pipeline import video_generation
+                    from app.services import video_generation
                     clip_path, model_used = await video_generation.generate_video_clip(
                         scene=scene,
                         output_dir=output_dir,
@@ -179,7 +179,7 @@ async def test_error_handling_api_failures_and_fallback(sample_scene_plan, tmp_p
 @pytest.mark.asyncio
 async def test_cancellation_during_video_generation(sample_scene_plan, tmp_path):
     """Integration test: Cancellation during video generation."""
-    from app.services.pipeline.video_generation import generate_all_clips
+    from app.services.video_generation import generate_all_clips
     
     cancellation_called = [False]
     
@@ -190,7 +190,7 @@ async def test_cancellation_during_video_generation(sample_scene_plan, tmp_path)
             return False
         return True  # Cancel on second check
     
-    with patch('app.services.pipeline.video_generation.generate_video_clip') as mock_generate:
+    with patch('app.services.video_generation.generate_video_clip') as mock_generate:
         # First clip succeeds
         clip_path_1 = tmp_path / "clip_1.mp4"
         clip_path_1.write_bytes(b"fake video")

@@ -174,7 +174,7 @@ def test_cli_file_not_found():
 def test_cli_mocked_integration(sample_prompt_file, temp_output_dir):
     """Test CLI with mocked API calls (doesn't require API keys)."""
     from app.services.pipeline.storyboard_service import create_storyboard
-    from app.services.pipeline.image_generation import ImageGenerationResult
+    from app.services.image_generation import ImageGenerationResult
     from app.schemas.generation import ScenePlan, Scene, TextOverlay
     
     # Mock image generation result

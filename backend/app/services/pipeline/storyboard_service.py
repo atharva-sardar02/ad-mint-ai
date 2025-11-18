@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from app.services.pipeline.scene_planning import create_basic_scene_plan_from_prompt, ScenePlan
-from app.services.pipeline.image_generation import (
+from app.services.image_generation import (
     generate_images,
     ImageGenerationResult,
     prepare_image_for_replicate

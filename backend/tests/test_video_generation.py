@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 from app.schemas.generation import Scene, TextOverlay
-from app.services.pipeline.video_generation import (
+from app.services.video_generation import (
     generate_video_clip,
     _generate_with_retry,
     _download_video,
@@ -35,7 +35,7 @@ def sample_scene():
 @pytest.fixture
 def mock_replicate_client():
     """Mock Replicate client."""
-    with patch('app.services.pipeline.video_generation.replicate.Client') as mock:
+    with patch('app.services.video_generation.replicate.Client') as mock:
         client = MagicMock()
         mock.return_value = client
         yield client
@@ -45,7 +45,7 @@ def mock_replicate_client():
 async def test_generate_video_clip_success(sample_scene, mock_replicate_client, tmp_path):
     """Test successful video clip generation."""
     # Mock settings
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+    with patch('app.services.video_generation.settings') as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         # Mock prediction
@@ -58,8 +58,8 @@ async def test_generate_video_clip_success(sample_scene, mock_replicate_client, 
         mock_replicate_client.predictions.get.return_value = prediction
         
         # Mock download
-        with patch('app.services.pipeline.video_generation._download_video') as mock_download:
-            with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
+        with patch('app.services.video_generation._download_video') as mock_download:
+            with patch('app.services.video_generation._validate_video') as mock_validate:
                 output_dir = str(tmp_path)
                 clip_path, model_used = await generate_video_clip(
                     scene=sample_scene,
@@ -77,7 +77,7 @@ async def test_generate_video_clip_success(sample_scene, mock_replicate_client, 
 @pytest.mark.asyncio
 async def test_generate_video_clip_cancellation(sample_scene, tmp_path):
     """Test video generation cancellation."""
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+    with patch('app.services.video_generation.settings') as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         def cancellation_check():
@@ -98,7 +98,7 @@ async def test_generate_video_clip_cancellation(sample_scene, tmp_path):
 @pytest.mark.asyncio
 async def test_generate_with_retry_success(mock_replicate_client):
     """Test retry logic with successful generation."""
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+    with patch('app.services.video_generation.settings') as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         prediction = MagicMock()
@@ -122,7 +122,7 @@ async def test_generate_with_retry_success(mock_replicate_client):
 @pytest.mark.asyncio
 async def test_generate_with_retry_rate_limit(mock_replicate_client):
     """Test retry logic with rate limit error."""
-    from app.services.pipeline.video_generation import REPLICATE_MODELS
+    from app.services.video_generation import REPLICATE_MODELS
     
     # Create mock exception classes that inherit from Exception
     class RateLimitError(Exception):
@@ -139,8 +139,8 @@ async def test_generate_with_retry_rate_limit(mock_replicate_client):
         'ReplicateError': ReplicateError
     })
     
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings, \
-         patch('app.services.pipeline.video_generation.replicate.exceptions', MockExceptionsModule):
+    with patch('app.services.video_generation.settings') as mock_settings, \
+         patch('app.services.video_generation.replicate.exceptions', MockExceptionsModule):
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         # First attempt: rate limit
@@ -178,7 +178,7 @@ async def test_download_video_success(tmp_path):
     # Create a mock video file content
     video_content = b"fake video content"
     
-    with patch('app.services.pipeline.video_generation.httpx.AsyncClient') as mock_client_class:
+    with patch('app.services.video_generation.httpx.AsyncClient') as mock_client_class:
         mock_response = MagicMock()
         mock_response.content = video_content
         mock_response.raise_for_status = MagicMock()
@@ -218,7 +218,7 @@ async def test_validate_video_missing_file(tmp_path):
 @pytest.mark.asyncio
 async def test_generate_video_clip_with_seed(sample_scene, mock_replicate_client, tmp_path):
     """Test that seed parameter is passed to Replicate API when provided."""
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+    with patch('app.services.video_generation.settings') as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         # Mock prediction
@@ -231,8 +231,8 @@ async def test_generate_video_clip_with_seed(sample_scene, mock_replicate_client
         mock_replicate_client.predictions.get.return_value = prediction
         
         # Mock download and validation
-        with patch('app.services.pipeline.video_generation._download_video') as mock_download:
-            with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
+        with patch('app.services.video_generation._download_video') as mock_download:
+            with patch('app.services.video_generation._validate_video') as mock_validate:
                 output_dir = str(tmp_path)
                 test_seed = 12345
                 
@@ -257,7 +257,7 @@ async def test_generate_video_clip_with_seed(sample_scene, mock_replicate_client
 @pytest.mark.asyncio
 async def test_generate_video_clip_without_seed(sample_scene, mock_replicate_client, tmp_path):
     """Test that seed parameter is not passed when None."""
-    with patch('app.services.pipeline.video_generation.settings') as mock_settings:
+    with patch('app.services.video_generation.settings') as mock_settings:
         mock_settings.REPLICATE_API_TOKEN = "test-token"
         
         # Mock prediction
@@ -270,8 +270,8 @@ async def test_generate_video_clip_without_seed(sample_scene, mock_replicate_cli
         mock_replicate_client.predictions.get.return_value = prediction
         
         # Mock download and validation
-        with patch('app.services.pipeline.video_generation._download_video') as mock_download:
-            with patch('app.services.pipeline.video_generation._validate_video') as mock_validate:
+        with patch('app.services.video_generation._download_video') as mock_download:
+            with patch('app.services.video_generation._validate_video') as mock_validate:
                 output_dir = str(tmp_path)
                 
                 clip_path, model_used = await generate_video_clip(
