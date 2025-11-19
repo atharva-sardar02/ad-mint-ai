@@ -93,6 +93,10 @@ async def process_generation(
     image_path: Optional[str] = None,
     refinement_instructions: Optional[dict] = None,
     brand_name: Optional[str] = None,
+    use_advanced_image_generation: bool = False,
+    advanced_image_quality_threshold: float = 30.0,
+    advanced_image_num_variations: int = 4,
+    advanced_image_max_enhancement_iterations: int = 4,
 ):
     """
     Background task to process video generation.
@@ -141,6 +145,7 @@ async def process_generation(
             from app.services.pipeline.image_generation import generate_image
             from app.services.pipeline.image_generation_batch import (
                 generate_images_with_sequential_references,
+                generate_enhanced_reference_images_with_sequential_references,
                 _build_enhanced_image_prompt
             )
             
@@ -407,20 +412,43 @@ async def process_generation(
                         logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} scene reference images using master reference (maximum consistency)")
                     else:
                         # Fallback: Use sequential chaining if no master reference
-                        logger.info(f"[{generation_id}] No master reference, using sequential chaining for scene reference images...")
-                        reference_image_paths = await generate_images_with_sequential_references(
-                            prompts=enhanced_reference_prompts,  # Use enhanced prompts that respect subject_presence
-                            output_dir=str(image_dir),
-                            generation_id=generation_id,
-                            consistency_markers=consistency_markers,
-                            continuity_notes=scene_continuity_notes,
-                            consistency_guidelines=scene_consistency_guidelines,
-                            transition_notes=scene_transition_notes,
-                            initial_reference_image=None,  # No initial reference in fallback mode
-                            cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
-                        )
+                        # Check if advanced image generation is enabled
                         
-                        logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} reference images with sequential chaining (coherent across all scenes)")
+                        if use_advanced_image_generation:
+                            logger.info(f"[{generation_id}] 🚀 ADVANCED IMAGE GENERATION enabled - using prompt enhancement & quality scoring...")
+                            logger.info(f"[{generation_id}] Settings: num_variations={advanced_image_num_variations}, quality_threshold={advanced_image_quality_threshold}, max_iterations={advanced_image_max_enhancement_iterations}")
+                            
+                            reference_image_paths = await generate_enhanced_reference_images_with_sequential_references(
+                                prompts=enhanced_reference_prompts,  # Use enhanced prompts that respect subject_presence
+                                output_dir=str(image_dir),
+                                generation_id=generation_id,
+                                consistency_markers=consistency_markers,
+                                continuity_notes=scene_continuity_notes,
+                                consistency_guidelines=scene_consistency_guidelines,
+                                transition_notes=scene_transition_notes,
+                                initial_reference_image=None,  # No initial reference in fallback mode
+                                cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                                quality_threshold=advanced_image_quality_threshold,
+                                num_variations=advanced_image_num_variations,
+                                max_enhancement_iterations=advanced_image_max_enhancement_iterations,
+                            )
+                            
+                            logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} reference images with ADVANCED mode (2-agent enhancement + 4-model scoring + best selection)")
+                        else:
+                            logger.info(f"[{generation_id}] Using standard sequential chaining for scene reference images...")
+                            reference_image_paths = await generate_images_with_sequential_references(
+                                prompts=enhanced_reference_prompts,  # Use enhanced prompts that respect subject_presence
+                                output_dir=str(image_dir),
+                                generation_id=generation_id,
+                                consistency_markers=consistency_markers,
+                                continuity_notes=scene_continuity_notes,
+                                consistency_guidelines=scene_consistency_guidelines,
+                                transition_notes=scene_transition_notes,
+                                initial_reference_image=None,  # No initial reference in fallback mode
+                                cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                            )
+                            
+                            logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} reference images with sequential chaining (coherent across all scenes)")
                     
                     # Generate start images (for Kling 2.5 Turbo) - SEQUENTIALLY for visual cohesion
                     # CRITICAL: Generate ALL start images in one sequential batch to maintain visual cohesion
@@ -666,7 +694,18 @@ async def process_generation(
             logger.info(f"[{generation_id}] Using {len(scene_plan.scenes)} scenes as planned by LLM, total duration: {scene_plan.total_duration}s")
             
             # Store scene plan
-            generation.scene_plan = scene_plan.model_dump()
+            scene_plan_dict = scene_plan.model_dump()
+            
+            # Add advanced image generation metadata to scene plan
+            scene_plan_dict['advanced_image_generation_used'] = use_advanced_image_generation
+            if use_advanced_image_generation:
+                scene_plan_dict['advanced_image_settings'] = {
+                    'quality_threshold': advanced_image_quality_threshold,
+                    'num_variations': advanced_image_num_variations,
+                    'max_enhancement_iterations': advanced_image_max_enhancement_iterations
+                }
+            
+            generation.scene_plan = scene_plan_dict
             generation.num_scenes = len(scene_plan.scenes)
             db.commit()
             logger.info(f"[{generation_id}] Scene plan stored in database")
@@ -1484,7 +1523,7 @@ async def create_generation(
     logger.info(f"Created generation {generation_id}")
     
     # Add background task to process the generation
-    # Pass model, target_duration, use_llm, refinement_instructions, and brand_name if specified
+    # Pass model, target_duration, use_llm, refinement_instructions, brand_name, and advanced image generation settings if specified
     background_tasks.add_task(
         process_generation,
         generation_id,
@@ -1495,6 +1534,10 @@ async def create_generation(
         None,  # image_path (for /api/generate endpoint, no image)
         request.refinement_instructions,  # Pass refinement instructions
         request.brand_name,  # Pass brand name if provided
+        request.use_advanced_image_generation or False,  # Advanced image generation flag
+        request.advanced_image_quality_threshold or 30.0,  # Quality threshold
+        request.advanced_image_num_variations or 4,  # Number of variations
+        request.advanced_image_max_enhancement_iterations or 4,  # Max enhancement iterations
     )
     logger.info(f"[{generation_id}] ✅ Background task added successfully")
     
@@ -2038,6 +2081,11 @@ async def get_generation_status(
                 except Exception as e:
                     logger.warning(f"[{generation_id}] Failed to reconstruct storyboard from scene_plan: {e}")
     
+    # Extract advanced image generation metadata from scene_plan
+    advanced_image_generation_used = None
+    if generation.scene_plan and isinstance(generation.scene_plan, dict):
+        advanced_image_generation_used = generation.scene_plan.get('advanced_image_generation_used', False)
+    
     return StatusResponse(
         generation_id=generation.id,
         status=generation.status,
@@ -2049,7 +2097,8 @@ async def get_generation_status(
         num_scenes=generation.num_scenes,
         available_clips=available_clips,
         seed_value=generation.seed_value,
-        storyboard_plan=storyboard_plan
+        storyboard_plan=storyboard_plan,
+        advanced_image_generation_used=advanced_image_generation_used
     )
 
 
