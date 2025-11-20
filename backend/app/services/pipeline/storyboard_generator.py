@@ -112,6 +112,48 @@ Follow the AIDA emotional arc:
 
 ---
 
+## 🎬 TRANSITION SELECTION BETWEEN SCENES
+
+For each scene (except the last), choose an appropriate transition to the next scene based on the narrative flow:
+
+**Available Transitions:**
+
+**Standard:**
+- **crossfade** - Smooth blend. Best for: subtle mood shifts, continuous time, same location, professional look
+- **cut** - Instant cut. Best for: high energy, dramatic reveals, stark contrast, rapid pacing
+
+**Movement-Based:**
+- **wipe_left/wipe_right/wipe_up/wipe_down** - Slide transition. Best for: location changes, dynamic movement
+
+**TikTok/Instagram Style (High Energy):**
+- **flash** - Quick white flash (0.1s). Best for: beat drops, dramatic reveals, attention-grabbing moments
+- **zoom_blur** - Aggressive zoom with blur (0.3s). Best for: product reveals, high-impact moments
+- **whip_pan_left/right/up/down** - Fast camera whip (0.2s). Best for: high energy lifestyle, trendy feel
+- **glitch** - Digital distortion (0.15s). Best for: tech products, modern/edgy brands
+
+**Selection Criteria:**
+- **Mood Shift**: Dramatic → cut/flash/glitch; Subtle → crossfade
+- **Location**: Different locations → wipe/whip_pan; Same location → crossfade
+- **Time Passage**: Time jumps → crossfade; Continuous → crossfade/cut
+- **Energy**: High energy → cut/flash/whip_pan; Moderate → zoom_blur/wipe; Calm → crossfade
+- **Target Audience**: Gen Z/Young → flash/whip_pan/glitch; Professional → crossfade
+- **Brand**: Tech/Modern → glitch/flash/zoom_blur; Premium → crossfade
+- **AIDA Stages**:
+  * Attention → Interest: flash/zoom_blur (building excitement)
+  * Interest → Desire: whip_pan/wipe (escalating emotion)
+  * Desire → Action: flash/cut/zoom_blur (urgency)
+
+**Examples:**
+- Establishing shot → Product closeup: zoom_blur
+- Calm scene → Energetic scene: whip_pan_right or flash
+- Daytime → Evening: crossfade
+- Problem → Solution: flash or cut
+- Kitchen → Living room: whip_pan_left or wipe_left
+- Tech product intro → Features: glitch or zoom_blur
+- Build-up → Big reveal/CTA: flash or zoom_blur
+
+---
+
 ## 🎬 OUTPUT JSON FORMAT
 
 {
@@ -146,7 +188,8 @@ Follow the AIDA emotional arc:
       },
       "voiceover": "string",
       "overlay_text": "string",
-      "sound_design": "string"
+      "sound_design": "string",
+      "transition_to_next": "crossfade"
     },
     {
       "scene_number": 2,
@@ -163,7 +206,8 @@ Follow the AIDA emotional arc:
       },
       "voiceover": "string",
       "overlay_text": "string",
-      "sound_design": "string"
+      "sound_design": "string",
+      "transition_to_next": "zoom_blur"
     },
     {
       "scene_number": 3,
@@ -180,7 +224,8 @@ Follow the AIDA emotional arc:
       },
       "voiceover": "string",
       "overlay_text": "string",
-      "sound_design": "string"
+      "sound_design": "string",
+      "transition_to_next": "cut"
     },
     {
       "scene_number": 4,
@@ -216,6 +261,8 @@ Create a storyboard that:
 - Maintains visual consistency
 - Follows AIDA framework
 - Provides rich detail for video generation
+- Includes appropriate transitions for each scene boundary (except last scene)
+- Selects transitions that enhance the narrative flow and emotional arc
 """
 
 
@@ -379,6 +426,9 @@ def _convert_storyboard_to_ad_spec(
             animation="fade_in",
         )
         
+        # Extract transition
+        transition_to_next = scene_data.get("transition_to_next", "crossfade")
+        
         scenes.append(
             Scene(
                 scene_number=scene_data.get("scene_number") or idx,
@@ -389,6 +439,7 @@ def _convert_storyboard_to_ad_spec(
                 text_overlay=text_overlay,
                 duration=int(scene_data.get("duration_seconds") or 4),
                 sound_design=sound_design,
+                transition_to_next=transition_to_next,
             )
         )
     
