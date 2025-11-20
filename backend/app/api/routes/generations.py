@@ -552,6 +552,7 @@ async def process_generation(
                             text_overlay=None,  # Can be added later
                             duration=int(scene_data.get("duration_seconds", 4)),
                             sound_design=None,  # Can be added later
+                            transition_to_next=scene_data.get("transition_to_next", "crossfade"),  # LLM-selected transition
                         )
                     )
                 
@@ -1065,10 +1066,25 @@ async def process_generation(
                 stitched_output_dir = str(temp_dir / f"{generation_id}_stitched")
                 stitched_output_path = str(Path(stitched_output_dir) / "stitched.mp4")
                 logger.info(f"[{generation_id}] Stitched video will be saved to: {stitched_output_path}")
+                
+                # Extract transitions from scene plan
+                transitions = []
+                if scene_plan_obj and scene_plan_obj.scenes:
+                    for scene in scene_plan_obj.scenes[:-1]:  # All scenes except last
+                        transition = getattr(scene, 'transition_to_next', 'crossfade')
+                        if transition is None:
+                            transition = 'crossfade'
+                        transitions.append(transition)
+                    logger.info(f"[{generation_id}] Using LLM-selected transitions: {transitions}")
+                else:
+                    # Fallback to default crossfade transitions
+                    transitions = ["crossfade"] * (len(overlay_paths) - 1)
+                    logger.info(f"[{generation_id}] Using default crossfade transitions")
+                
                 stitched_video_path = stitch_video_clips(
                     clip_paths=overlay_paths,
                     output_path=stitched_output_path,
-                    transitions=True,
+                    transitions=transitions,
                     cancellation_check=check_cancellation
                 )
                 logger.info(f"[{generation_id}] Video stitching completed: {stitched_video_path}")

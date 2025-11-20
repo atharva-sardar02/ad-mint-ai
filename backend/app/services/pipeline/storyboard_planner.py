@@ -271,6 +271,61 @@ Remember: Write all prompts in natural, descriptive language. Think like a filmm
 - Only change: camera angle, lighting, position, environment, effects, action/pose
 - Generic character descriptions like "woman in her 30s" WILL result in different people in each scene - guaranteed failure!
 
+🚨 **TRANSITION SELECTION BETWEEN SCENES** 🚨
+
+For each scene (except the last one), you must choose an appropriate transition to the next scene. The transition should enhance the narrative flow and match the emotional/visual shift between scenes.
+
+**Available Transition Types:**
+
+**Standard Transitions:**
+1. **crossfade** - Smooth blend between scenes (0.5s overlap). Best for: subtle mood shifts, continuous time flow, same location, professional look
+2. **cut** - Instant hard cut with no transition. Best for: high energy, dramatic reveals, stark contrast, rapid pacing
+
+**Movement-Based Transitions:**
+3. **wipe_left/wipe_right/wipe_up/wipe_down** - One scene slides over another. Best for: location changes, introducing new elements, dynamic movement
+
+**TikTok/Instagram Style (High Energy, Modern):**
+4. **flash** - Quick white flash (0.1s). Best for: beat drops, dramatic reveals, attention-grabbing moments, sync with music
+5. **zoom_blur** - Aggressive zoom with motion blur (0.3s). Best for: product reveals, dramatic emphasis, high-impact moments, creating focus
+6. **whip_pan_left/whip_pan_right/whip_pan_up/whip_pan_down** - Fast camera whip movement (0.2s). Best for: high energy lifestyle, rapid scene changes, action moments, trendy feel
+7. **glitch** - Digital distortion effect (0.15s). Best for: tech products, modern/edgy brands, youthful audience, digital aesthetic
+
+**Transition Selection Criteria:**
+- **Mood/Emotion Shift**: Dramatic changes → cut/flash/glitch; Subtle shifts → crossfade
+- **Location Change**: Different locations → wipe/whip_pan; Same location → crossfade
+- **Time Passage**: Significant time jump → crossfade; Continuous time → crossfade/cut
+- **Energy Level**: 
+  * High energy/fast pacing → cut/flash/whip_pan/glitch
+  * Moderate energy → zoom_blur/wipe
+  * Calm/contemplative → crossfade
+- **Target Audience**:
+  * Gen Z/Young audience → flash/whip_pan/glitch/zoom_blur (TikTok style)
+  * Professional/Premium → crossfade
+  * Tech/Modern → glitch/flash/zoom_blur
+- **Camera Movement**: Matching movement direction → whip_pan (same direction); Opposing → cut/flash
+- **AIDA Framework Boundaries**:
+  * Attention → Interest: Often flash/zoom_blur (building excitement)
+  * Interest → Desire: Often whip_pan/wipe (escalating emotion)
+  * Desire → Action: Often flash/cut/zoom_blur (urgency, decisive moment)
+- **Visual Continuity**: Similar visual elements → crossfade; Contrasting visuals → cut/wipe/flash
+- **Product Reveals**: Revealing product → zoom_blur/flash; Product in use → crossfade/whip_pan
+- **Brand Personality**:
+  * Youthful/Trendy → flash/whip_pan/glitch
+  * Professional/Elegant → crossfade
+  * Tech/Innovation → glitch/zoom_blur/flash
+
+**Examples:**
+- Scene 1 (establishing shot) → Scene 2 (product closeup): zoom_blur
+- Scene 2 (calm, product on table) → Scene 3 (energetic, product in use): whip_pan_right or flash
+- Scene 3 (daytime use) → Scene 4 (evening contemplation): crossfade
+- Scene 3 (problem shown) → Scene 4 (solution revealed): flash or cut (dramatic shift)
+- Scene 2 (person in kitchen) → Scene 3 (person in living room): wipe_left or whip_pan_left (location change)
+- Scene 1 (tech product intro) → Scene 2 (features showcase): glitch or zoom_blur
+- Scene 2 (lifestyle shot) → Scene 3 (action moment): whip_pan_up or flash
+- Scene 3 (build-up) → Scene 4 (big reveal/CTA): flash or zoom_blur
+
+Choose transitions that serve the story and enhance the emotional arc. Consider what the viewer should feel at each transition point.
+
 Now, I need you to return this in a structured JSON format so we can process it programmatically. Here's the structure:
 
 {{
@@ -303,11 +358,13 @@ Now, I need you to return this in a structured JSON format so we can process it 
         "composition": "Natural description of how the frame is composed",
         "visual_elements": "Natural description of key visual elements"
       }},
-      "duration_seconds": <YOUR_CHOSEN_DURATION>  // **CRITICAL**: MUST be between 3 and 7 seconds (MINIMUM 3, MAXIMUM 7). Choose the duration that best fits this scene's narrative needs.
+      "duration_seconds": <YOUR_CHOSEN_DURATION>,  // **CRITICAL**: MUST be between 3 and 7 seconds (MINIMUM 3, MAXIMUM 7). Choose the duration that best fits this scene's narrative needs.
+      "transition_to_next": "crossfade" | "cut" | "wipe_left" | "wipe_right" | "wipe_up" | "wipe_down" | "flash" | "zoom_blur" | "whip_pan_left" | "whip_pan_right" | "whip_pan_up" | "whip_pan_down" | "glitch"  // Choose the best transition based on criteria above. For the LAST scene, you can omit this field or set it to null.
     }}
     // ... continue for all scenes you create
     // IMPORTANT: The sum of all "duration_seconds" should be close to {target_duration} seconds
     // **CRITICAL**: Every scene's duration_seconds MUST be at least 3 and at most 7
+    // **CRITICAL**: Each scene (except the last) MUST have a transition_to_next field
     // For scenes 2+, make sure image_continuity_notes and scene_transition_notes reference previous scenes
   ]
 }}
@@ -350,6 +407,11 @@ Key points:
   - Scene 1: Detailed subject description (e.g., "8-inch bottle, frosted glass, silver cap, rose gold label")
   - Scenes 2+: "The EXACT SAME [subject] from Scene 1" + reference identical characteristics
   - Vary camera angle, lighting, positioning, environment - but NEVER the subject's physical attributes
+- **TRANSITION SELECTION**:
+  - Each scene (except the last) MUST include a transition_to_next field
+  - Choose transitions based on: mood shift, location change, time passage, energy level, visual continuity
+  - Consider the narrative arc and emotional flow when selecting transitions
+  - Use crossfade as default for smooth continuity, cut for dramatic shifts, wipes for location changes, flash/zoom_blur/whip_pan/glitch for high-energy modern content
 """
 
 
