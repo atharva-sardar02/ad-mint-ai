@@ -5,6 +5,7 @@ Video generation route handlers.
 import asyncio
 import logging
 import os
+import shutil
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -318,46 +319,9 @@ async def process_generation(
                 logger.info(f"[{generation_id}] Generating {len(scene_image_generation_prompts)} enhanced reference images with prompt enhancement and quality scoring...")
                 try:
                     # Generate enhanced reference images with prompt enhancement, quality scoring, and sequential chaining
-                    # STEP: Generate a master reference image from user's reference image + enhanced prompt
-                    # This master reference will be used for ALL scenes to ensure maximum consistency
+                    # STEP: Use user's provided image as the FIRST reference image directly
+                    # All subsequent images will be generated using sequential chaining starting from user's image
                     user_initial_reference = image_path if image_path else None
-                    first_scene_subject_presence = scene_subject_presence[0] if scene_subject_presence and len(scene_subject_presence) > 0 else "full"
-                    
-                    master_reference_image = None
-                    if user_initial_reference and first_scene_subject_presence != "none":
-                        logger.info(f"[{generation_id}] Generating master reference image from user's reference image + enhanced prompt...")
-                        
-                        # Use the first scene's prompt as the base for the master reference image
-                        # This ensures the master image matches the overall vision
-                        first_scene_prompt = scene_image_generation_prompts[0] if scene_image_generation_prompts else ""
-                        
-                        # Build enhanced prompt for master reference image
-                        master_prompt = _build_enhanced_image_prompt(
-                            base_prompt=first_scene_prompt,
-                            consistency_markers=consistency_markers,
-                            continuity_note=scene_continuity_notes[0] if scene_continuity_notes and len(scene_continuity_notes) > 0 else None,
-                            consistency_guideline=scene_consistency_guidelines[0] if scene_consistency_guidelines and len(scene_consistency_guidelines) > 0 else None,
-                            transition_note=None,  # No transition for master image
-                            scene_number=1,
-                        )
-                        
-                        # Generate master reference image using user's reference + enhanced prompt
-                        master_reference_image = await generate_image(
-                            prompt=master_prompt,
-                            output_dir=str(image_dir),
-                            generation_id=generation_id,
-                            scene_number=0,  # Use scene 0 to indicate master reference
-                            consistency_markers=None,  # Already included in enhanced prompt
-                            reference_image_path=user_initial_reference,  # Use user's reference as input
-                            cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
-                        )
-                        
-                        logger.info(f"[{generation_id}] ✅ Generated master reference image: {master_reference_image}")
-                        logger.info(f"[{generation_id}] This master reference will be used for all {len(scene_image_generation_prompts)} scenes")
-                    elif user_initial_reference and first_scene_subject_presence == "none":
-                        logger.info(f"[{generation_id}] First scene has subject_presence='none', skipping master reference generation (scene doesn't include subject)")
-                    else:
-                        logger.info(f"[{generation_id}] No user reference image provided, will generate scene-specific reference images without master reference")
                     
                     # Enhance reference image prompts based on subject_presence
                     enhanced_reference_prompts = []
@@ -372,44 +336,69 @@ async def process_generation(
                             enhanced_reference_prompts.append(prompt)
                     
                     # Generate reference images for each scene
-                    # If master reference exists, use it for ALL scenes (maximum consistency)
-                    # Otherwise, use sequential chaining (fallback)
-                    if master_reference_image:
-                        logger.info(f"[{generation_id}] Generating scene reference images using master reference for all scenes...")
-                        reference_image_paths = []
-                        for idx, prompt in enumerate(enhanced_reference_prompts, start=1):
-                            # Check cancellation
-                            cancellation_check = lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False
-                            if cancellation_check():
-                                raise RuntimeError("Image generation cancelled by user")
-                            
-                            logger.info(f"[{generation_id}] Generating reference image {idx}/{len(enhanced_reference_prompts)} using master reference")
-                            
-                            # Build enhanced prompt for this scene
-                            enhanced_prompt = _build_enhanced_image_prompt(
-                                base_prompt=prompt,
-                                consistency_markers=consistency_markers,
-                                continuity_note=scene_continuity_notes[idx - 1] if scene_continuity_notes and idx - 1 < len(scene_continuity_notes) else None,
-                                consistency_guideline=scene_consistency_guidelines[idx - 1] if scene_consistency_guidelines and idx - 1 < len(scene_consistency_guidelines) else None,
-                                transition_note=scene_transition_notes[idx - 1] if scene_transition_notes and idx - 1 < len(scene_transition_notes) else None,
-                                scene_number=idx,
-                            )
-                            
-                            # Generate scene reference image using master reference
-                            scene_reference_image = await generate_image(
-                                prompt=enhanced_prompt,
-                                output_dir=str(image_dir),
-                                generation_id=generation_id,
-                                scene_number=idx,
-                                consistency_markers=None,  # Already included in enhanced prompt
-                                reference_image_path=master_reference_image,  # Use master reference for ALL scenes
-                                cancellation_check=cancellation_check,
-                            )
-                            
-                            reference_image_paths.append(scene_reference_image)
-                            logger.info(f"[{generation_id}] Scene {idx} reference image generated: {scene_reference_image}")
+                    # If user provided an image, use it directly as the first reference image
+                    # Then generate remaining images using sequential chaining starting from user's image
+                    if user_initial_reference:
+                        logger.info(f"[{generation_id}] User provided reference image - using it directly as first scene reference image")
+                        logger.info(f"[{generation_id}] All subsequent reference images will be generated using sequential chaining for consistency")
                         
-                        logger.info(f"[{generation_id}] ✅ Generated {len(reference_image_paths)} scene reference images using master reference (maximum consistency)")
+                        # Copy user's image to the first scene reference image location
+                        user_ref_path = Path(user_initial_reference)
+                        if user_ref_path.exists():
+                            # Copy user's image to scene 1 reference location
+                            first_scene_ref_path = image_dir / f"{generation_id}_scene_1.png"
+                            shutil.copy2(user_ref_path, first_scene_ref_path)
+                            first_reference_image = str(first_scene_ref_path)
+                            logger.info(f"[{generation_id}] ✅ Copied user's reference image to first scene: {first_reference_image}")
+                            
+                            # Generate remaining reference images (scenes 2, 3, etc.) using sequential chaining
+                            # Start the chain with the user's image
+                            if len(enhanced_reference_prompts) > 1:
+                                remaining_prompts = enhanced_reference_prompts[1:]  # Skip first prompt (using user's image)
+                                
+                                if use_advanced_image_generation:
+                                    logger.info(f"[{generation_id}] 🚀 ADVANCED IMAGE GENERATION enabled for remaining scenes...")
+                                    remaining_reference_images = await generate_enhanced_reference_images_with_sequential_references(
+                                        prompts=remaining_prompts,
+                                        output_dir=str(image_dir),
+                                        generation_id=generation_id,
+                                        consistency_markers=consistency_markers,
+                                        continuity_notes=scene_continuity_notes[1:] if scene_continuity_notes and len(scene_continuity_notes) > 1 else None,
+                                        consistency_guidelines=scene_consistency_guidelines[1:] if scene_consistency_guidelines and len(scene_consistency_guidelines) > 1 else None,
+                                        transition_notes=scene_transition_notes[1:] if scene_transition_notes and len(scene_transition_notes) > 1 else None,
+                                        initial_reference_image=first_reference_image,  # Start chain with user's image
+                                        cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                                        quality_threshold=advanced_image_quality_threshold,
+                                        num_variations=advanced_image_num_variations,
+                                        max_enhancement_iterations=advanced_image_max_enhancement_iterations,
+                                        scene_offset=1,  # Start from scene 2 (idx 1)
+                                    )
+                                    logger.info(f"[{generation_id}] ✅ Generated {len(remaining_reference_images)} remaining reference images with ADVANCED mode")
+                                else:
+                                    remaining_reference_images = await generate_images_with_sequential_references(
+                                        prompts=remaining_prompts,
+                                        output_dir=str(image_dir),
+                                        generation_id=generation_id,
+                                        consistency_markers=consistency_markers,
+                                        continuity_notes=scene_continuity_notes[1:] if scene_continuity_notes and len(scene_continuity_notes) > 1 else None,
+                                        consistency_guidelines=scene_consistency_guidelines[1:] if scene_consistency_guidelines and len(scene_consistency_guidelines) > 1 else None,
+                                        transition_notes=scene_transition_notes[1:] if scene_transition_notes and len(scene_transition_notes) > 1 else None,
+                                        initial_reference_image=first_reference_image,  # Start chain with user's image
+                                        cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
+                                        scene_offset=1,  # Start from scene 2 (idx 1)
+                                    )
+                                    logger.info(f"[{generation_id}] ✅ Generated {len(remaining_reference_images)} remaining reference images with sequential chaining")
+                                
+                                # Combine: user's image (first) + generated images (remaining)
+                                reference_image_paths = [first_reference_image] + remaining_reference_images
+                            else:
+                                # Only one scene - just use user's image
+                                reference_image_paths = [first_reference_image]
+                            
+                            logger.info(f"[{generation_id}] ✅ Total {len(reference_image_paths)} reference images: user's image (scene 1) + {len(reference_image_paths) - 1} generated images")
+                        else:
+                            logger.warning(f"[{generation_id}] User reference image not found: {user_initial_reference}, falling back to sequential generation")
+                            user_initial_reference = None  # Fall through to sequential generation
                     else:
                         # Fallback: Use sequential chaining if no master reference
                         # Check if advanced image generation is enabled
@@ -481,8 +470,13 @@ async def process_generation(
                             enhanced_start_prompts.append(enhanced_start_prompt)
                         
                         # Generate ALL start images sequentially in one batch
-                        # Use Scene 1's reference image as the initial reference to start the chain
+                        # Use Scene 1's reference image (user's image if provided) as the initial reference to start the chain
                         initial_start_reference = reference_image_paths[0] if reference_image_paths else None
+                        if user_initial_reference and initial_start_reference:
+                            # If user provided image, use it directly as initial reference for start images
+                            # This ensures start images are consistent with user's image
+                            initial_start_reference = reference_image_paths[0]  # This is the user's image (copied to scene 1 location)
+                            logger.info(f"[{generation_id}] Using user's reference image as initial reference for start images")
                         start_image_paths = await generate_images_with_sequential_references(
                             prompts=enhanced_start_prompts,  # All start prompts at once
                             output_dir=str(image_dir / "start"),
@@ -491,7 +485,7 @@ async def process_generation(
                             continuity_notes=None,  # Start frames don't need continuity notes
                             consistency_guidelines=scene_consistency_guidelines if scene_consistency_guidelines else None,
                             transition_notes=None,  # Start frames don't need transition notes
-                            initial_reference_image=initial_start_reference,  # Use Scene 1's reference to start the chain
+                            initial_reference_image=initial_start_reference,  # Use Scene 1's reference (user's image) to start the chain
                             cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
                             scene_offset=0,  # Start from 1 (idx+1 happens inside generate_images_with_sequential_references)
                         )
@@ -528,8 +522,13 @@ async def process_generation(
                             enhanced_end_prompts.append(enhanced_end_prompt)
                         
                         # Generate ALL end images sequentially in one batch
-                        # Use Scene 1's reference image as the initial reference to start the chain
+                        # Use Scene 1's reference image (user's image if provided) as the initial reference to start the chain
                         initial_end_reference = reference_image_paths[0] if reference_image_paths else None
+                        if user_initial_reference and initial_end_reference:
+                            # If user provided image, use it directly as initial reference for end images
+                            # This ensures end images are consistent with user's image
+                            initial_end_reference = reference_image_paths[0]  # This is the user's image (copied to scene 1 location)
+                            logger.info(f"[{generation_id}] Using user's reference image as initial reference for end images")
                         end_image_paths = await generate_images_with_sequential_references(
                             prompts=enhanced_end_prompts,  # All end prompts at once
                             output_dir=str(image_dir / "end"),
@@ -538,7 +537,7 @@ async def process_generation(
                             continuity_notes=None,  # End frames don't need continuity notes
                             consistency_guidelines=scene_consistency_guidelines if scene_consistency_guidelines else None,
                             transition_notes=None,  # End frames don't need transition notes
-                            initial_reference_image=initial_end_reference,  # Use Scene 1's reference to start the chain
+                            initial_reference_image=initial_end_reference,  # Use Scene 1's reference (user's image) to start the chain
                             cancellation_check=lambda: db.query(Generation).filter(Generation.id == generation_id).first().cancellation_requested if db.query(Generation).filter(Generation.id == generation_id).first() else False,
                             scene_offset=0,  # Start from 1 (idx+1 happens inside generate_images_with_sequential_references)
                         )
@@ -1356,7 +1355,6 @@ async def process_generation(
                 # Clean up temp files
                 logger.info(f"[{generation_id}] Starting cleanup of temporary files...")
                 try:
-                    import shutil
                     temp_gen_dir = temp_dir / generation_id
                     if temp_gen_dir.exists():
                         shutil.rmtree(temp_gen_dir)

@@ -36,14 +36,14 @@ export const VIDEO_MODELS: VideoModel[] = [
     rank: 2,
   },
   {
-    value: "google/veo-3",
-    label: "Google Veo 3",
-    description: "Top-tier cinematic quality with stunning HD visuals and native audio generation. Best for high-fidelity cinematic ads requiring film-like quality and lip-synced dialogue.",
+    value: "google/veo-3.1",
+    label: "Google Veo 3.1",
+    description: "Top-tier cinematic quality with stunning HD visuals, native audio generation, and support for 1-3 reference images. Best for high-fidelity cinematic ads requiring film-like quality, lip-synced dialogue, and subject-consistent generation.",
     maxLength: "8s",
-    inputTypes: ["Text"],
+    inputTypes: ["Text", "Image"],
     audio: true,
-    strengths: "Stunning frame fidelity (HD, film-like), strong temporal consistency, native audio & lip-synced dialogue",
-    weaknesses: "Short duration (8s limit), text-only input, proprietary model",
+    strengths: "Stunning frame fidelity (HD, film-like), strong temporal consistency, native audio & lip-synced dialogue, reference-to-video (R2V) with 1-3 images, start/end frame control",
+    weaknesses: "Short duration (8s limit), reference images require 16:9 aspect ratio, proprietary model",
     rank: 1,
   },
   {
@@ -104,16 +104,16 @@ export const VIDEO_MODELS: VideoModel[] = [
 ];
 
 /**
- * Get the default model (Kling 2.5 Turbo Pro).
+ * Get the default model (Google Veo 3.1).
  */
-export const DEFAULT_MODEL = "kwaivgi/kling-v2.5-turbo-pro";
+export const DEFAULT_MODEL = "google/veo-3.1";
 
 /**
  * Get the default model label for display.
  */
 export const getDefaultModelLabel = (): string => {
   const defaultModel = VIDEO_MODELS.find((m) => m.value === DEFAULT_MODEL);
-  return defaultModel ? defaultModel.label : "Kling 2.5 Turbo Pro";
+  return defaultModel ? defaultModel.label : "Google Veo 3.1";
 };
 
 /**

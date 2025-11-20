@@ -16,10 +16,10 @@ from app.schemas.generation import Scene, ScenePlan
 logger = logging.getLogger(__name__)
 
 # Replicate model configurations
-# Default model: Sora 2 (OpenAI) - State-of-the-art realism with exceptional physics
+# Default model: Google Veo 3 - Premium cinematic quality with native audio and lip-synced dialogue
 # Top models ranked by quality: Sora 2, Veo 3, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
-    "default": "kwaivgi/kling-v2.1",  # Kling v2.1 - Default for image-to-video support
+    "default": "google/veo-3",  # Google Veo 3 - Default with premium cinematic quality and native audio
     "veo_3": "google/veo-3",
     "pixverse_v5": "pixverse/pixverse-v5",
     "kling_v2_1": "kwaivgi/kling-v2.1",
@@ -223,13 +223,13 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: preferred_model (if specified) -> default (Sora 2) -> fallback chain
+    # Try models in order: preferred_model (if specified) -> default (Google Veo 3) -> fallback chain
     models_to_try = []
     if preferred_model and preferred_model in MODEL_COSTS:
         models_to_try.append(preferred_model)
         logger.info(f"Using preferred model: {preferred_model}")
     else:
-        # Use Sora 2 as default when no model is specified
+        # Use Google Veo 3 as default when no model is specified
         models_to_try.append(REPLICATE_MODELS["default"])
         logger.info(f"Using default model: {REPLICATE_MODELS['default']}")
     

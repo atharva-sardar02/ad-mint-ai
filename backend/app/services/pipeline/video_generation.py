@@ -16,11 +16,12 @@ from app.schemas.generation import Scene, ScenePlan
 logger = logging.getLogger(__name__)
 
 # Replicate model configurations
-# Default model: Kling 2.5 Turbo Pro - Fast cinematic quality with reference/start/end image support
-# Top models ranked by quality: Sora 2, Veo 3, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
+# Default model: Google Veo 3.1 - Premium cinematic quality with native audio, reference images, and start/end frame control
+# Top models ranked by quality: Sora 2, Veo 3.1, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
-    "default": "kwaivgi/kling-v2.5-turbo-pro",  # Kling 2.5 Turbo Pro - Default with start/end image support
-    "veo_3": "google/veo-3",
+    "default": "google/veo-3.1",  # Google Veo 3.1 - Default with premium cinematic quality and native audio
+    "veo_3": "google/veo-3.1",
+    "veo_3_1": "google/veo-3.1",
     "pixverse_v5": "pixverse/pixverse-v5",
     "kling_2_5": "kwaivgi/kling-v2.5-turbo-pro",  # Kling 2.5 Turbo Pro on Replicate
     "hailuo_02": "minimax-ai/hailuo-02",
@@ -38,7 +39,8 @@ REPLICATE_MODELS = {
 MODEL_COSTS = {
     # Top-tier models
     "openai/sora-2": 0.10,  # Default - state-of-the-art
-    "google/veo-3": 0.12,  # Premium cinematic quality
+    "google/veo-3": 0.12,  # Premium cinematic quality (legacy)
+    "google/veo-3.1": 0.12,  # Premium cinematic quality with reference images support
     "pixverse/pixverse-v5": 0.06,  # Balanced quality & cost
     "kwaivgi/kling-v2.5-turbo-pro": 0.07,  # Fast cinematic (Kling 2.5 Turbo Pro)
     "minimax-ai/hailuo-02": 0.09,  # Physics proficiency
@@ -66,6 +68,7 @@ MODEL_SEED_SUPPORT = {
     # Newer models (2025) - most use "seed" parameter
     "openai/sora-2": ("seed", True),  # Sora-2 uses "seed" parameter (OpenAI standard)
     "google/veo-3": ("seed", False),  # Likely supports seed, but not verified
+    "google/veo-3.1": ("seed", True),  # Veo 3.1 supports seed parameter
     "pixverse/pixverse-v5": ("seed", False),  # Likely supports seed, but not verified
     "kwaivgi/kling-v2.5-turbo-pro": ("seed", False),  # Likely supports seed, but not verified
     "minimax-ai/hailuo-02": ("seed", False),  # Likely supports seed, but not verified
@@ -124,8 +127,12 @@ async def generate_video_clip_with_model(
     clip_index: Optional[int] = None,
     consistency_markers: Optional[dict] = None,
     reference_image_path: Optional[str] = None,
+    reference_images: Optional[List[str]] = None,
     start_image_path: Optional[str] = None,
     end_image_path: Optional[str] = None,
+    resolution: Optional[str] = None,
+    generate_audio: Optional[bool] = None,
+    negative_prompt: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     Generate a single video clip with a specific model (bypasses pipeline).
@@ -181,10 +188,14 @@ async def generate_video_clip_with_model(
             duration=duration,
             cancellation_check=cancellation_check,
             reference_image_path=reference_image_path,
+            reference_images=reference_images,
             start_image_path=start_image_path,
             end_image_path=end_image_path,
             scene_number=clip_index,
             consistency_markers=consistency_markers,
+            resolution=resolution,
+            generate_audio=generate_audio,
+            negative_prompt=negative_prompt,
         )
         
         # Download video clip
@@ -217,9 +228,13 @@ async def generate_video_clip(
     seed: Optional[int] = None,
     preferred_model: Optional[str] = None,
     reference_image_path: Optional[str] = None,
+    reference_images: Optional[List[str]] = None,
     start_image_path: Optional[str] = None,
     end_image_path: Optional[str] = None,
     consistency_markers: Optional[dict] = None,
+    resolution: Optional[str] = None,
+    generate_audio: Optional[bool] = None,
+    negative_prompt: Optional[str] = None,
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -261,13 +276,13 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-    # Try models in order: preferred_model (if specified) -> default (Kling 2.5 Turbo Pro) -> fallback chain
+    # Try models in order: preferred_model (if specified) -> default (Google Veo 3) -> fallback chain
     models_to_try = []
     if preferred_model and preferred_model in MODEL_COSTS:
         models_to_try.append(preferred_model)
         logger.info(f"Using preferred model: {preferred_model}")
     else:
-        # Use Kling 2.5 Turbo Pro as default when no model is specified
+        # Use Google Veo 3 as default when no model is specified
         models_to_try.append(REPLICATE_MODELS["default"])
         logger.info(f"Using default model: {REPLICATE_MODELS['default']}")
     
@@ -312,10 +327,14 @@ async def generate_video_clip(
                 cancellation_check=cancellation_check,
                 seed=seed,
                 reference_image_path=reference_image_path,
+                reference_images=reference_images,
                 start_image_path=scene_start_image,
                 end_image_path=scene_end_image,
                 scene_number=scene_number,
                 consistency_markers=consistency_markers,
+                resolution=resolution,
+                generate_audio=generate_audio,
+                negative_prompt=negative_prompt,
             )
             
             # Download video clip
@@ -370,10 +389,14 @@ async def _generate_with_retry(
     cancellation_check: Optional[callable] = None,
     seed: Optional[int] = None,
     reference_image_path: Optional[str] = None,
+    reference_images: Optional[List[str]] = None,
     start_image_path: Optional[str] = None,
     end_image_path: Optional[str] = None,
     scene_number: Optional[int] = None,
     consistency_markers: Optional[dict] = None,
+    resolution: Optional[str] = None,
+    generate_audio: Optional[bool] = None,
+    negative_prompt: Optional[str] = None,
 ) -> str:
     """
     Generate video with retry logic and exponential backoff.
@@ -487,30 +510,121 @@ async def _generate_with_retry(
                             f"for Sora-2: {e}",
                             exc_info=True
                         )
-            elif model_name == "google/veo-3":
-                # Veo 3 only supports duration values: 4, 6, or 8 seconds
+            elif model_name in ["google/veo-3", "google/veo-3.1"]:
+                # Veo 3.1 supports duration values: 4, 6, or 8 seconds
                 # Round to nearest valid duration
                 valid_durations = [4, 6, 8]
                 veo_duration = min(valid_durations, key=lambda x: abs(x - duration))
                 if veo_duration != duration:
-                    logger.debug(f"Veo-3: Rounding duration from {duration}s to {veo_duration}s (valid values: 4, 6, 8)")
-                input_params = {
-                    "prompt": enhanced_prompt,
-                    "duration": veo_duration,
-                    "aspect_ratio": "9:16",  # Vertical for MVP
-                }
-                # Veo-3 supports reference image for style/character consistency
-                if reference_image_path:
-                    try:
-                        ref_image_path_obj = Path(reference_image_path)
-                        if ref_image_path_obj.exists():
-                            ref_file_handle = open(ref_image_path_obj, "rb")
-                            input_params["image"] = ref_file_handle
-                            file_handles_to_close.append(ref_file_handle)
-                            logger.info(f"✅ Attached reference image for Veo-3: {reference_image_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to load reference image for Veo-3: {e}")
-                # Note: Veo-3 does not support start_image or end_image parameters
+                    logger.debug(f"Veo-3.1: Rounding duration from {duration}s to {veo_duration}s (valid values: 4, 6, 8)")
+                
+                # Default aspect ratio (9:16 for portrait, but reference_images require 16:9)
+                default_aspect_ratio = "9:16"
+                
+                # Check if reference_images are provided (1-3 images for R2V mode)
+                # Note: reference_images only work with 16:9 aspect ratio and 8-second duration
+                if reference_images and len(reference_images) > 0:
+                    if len(reference_images) > 3:
+                        logger.warning(f"Veo-3.1: Maximum 3 reference images supported, using first 3")
+                        reference_images = reference_images[:3]
+                    
+                    # Reference images require 16:9 and 8s duration
+                    if veo_duration != 8:
+                        logger.warning(f"Veo-3.1: reference_images require 8s duration, adjusting from {veo_duration}s to 8s")
+                        veo_duration = 8
+                    default_aspect_ratio = "16:9"
+                    
+                    # Load reference images
+                    ref_image_files = []
+                    for i, ref_img_path in enumerate(reference_images):
+                        try:
+                            ref_img_path_obj = Path(ref_img_path)
+                            if ref_img_path_obj.exists():
+                                ref_file_handle = open(ref_img_path_obj, "rb")
+                                ref_image_files.append(ref_file_handle)
+                                file_handles_to_close.append(ref_file_handle)
+                                logger.info(f"✅ Attached reference image {i+1}/{len(reference_images)} for Veo-3.1: {ref_img_path}")
+                            else:
+                                logger.warning(f"Reference image not found: {ref_img_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to load reference image {ref_img_path}: {e}")
+                    
+                    if ref_image_files:
+                        input_params = {
+                            "prompt": enhanced_prompt,
+                            "duration": veo_duration,
+                            "aspect_ratio": default_aspect_ratio,
+                            "reference_images": ref_image_files,
+                        }
+                        logger.info(f"✅ Using Veo-3.1 R2V mode with {len(ref_image_files)} reference images (16:9, 8s)")
+                    else:
+                        # Fallback to regular mode if no valid reference images
+                        logger.warning("No valid reference images found, falling back to regular mode")
+                        input_params = {
+                            "prompt": enhanced_prompt,
+                            "duration": veo_duration,
+                            "aspect_ratio": default_aspect_ratio,
+                        }
+                else:
+                    # Regular mode: use image (start) and last_frame (end) if provided
+                    input_params = {
+                        "prompt": enhanced_prompt,
+                        "duration": veo_duration,
+                        "aspect_ratio": default_aspect_ratio,
+                    }
+                    
+                    # Add start image (image parameter)
+                    if start_image_path:
+                        try:
+                            start_img_path_obj = Path(start_image_path)
+                            if start_img_path_obj.exists():
+                                start_file_handle = open(start_img_path_obj, "rb")
+                                input_params["image"] = start_file_handle
+                                file_handles_to_close.append(start_file_handle)
+                                logger.info(f"✅ Attached start image for Veo-3.1: {start_image_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to load start image for Veo-3.1: {e}")
+                    elif reference_image_path:
+                        # Fallback: use reference_image_path as start image if no start_image_path
+                        try:
+                            ref_img_path_obj = Path(reference_image_path)
+                            if ref_img_path_obj.exists():
+                                ref_file_handle = open(ref_img_path_obj, "rb")
+                                input_params["image"] = ref_file_handle
+                                file_handles_to_close.append(ref_file_handle)
+                                logger.info(f"✅ Attached reference image as start image for Veo-3.1: {reference_image_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to load reference image for Veo-3.1: {e}")
+                    
+                    # Add end image (last_frame parameter)
+                    if end_image_path:
+                        try:
+                            end_img_path_obj = Path(end_image_path)
+                            if end_img_path_obj.exists():
+                                end_file_handle = open(end_img_path_obj, "rb")
+                                input_params["last_frame"] = end_file_handle
+                                file_handles_to_close.append(end_file_handle)
+                                logger.info(f"✅ Attached end image (last_frame) for Veo-3.1: {end_image_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to load end image for Veo-3.1: {e}")
+                
+                # Add optional parameters
+                if resolution:
+                    if resolution in ["720p", "1080p"]:
+                        input_params["resolution"] = resolution
+                    else:
+                        logger.warning(f"Veo-3.1: Invalid resolution '{resolution}', using default 1080p")
+                        input_params["resolution"] = "1080p"
+                else:
+                    input_params["resolution"] = "1080p"  # Default
+                
+                if generate_audio is not None:
+                    input_params["generate_audio"] = generate_audio
+                else:
+                    input_params["generate_audio"] = True  # Default
+                
+                if negative_prompt:
+                    input_params["negative_prompt"] = negative_prompt
             elif model_name == "pixverse/pixverse-v5":
                 # PixVerse requires quality as resolution string: "360p", "540p", "720p", "1080p"
                 input_params = {
