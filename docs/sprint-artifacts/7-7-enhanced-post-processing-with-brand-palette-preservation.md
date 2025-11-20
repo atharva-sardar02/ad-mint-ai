@@ -27,7 +27,7 @@ so that final videos maintain brand identity while improving visual coherence.
    - Optimizes crossfade durations based on scene analysis
    - Adjusts transition easing for smoother flow
    - Uses motion matching for seamless scene linking
-   - Applies appropriate transition types (hard cut, crossfade, dissolve) based on scene relationship
+   - Applies appropriate transition types (cut, crossfade, wipe, flash, zoom_blur, whip_pan, glitch) based on scene relationship and target audience
 
 3. **Lighting and Style Normalization:**
    **Given** clips may have varying lighting and style
@@ -70,9 +70,10 @@ so that final videos maintain brand identity while improving visual coherence.
 - [ ] Task 2: Implement Transition Optimization (AC: 2)
   - [ ] Extend `stitch_video_clips()` in `stitching.py` to analyze scene relationships
   - [ ] Implement scene analysis function that determines optimal transition type:
-    - Hard cut for rapid scene changes
+    - Cut for rapid scene changes and dramatic reveals
     - Crossfade for smooth narrative flow
-    - Dissolve for emotional transitions
+    - Flash/zoom_blur/whip_pan/glitch for high-energy modern content
+    - Wipe for location changes
   - [ ] Calculate optimal crossfade duration based on scene motion and content
   - [ ] Implement transition easing (ease-in, ease-out) for smoother flow
   - [ ] Add motion matching algorithm to link scenes with similar motion patterns

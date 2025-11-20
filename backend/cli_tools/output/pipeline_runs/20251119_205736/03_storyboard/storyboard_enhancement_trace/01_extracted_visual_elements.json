@@ -1,0 +1,40 @@
+{
+  "brand_identity": {
+    "brand_name": "Dior",
+    "brand_colors": [
+      "#282828",
+      "#F2F2F2"
+    ],
+    "logo_style": "minimalist and elegant"
+  },
+  "product_details": {
+    "bottle_shape": "rectangular with slightly rounded edges",
+    "materials": "transparent glass",
+    "distinctive_elements": "centered label, reflective finish",
+    "bottle_text": "Dior\nCANUE",
+    "label_design": "centered square label with bold serif font for 'Dior' and smaller font for 'CANUE'",
+    "cap_design": "cylindrical, matte black material with a metallic band at the base",
+    "exact_bottle_description": "A rectangular transparent glass bottle with slightly rounded edges, holding a central square label with 'Dior' in bold serif font and 'CANUE' beneath it in a smaller font. The cap is cylindrical and matte black, with a metallic band at the base, providing a sleek and modern appearance."
+  },
+  "color_palette": {
+    "dominant_colors": [
+      "#1F1F2E",
+      "#D09C67"
+    ],
+    "accent_colors": [
+      "#F2F2F2"
+    ],
+    "scheme": "warm with dark accents"
+  },
+  "style_aesthetic": {
+    "visual_style": "luxury and sophisticated",
+    "mood": "elegant and alluring",
+    "composition": "bottle centered with Eiffel Tower in the blurred background",
+    "lighting_characteristics": "dim, evening lighting with glowy highlights"
+  },
+  "composition_elements": {
+    "framing": "centered",
+    "perspective": "eye-level shot",
+    "background_style": "blurred cityscape with Eiffel Tower in the evening"
+  }
+}

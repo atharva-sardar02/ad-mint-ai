@@ -53,21 +53,14 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 - **FR-034:** Profile Display - System shall show user statistics (total videos, cost, dates) ✅
 - **FR-035:** User Stats Update - System shall increment total_generations and update total_cost ✅
  - **FR-036:** Hero Frame Generation (Text → Photo) - System shall provide a dedicated hero-frame generation flow, using text-to-image models to generate 4–8 hero frame candidates per request and persist them with metadata.
- - **FR-037:** Cinematographer-Level Prompt Enhancement for Images - System shall offer an optional LLM-powered "cinematographer enhancement" step for hero-frame prompts, returning enriched prompts with detailed cinematography guidance.
+ - **FR-037:** Cinematographer-Level Prompt Enhancement for Images - System shall offer an optional LLM-powered “cinematographer enhancement” step for hero-frame prompts, returning enriched prompts with detailed cinematography guidance.
  - **FR-038:** Hero Frame Iteration & Selection - System shall allow users to regenerate, mutate, favorite, and clearly select a canonical hero frame as the anchor for downstream generations.
  - **FR-039:** Image-to-Video Generation (Photo → Video) from Hero Frame - System shall support image-to-video generation from a selected hero frame, including motion and negative prompts, and produce at least one video attempt.
  - **FR-040:** Automated Multi-Attempt Generation with VBench-Based Selection - System shall support a 3-attempt auto mode, evaluate attempts with VBench, and auto-select the top-scoring attempt within a generation group.
  - **FR-041:** Iteration Workspace & Human-in-the-Loop Refinement - System shall provide an Iteration Workspace UI for side-by-side comparison of attempts, manual overrides, prompt edits, and LLM-based improvement suggestions.
- - **FR-042:** Iterative Refinement Workflow & Versioning - System shall treat each cycle of "prompt update → attempts → evaluation → selection" as an iteration, maintain a generation history timeline, and track a final_version per ad.
+ - **FR-042:** Iterative Refinement Workflow & Versioning - System shall treat each cycle of “prompt update → attempts → evaluation → selection” as an iteration, maintain a generation history timeline, and track a final_version per ad.
  - **FR-043:** Quality Dashboard & Benchmarks - System shall provide a quality dashboard visualizing VBench scores, iterations, and acceptance trends with filtering and aggregation options.
  - **FR-044:** Integration with Existing Pipeline & Epics - The hero-frame workflow shall reuse the existing generation pipeline, Epic 7 coherence capabilities, and Epic 6 editor as an additive professional-mode layer on top of the current system.
- - **FR-045:** Brand Style Image Upload & Storage - System shall allow users to upload a folder of brand style images that persists across all their generations.
- - **FR-046:** Product Image Upload & Storage - System shall allow users to upload a folder of product images that persists across all their generations.
- - **FR-047:** Vision LLM Brand Style Extraction - System shall use Gemini 2.5 Flash Vision (via Replicate) to analyze brand style images and extract style information into a structured JSON format.
- - **FR-048:** Vision LLM Product Image Analysis - System shall use Gemini 2.5 Flash Vision (via Replicate) to analyze product images and extract product-specific style and visual characteristics into a structured JSON format.
- - **FR-049:** Brand Style JSON Integration with Scene Assembler - System shall feed extracted brand style JSON into the scene assembler to generate scene text with consistent brand style.
- - **FR-050:** Product Image Selection from Uploaded Folder - System shall allow users to select a product image from their uploaded product folder when generating videos, instead of selecting from their computer system folder.
- - **FR-051:** Brand Style Persistence Across Generations - System shall maintain extracted brand style JSON per user and apply it automatically to all their video generations unless explicitly overridden.
 
 ---
 
@@ -82,7 +75,6 @@ This document provides the complete epic and story breakdown for ad-mint-ai, dec
 - **Epic 7 (Video Quality Optimization):** FR-030, FR-031, FR-032, FR-033
  - **Epic 8 (Hero-Frame Generation):** FR-036, FR-037, FR-038
  - **Epic 9 (Hero-Frame Iteration & Image-to-Video Workflow):** FR-039, FR-040, FR-041, FR-042, FR-043, FR-044
- - **Epic 10 (Brand & Product Image Consistency):** FR-045, FR-046, FR-047, FR-048, FR-049, FR-050, FR-051
 
 ---
 
@@ -1790,7 +1782,7 @@ So that final videos maintain brand identity while improving visual coherence.
 - Optimizes crossfade durations based on scene analysis
 - Adjusts transition easing for smoother flow
 - Uses motion matching for seamless scene linking
-- Applies appropriate transition types (hard cut, crossfade, dissolve) based on scene relationship
+- Applies appropriate transition types (cut, crossfade, wipe, flash, zoom_blur, whip_pan, glitch) based on scene relationship and target audience
 
 **Lighting and Style Normalization:**
 **Given** clips may have varying lighting and style
@@ -2495,259 +2487,90 @@ So that I can rapidly iterate through the entire pipeline: image prompt → imag
 
 ---
 
-## Epic 10: Brand & Product Image Consistency
-
-**Goal:** Enable users to upload brand style and product image folders, extract style information using Vision LLM, and integrate the extracted style JSON into the scene assembler to generate videos with consistent brand-aware styling.
-
-**Status:** Not Started
-
-**Stories:** 10.1 (Folder Upload & Storage), 10.2 (Vision LLM Style Extraction), 10.3 (Scene Assembler Integration), 10.4 (Product Image Selection UI)
-
----
-
-### Story 10.1: Brand & Product Image Folder Upload & Storage (FR-045, FR-046)
+### Story 9.4: Enhanced Reference Image Generation with Prompt Enhancement and Quality Scoring
 
 As a **user**,  
-I want to upload folders containing my brand style images and product images,  
-So that these images are stored and available for all my video generations.
+I want reference images generated using enhanced prompts and quality scoring,  
+So that I get higher quality, more consistent reference images for my video generation.
 
 **Acceptance Criteria:**
 
-**Given** I am logged into the application  
-**When** I navigate to my Profile or Settings page  
-**Then** I see two folder upload buttons:
-- "Upload Brand Style Images" button
-- "Upload Product Images" button
+1. **Given** I start a video generation with the enhanced reference image feature enabled
+   **When** the system generates reference images for each scene
+   **Then** the system:
+   - Enhances each scene's image generation prompt using iterative two-agent enhancement:
+     - Agent 1 (Creative Director): Enhances prompt with visual details, style, composition, lighting
+     - Agent 2 (Prompt Engineer): Critiques and scores the enhanced prompt
+     - Iterates up to 4 rounds until score threshold is met or convergence detected
+     - Scores prompts on dimensions: Completeness, Specificity, Professionalism, Cinematography, Brand Alignment
+   - Generates 4 image variations per scene using the enhanced prompt
+   - Scores all 4 variations using quality metrics:
+     - PickScore (human preference prediction, 0-100)
+     - CLIP-Score (image-text alignment, 0-100)
+     - Aesthetic Predictor (aesthetic quality, 0-100)
+     - Overall Quality Score (weighted combination)
+   - Ranks all variations by overall quality score
+   - Selects the best-ranked image (rank 1) as the reference image for the scene
+   - Checks if selected image's quality score is ≥ 30:
+     - If score ≥ 30: Proceeds with selected image
+     - If score < 30: Logs warning with score but proceeds with selected image
+   - Uses selected reference image as input for next scene's generation (maintains sequential chaining)
+   - Saves trace files to `output/reference_image_traces/{generation_id}/scene_{N}/`:
+     - `00_original_prompt.txt` - Original scene prompt
+     - `01_agent1_iteration_1.txt` - First Creative Director enhancement
+     - `02_agent2_iteration_1.txt` - First Prompt Engineer critique + score
+     - `03_agent1_iteration_2.txt` - Second enhancement (if iterated)
+     - `04_agent2_iteration_2.txt` - Second critique (if iterated)
+     - ... (up to 4 iterations)
+     - `final_enhanced_prompt.txt` - Final enhanced prompt used for generation
+     - `prompt_trace_summary.json` - Enhancement metadata: scores, iterations, timestamps
+     - `generation_trace.json` - Image generation metadata: variations, scores, rankings, selected image
+   - Cleans up trace files immediately after reference image generation completes (no retention)
+   - Updates progress: "Enhancing prompts for reference images" → "Generating reference image variations" → "Scoring and ranking reference images"
 
-**And** when I click "Upload Brand Style Images":
-- A file picker opens allowing me to select a folder
-- I can select a folder containing brand style images (logos, color palettes, mood boards, brand guidelines visuals, etc.)
-- Only image files are accepted (JPEG, PNG, WebP)
-- Maximum folder size: 100MB
-- Maximum images per folder: 50 images
+2. **Given** the system maintains sequential chaining for visual consistency
+   **Then** reference image generation:
+   - First scene: Uses user's initial reference image (if provided) as base for first scene's generation
+   - Subsequent scenes: Uses previous scene's best-ranked reference image as reference for next scene
+   - Maintains consistency markers, continuity notes, and consistency guidelines from LLM planning
+   - Ensures visual coherence across all scenes
 
-**And** when I click "Upload Product Images":
-- A file picker opens allowing me to select a folder
-- I can select a folder containing product images (product photos, packaging, lifestyle shots, etc.)
-- Only image files are accepted (JPEG, PNG, WebP)
-- Maximum folder size: 100MB
-- Maximum images per folder: 50 images
+3. **Given** I start a video generation
+   **When** the system processes the generation request
+   **Then** the enhanced reference image generation is enabled by default for all users:
+   - No optional toggle required (feature is always on)
+   - No backward compatibility mode (replaces previous approach entirely)
+   - All new generations use enhanced prompt + quality scoring workflow
 
-**And** after uploading:
-- Images are uploaded to backend storage (per-user directories)
-- A success message displays: "Brand style images uploaded successfully (X images)" or "Product images uploaded successfully (X images)"
-- Uploaded image metadata is stored in the database
-- Existing folders can be replaced by uploading a new folder (previous images are deleted)
-- User can view thumbnails of uploaded images in their profile/settings
+4. **Given** reference image generation completes
+   **When** the system has selected the best reference images for all scenes
+   **Then** the system:
+   - Logs quality scores for each scene's selected reference image
+   - Logs warnings for any scenes where quality score < 30
+   - Continues with video generation pipeline using selected reference images
+   - Cleans up all trace files immediately after completion
 
-**And** the backend:
-- Stores images in organized directory structure: `backend/assets/users/{user_id}/brand_styles/` and `backend/assets/users/{user_id}/products/`
-- Creates database records linking user to their uploaded image folders
-- Validates file types and sizes before storage
-- Handles errors gracefully (file too large, unsupported format, storage failure)
+5. **Given** an error occurs during prompt enhancement or image generation
+   **When** the system encounters the error
+   **Then** the system:
+   - Logs the error with context (scene number, step, error details)
+   - Falls back gracefully: Uses original prompt (without enhancement) and generates single image
+   - Continues pipeline with fallback image
+   - Does not fail the entire generation due to enhancement errors
 
-**Prerequisites:** Epic 2 (User Authentication), Story 5.1 (Profile Display)
-
-**Technical Notes:**
-- Create new database models: `BrandStyleFolder`, `ProductImageFolder`, `UploadedImage`
-- Create API endpoints: `POST /api/brand-styles/upload`, `POST /api/products/upload`, `GET /api/brand-styles`, `GET /api/products`, `DELETE /api/brand-styles`, `DELETE /api/products`
-- Implement file upload handling with FastAPI `UploadFile` and Python `pathlib`
-- Add storage management utilities in `backend/app/utils/storage.py`
-- Frontend: Add folder upload UI components in Profile or Settings page
-- Use HTML5 file input with `webkitdirectory` attribute for folder selection
-- Validate files on frontend before upload (size, type, count)
-- Show upload progress indicators
-
----
-
-### Story 10.2: Vision LLM Brand & Product Style Extraction (FR-047, FR-048)
-
-As a **system**,  
-I want to use Gemini 2.5 Flash Vision (via Replicate) to analyze brand style and product images,  
-So that I can extract structured style information as JSON for use in scene generation.
-
-**Acceptance Criteria:**
-
-**Given** a user has uploaded brand style images (Story 10.1)  
-**When** the system processes the brand style folder  
-**Then** the system:
-- Analyzes all brand style images using Gemini 2.5 Flash Vision model via Replicate API
-- Extracts brand style information into a structured JSON format containing:
-  ```json
-  {
-    "color_palette": {
-      "primary_colors": ["#hex1", "#hex2", ...],
-      "secondary_colors": ["#hex3", ...],
-      "accent_colors": ["#hex4", ...]
-    },
-    "visual_style": {
-      "aesthetic": "modern/minimalist/luxury/playful/etc",
-      "mood": "sophisticated/energetic/calm/etc",
-      "composition_style": "centered/asymmetric/balanced/etc"
-    },
-    "typography": {
-      "style": "serif/sans-serif/display/etc",
-      "weight": "light/bold/etc",
-      "usage_patterns": "headlines/body/etc"
-    },
-    "lighting_cues": "natural/studio/dramatic/soft/etc",
-    "texture_surfaces": "matte/glossy/textured/etc",
-    "atmosphere_density": "airier/denser/etc",
-    "brand_markers": ["logo_placement_style", "iconography_patterns", ...]
-  }
-  ```
-- Stores the extracted JSON in the database linked to the user
-- Processes images in batch (all brand style images analyzed together)
-
-**And** given a user has uploaded product images and selects a specific product image for a generation  
-**When** the system processes the selected product image  
-**Then** the system:
-- Analyzes the selected product image using Gemini 2.5 Flash Vision model via Replicate API
-- Extracts product-specific style information into a structured JSON format containing:
-  ```json
-  {
-    "product_characteristics": {
-      "form_factor": "bottle/box/packaging/etc",
-      "material_appearance": "glass/metal/paper/etc",
-      "surface_quality": "reflective/matte/textured/etc"
-    },
-    "visual_style": {
-      "composition": "centered/angled/etc",
-      "background_treatment": "white/gradient/environment/etc",
-      "perspective": "eye_level/overhead/etc"
-    },
-    "color_profile": {
-      "dominant_colors": ["#hex1", "#hex2", ...],
-      "contrast_level": "high/medium/low"
-    },
-    "product_usage_context": "how product appears in lifestyle/marketing imagery"
-  }
-  ```
-- Stores the extracted JSON temporarily for the current generation (or persists if user selects same product across generations)
-
-**And** the system:
-- Handles API errors gracefully (retry logic, fallback behavior)
-- Logs all Vision LLM API calls and costs
-- Caches extracted brand style JSON (only re-extract if brand style folder changes)
-- Provides error messages if Vision LLM analysis fails
-
-**Prerequisites:** Story 10.1 (Folder Upload), Epic 3 (Video Generation Pipeline - Replicate integration pattern)
+**Prerequisites:** Story 8.3 (Storyboard Creation CLI), Story 8.4 (Unified Narrative Generation), Epic 3 (Progress Tracking), existing prompt enhancement service, existing image generation service, existing quality scoring service.
 
 **Technical Notes:**
-- Create `backend/app/services/pipeline/brand_style_extractor.py` service
-- Integrate Replicate API for Gemini 2.5 Flash Vision model
-- Create Pydantic schemas for brand style JSON and product style JSON in `llm_schemas.py`
-- Design Vision LLM prompt to extract style information systematically
-- Implement batch processing for brand style images (send all images in single API call or process sequentially)
-- Add caching mechanism (store extracted brand style JSON in database, only re-extract on folder change)
-- Add cost tracking for Vision LLM API calls
-- Handle rate limiting and retries for Replicate API
-
----
-
-### Story 10.3: Brand Style JSON Integration with Scene Assembler (FR-049, FR-051)
-
-As a **system**,  
-I want to feed extracted brand style JSON into the scene assembler,  
-So that generated scene text incorporates consistent brand styling.
-
-**Acceptance Criteria:**
-
-**Given** a user has:
-- Uploaded brand style images and extracted brand style JSON exists (Story 10.2)
-- Optionally selected a product image and extracted product style JSON exists (Story 10.2)
-- Initiated a video generation
-
-**When** the system executes Stage 3 (Scene Assembler)  
-**Then** the system:
-- Loads the user's extracted brand style JSON from the database
-- Loads product style JSON if a product image was selected for this generation
-- Incorporates brand style information into the scene assembler prompt:
-  - Brand style JSON is appended to the Stage 3 prompt context
-  - Scene assembler is instructed to incorporate brand colors, visual style, lighting cues, textures, and atmosphere from the brand style JSON
-  - Product style JSON (if available) is also included to inform product appearance and context
-- Scene assembler generates scene text that reflects:
-  - Brand color palette in scene descriptions
-  - Brand visual style (mood, composition style)
-  - Brand lighting cues and atmosphere
-  - Product characteristics from product style JSON (if provided)
-
-**And** the brand style JSON:
-- Persists across all user generations (unless brand style folder is replaced)
-- Is automatically applied to all generations (no need to re-upload per generation)
-- Can be manually disabled per-generation if user wants to generate without brand style (future: toggle option)
-
-**And** the integration:
-- Maintains backward compatibility (generations work without brand style JSON if user hasn't uploaded images)
-- Logs when brand style JSON is applied to a generation
-- Handles cases where brand style JSON extraction failed (gracefully continues without brand style)
-
-**Prerequisites:** Story 10.2 (Vision LLM Style Extraction), Story 3.1 (LLM Enhancement - Stage 3 Scene Assembler pattern)
-
-**Technical Notes:**
-- Modify `stage3_scene_assembler.py` to accept optional brand style JSON and product style JSON parameters
-- Update `STAGE3_SCENE_ASSEMBLER_PROMPT` to include instructions for incorporating brand style information
-- Modify `run_stage3_scene_assembler()` function signature to accept brand style and product style JSON
-- Update pipeline orchestrator (`pipeline_orchestrator.py`) to:
-  - Load user's brand style JSON before Stage 3
-  - Load product style JSON if product image was selected
-  - Pass brand/product style JSON to Stage 3 scene assembler
-- Update `llm_schemas.py` to include brand style and product style JSON schemas if not already defined
-- Ensure brand style JSON is loaded efficiently (cache in memory or database lookup)
-- Add logging to track brand style application in generation logs
-
----
-
-### Story 10.4: Product Image Selection from Uploaded Folder (FR-050)
-
-As a **user**,  
-I want to select a product image from my uploaded product folder when generating videos,  
-So that I don't need to browse my computer's file system each time.
-
-**Acceptance Criteria:**
-
-**Given** I have uploaded a product images folder (Story 10.1)  
-**When** I am on the Dashboard page initiating a video generation  
-**Then** instead of the current "Reference Image" file input that opens my computer's file system:
-- I see a "Select Product Image" button or dropdown
-- Clicking it shows a modal or dropdown with thumbnails of all my uploaded product images
-- I can select a product image from my uploaded folder
-- Selected product image displays a preview thumbnail
-- I can clear the selection and choose a different product image
-- I can optionally still upload a new image from my computer (fallback option)
-
-**And** when I select a product image:
-- The selected product image is used for the generation
-- Product style JSON is extracted using Vision LLM (Story 10.2) if not already extracted for this image
-- Product style JSON is passed to the scene assembler (Story 10.3)
-- The generation proceeds with brand + product style consistency
-
-**And** the UI:
-- Shows clear visual distinction between selecting from uploaded folder vs uploading from computer
-- Displays image thumbnails in a grid layout for easy selection
-- Supports image preview on hover
-- Shows image count: "X product images available"
-- Handles empty state gracefully: "No product images uploaded. Upload a folder in Settings."
-
-**And** the workflow:
-- If user has no uploaded product images, falls back to current file system upload behavior
-- If user selects an image from uploaded folder, that image is used (no need to re-upload)
-- User can update their product folder at any time in Settings, and new images become available for selection
-
-**Prerequisites:** Story 10.1 (Folder Upload), Story 10.2 (Vision LLM Style Extraction), Story 10.3 (Scene Assembler Integration)
-
-**Technical Notes:**
-- Modify `frontend/src/routes/Dashboard.tsx`:
-  - Replace or enhance existing "Reference Image" upload with product image selection UI
-  - Add API call to fetch user's uploaded product images: `GET /api/products`
-  - Create modal/dropdown component for product image selection
-  - Add image thumbnail grid display
-  - Update form state to track selected product image ID instead of File object
-- Backend: Update `POST /api/generate` endpoint to accept product image ID (if selected) instead of uploaded file
-- Modify generation request schema to accept `product_image_id: Optional[str]` field
-- When generation starts, load product image file path from database using product_image_id
-- Ensure product image file path is passed through pipeline to Vision LLM extractor and scene assembler
-- Maintain backward compatibility: if no product_image_id provided, use existing reference image upload flow
+- Replace `generate_images_with_sequential_references()` call in `process_generation()` (around line 339)
+- Use `app.services.pipeline.prompt_enhancement.enhance_prompt_iterative()` for prompt enhancement
+- Use `app.services.image_generation.generate_images()` for generating variations
+- Use `app.services.pipeline.image_quality_scoring.score_image()` for quality scoring
+- Use `app.services.pipeline.image_quality_scoring.rank_images_by_quality()` for ranking
+- Configuration: 4 variations per scene, 4 enhancement iterations, quality threshold 30.0
+- Trace cleanup: Immediate (delete trace files after generation completes)
+- Update progress tracking to include enhancement and scoring steps
+- Error handling: Fallback to original prompt if enhancement fails, retry once if generation fails, use first image if scoring fails
+- Performance overhead: ~33-70s per scene (2-5 minutes for 4 scenes)
 
 ---
 
@@ -2797,19 +2620,12 @@ So that I don't need to browse my computer's file system each time.
  - **FR-042:** Iterative Refinement Workflow & Versioning → Epic 9, Story 9.3 (CLI MVP - complete feedback loop)
  - **FR-043:** Quality Dashboard & Benchmarks → Epic 9, Story 9.2 (CLI MVP - VBench scoring)
  - **FR-044:** Integration with Existing Pipeline & Epics → Epic 9, Story 9.3 (CLI MVP - workflow orchestration)
- - **FR-045:** Brand Style Image Upload & Storage → Epic 10, Story 10.1
- - **FR-046:** Product Image Upload & Storage → Epic 10, Story 10.1
- - **FR-047:** Vision LLM Brand Style Extraction → Epic 10, Story 10.2
- - **FR-048:** Vision LLM Product Image Analysis → Epic 10, Story 10.2
- - **FR-049:** Brand Style JSON Integration with Scene Assembler → Epic 10, Story 10.3
- - **FR-050:** Product Image Selection from Uploaded Folder → Epic 10, Story 10.4
- - **FR-051:** Brand Style Persistence Across Generations → Epic 10, Story 10.3
 
 ---
 
 ## Summary
 
-This epic breakdown decomposes all 51 functional requirements from the PRD into 10 epics and 37+ implementable stories. Each story is sized for focused development work, with detailed BDD-style acceptance criteria and technical implementation notes.
+This epic breakdown decomposes all 35 functional requirements from the PRD into 7 epics and 29 implementable stories. Each story is sized for focused development work, with detailed BDD-style acceptance criteria and technical implementation notes.
 
 **Epic Sequencing:**
 1. **Epic 1 (Foundation)** - Must be completed first, establishes infrastructure (5 stories: 1.1-1.4 ✅ COMPLETED, 1.5 pending)
@@ -2820,8 +2636,7 @@ This epic breakdown decomposes all 51 functional requirements from the PRD into 
 6. **Epic 6 (Video Editing)** - Enables users to edit generated videos with timeline-based editor (6 stories)
 7. **Epic 7 (Multi-Scene Coherence & Quality Optimization)** [MVP: Stories 7.0-7.4] - Implements state-of-the-art generation-time consistency techniques (seed control, IP-Adapter, LoRA training with infrastructure setup, VideoDirectorGPT-style planning) to ensure professional multi-scene coherence. MVP includes dev tool for testing coherence settings (Story 7.0), seed control (7.1), parallel generation comparison tool (7.2), enhanced LLM planning (7.3), IP-Adapter (7.4), and LoRA training pipeline (7.5). Growth phase (7.6-7.10) includes advanced quality control (VBench, CSFD, ControlNet) and feedback loops. Quality is priority; cost and generation time are not constraints.
 8. **Epic 8 (CLI MVP - Image Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for image prompt enhancement and image generation with automatic quality scoring (PickScore, CLIP-Score, VQAScore, Aesthetic Predictor). Includes: image prompt feedback loop using two-agent approach (8.1), image generation with automatic scoring (8.2), and storyboard creation with start/end frames (8.3). Enables developers to quickly test and refine image generation workflows before building UI.
-9. **Epic 9 (CLI MVP - Video Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for video prompt enhancement and video generation with automatic VBench quality scoring. Includes: video prompt feedback loop using two-agent approach + VideoDirectorGPT (9.1), video generation with VBench scoring (9.2), and integrated complete workflow orchestrator (9.3). Enables developers to rapidly iterate through entire pipeline: image prompt → image generation → video prompt → video generation.
-10. **Epic 10 (Brand & Product Image Consistency)** [Not Started] - Enables users to upload brand style and product image folders, extracts style information using Vision LLM (Gemini 2.5 Flash via Replicate), and integrates the extracted style JSON into the scene assembler for consistent brand-aware video generation. Includes: folder upload UI and backend storage (10.1), Vision LLM style extraction service (10.2), scene assembler integration with brand style JSON (10.3), and frontend product image selection from uploaded folder (10.4).
+9. **Epic 9 (CLI MVP - Video Generation Feedback Loops)** [Not Started] - Provides rapid-iteration CLI tools for video prompt enhancement and video generation with automatic VBench quality scoring. Includes: video prompt feedback loop using two-agent approach + VideoDirectorGPT (9.1), video generation with VBench scoring (9.2), integrated complete workflow orchestrator (9.3), and enhanced reference image generation with prompt enhancement and quality scoring (9.4). Enables developers to rapidly iterate through entire pipeline: image prompt → image generation → video prompt → video generation.
 
 **Next Steps in BMad Method:**
 1. **UX Design** (if UI exists) - Run: `*create-ux-design` workflow

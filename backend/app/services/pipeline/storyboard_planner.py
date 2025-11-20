@@ -271,6 +271,61 @@ Remember: Write all prompts in natural, descriptive language. Think like a filmm
 - Only change: camera angle, lighting, position, environment, effects, action/pose
 - Generic character descriptions like "woman in her 30s" WILL result in different people in each scene - guaranteed failure!
 
+🚨 **TRANSITION SELECTION BETWEEN SCENES** 🚨
+
+For each scene (except the last one), you must choose an appropriate transition to the next scene. The transition should enhance the narrative flow and match the emotional/visual shift between scenes.
+
+**Available Transition Types:**
+
+**Standard Transitions:**
+1. **crossfade** - Smooth blend between scenes (0.5s overlap). Best for: subtle mood shifts, continuous time flow, same location, professional look
+2. **cut** - Instant hard cut with no transition. Best for: high energy, dramatic reveals, stark contrast, rapid pacing
+
+**Movement-Based Transitions:**
+3. **wipe_left/wipe_right/wipe_up/wipe_down** - One scene slides over another. Best for: location changes, introducing new elements, dynamic movement
+
+**TikTok/Instagram Style (High Energy, Modern):**
+4. **flash** - Quick white flash (0.1s). Best for: beat drops, dramatic reveals, attention-grabbing moments, sync with music
+5. **zoom_blur** - Aggressive zoom with motion blur (0.3s). Best for: product reveals, dramatic emphasis, high-impact moments, creating focus
+6. **whip_pan_left/whip_pan_right/whip_pan_up/whip_pan_down** - Fast camera whip movement (0.2s). Best for: high energy lifestyle, rapid scene changes, action moments, trendy feel
+7. **glitch** - Digital distortion effect (0.15s). Best for: tech products, modern/edgy brands, youthful audience, digital aesthetic
+
+**Transition Selection Criteria:**
+- **Mood/Emotion Shift**: Dramatic changes → cut/flash/glitch; Subtle shifts → crossfade
+- **Location Change**: Different locations → wipe/whip_pan; Same location → crossfade
+- **Time Passage**: Significant time jump → crossfade; Continuous time → crossfade/cut
+- **Energy Level**: 
+  * High energy/fast pacing → cut/flash/whip_pan/glitch
+  * Moderate energy → zoom_blur/wipe
+  * Calm/contemplative → crossfade
+- **Target Audience**:
+  * Gen Z/Young audience → flash/whip_pan/glitch/zoom_blur (TikTok style)
+  * Professional/Premium → crossfade
+  * Tech/Modern → glitch/flash/zoom_blur
+- **Camera Movement**: Matching movement direction → whip_pan (same direction); Opposing → cut/flash
+- **AIDA Framework Boundaries**:
+  * Attention → Interest: Often flash/zoom_blur (building excitement)
+  * Interest → Desire: Often whip_pan/wipe (escalating emotion)
+  * Desire → Action: Often flash/cut/zoom_blur (urgency, decisive moment)
+- **Visual Continuity**: Similar visual elements → crossfade; Contrasting visuals → cut/wipe/flash
+- **Product Reveals**: Revealing product → zoom_blur/flash; Product in use → crossfade/whip_pan
+- **Brand Personality**:
+  * Youthful/Trendy → flash/whip_pan/glitch
+  * Professional/Elegant → crossfade
+  * Tech/Innovation → glitch/zoom_blur/flash
+
+**Examples:**
+- Scene 1 (establishing shot) → Scene 2 (product closeup): zoom_blur
+- Scene 2 (calm, product on table) → Scene 3 (energetic, product in use): whip_pan_right or flash
+- Scene 3 (daytime use) → Scene 4 (evening contemplation): crossfade
+- Scene 3 (problem shown) → Scene 4 (solution revealed): flash or cut (dramatic shift)
+- Scene 2 (person in kitchen) → Scene 3 (person in living room): wipe_left or whip_pan_left (location change)
+- Scene 1 (tech product intro) → Scene 2 (features showcase): glitch or zoom_blur
+- Scene 2 (lifestyle shot) → Scene 3 (action moment): whip_pan_up or flash
+- Scene 3 (build-up) → Scene 4 (big reveal/CTA): flash or zoom_blur
+
+Choose transitions that serve the story and enhance the emotional arc. Consider what the viewer should feel at each transition point.
+
 Now, I need you to return this in a structured JSON format so we can process it programmatically. Here's the structure:
 
 {{
@@ -303,11 +358,13 @@ Now, I need you to return this in a structured JSON format so we can process it 
         "composition": "Natural description of how the frame is composed",
         "visual_elements": "Natural description of key visual elements"
       }},
-      "duration_seconds": <YOUR_CHOSEN_DURATION>  // **CRITICAL**: MUST be between 3 and 7 seconds (MINIMUM 3, MAXIMUM 7). Choose the duration that best fits this scene's narrative needs.
+      "duration_seconds": <YOUR_CHOSEN_DURATION>,  // **CRITICAL**: MUST be between 3 and 7 seconds (MINIMUM 3, MAXIMUM 7). Choose the duration that best fits this scene's narrative needs.
+      "transition_to_next": "crossfade" | "cut" | "wipe_left" | "wipe_right" | "wipe_up" | "wipe_down" | "flash" | "zoom_blur" | "whip_pan_left" | "whip_pan_right" | "whip_pan_up" | "whip_pan_down" | "glitch"  // Choose the best transition based on criteria above. For the LAST scene, you can omit this field or set it to null.
     }}
     // ... continue for all scenes you create
     // IMPORTANT: The sum of all "duration_seconds" should be close to {target_duration} seconds
     // **CRITICAL**: Every scene's duration_seconds MUST be at least 3 and at most 7
+    // **CRITICAL**: Each scene (except the last) MUST have a transition_to_next field
     // For scenes 2+, make sure image_continuity_notes and scene_transition_notes reference previous scenes
   ]
 }}
@@ -350,7 +407,212 @@ Key points:
   - Scene 1: Detailed subject description (e.g., "8-inch bottle, frosted glass, silver cap, rose gold label")
   - Scenes 2+: "The EXACT SAME [subject] from Scene 1" + reference identical characteristics
   - Vary camera angle, lighting, positioning, environment - but NEVER the subject's physical attributes
+- **TRANSITION SELECTION**:
+  - Each scene (except the last) MUST include a transition_to_next field
+  - Choose transitions based on: mood shift, location change, time passage, energy level, visual continuity
+  - Consider the narrative arc and emotional flow when selecting transitions
+  - Use crossfade as default for smooth continuity, cut for dramatic shifts, wipes for location changes, flash/zoom_blur/whip_pan/glitch for high-energy modern content
 """
+
+
+async def plan_storyboard_from_scenes(
+    story: dict,
+    scenes_data: dict,
+    target_duration: int = 15,
+    max_retries: int = 3,
+) -> dict:
+    """
+    Create detailed visual storyboard (Stage 3) from story and scene breakdown.
+    Converts high-level scene descriptions into detailed image generation prompts.
+    
+    Args:
+        story: Complete story from story generator (Stage 1)
+        scenes_data: Scene breakdown from scene divider (Stage 2)
+        target_duration: Target total duration in seconds
+        max_retries: Maximum retry attempts
+    
+    Returns:
+        dict: Storyboard plan with detailed image generation prompts for each scene
+    """
+    if not settings.OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY not configured.")
+    
+    model = "gpt-4o"
+    async_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    
+    # Extract key information from story and scenes
+    character_subject = story.get("character_subject", {})
+    production_notes = story.get("production_notes", {})
+    scenes = scenes_data.get("scenes", [])
+    
+    system_prompt = f"""You are a professional cinematographer and visual AI prompt engineer. Your job is to convert high-level scene descriptions into detailed, specific image generation prompts that maintain perfect visual consistency.
+
+You will receive:
+1. Character/product descriptions (MUST remain identical across all scenes)
+2. Production style notes (visual style, colors, lighting approach)
+3. Scene-by-scene breakdowns with actions and camera work
+
+Your task is to create THREE types of prompts for EACH scene:
+1. **image_generation_prompt** - Main reference image (80-150 words, extremely detailed)
+2. **start_image_prompt** - First frame of video (specific moment, detailed)
+3. **end_image_prompt** - Last frame of video (different moment, detailed)
+
+CRITICAL CONSISTENCY RULES:
+
+🚨 **CHARACTER CONSISTENCY:**
+Character Description: {character_subject.get('character_description', 'N/A')}
+- This character MUST appear IDENTICAL in every scene they're visible
+- COPY this exact description into every prompt where character appears
+- Add "The EXACT SAME person from Scene 1" in scenes 2+
+- Only vary: pose, action, camera angle, lighting, environment
+
+🚨 **PRODUCT CONSISTENCY:**
+Product Description: {character_subject.get('product_description', 'N/A')}
+- This product MUST appear IDENTICAL in every scene it's visible
+- COPY this exact description into every prompt where product appears
+- Add "The EXACT SAME product from Scene 1" in scenes 2+
+- Only vary: positioning, camera angle, lighting, environment
+
+VISUAL STYLE:
+Overall Style: {production_notes.get('overall_style', 'N/A')}
+Color Palette: {production_notes.get('color_palette', 'N/A')}
+Lighting Approach: {production_notes.get('lighting_approach', 'N/A')}
+Pacing: {production_notes.get('pacing', 'N/A')}
+
+For each scene, create prompts that are:
+- **Extremely detailed** (visual specifications, not storytelling)
+- **Consistent** (same character/product across all scenes)
+- **Specific to image generation** (describe a still image, not motion)
+- **Unique per scene** (different pose/action/angle for each scene's start/end)
+
+Return JSON:
+{{
+  "consistency_markers": {{
+    "style": "{production_notes.get('overall_style', 'Cinematic photorealistic')}",
+    "color_palette": "{production_notes.get('color_palette', 'Natural warm tones')}",
+    "lighting": "{production_notes.get('lighting_approach', 'Natural soft lighting')}",
+    "composition": "Balanced, rule of thirds",
+    "mood": "Engaging and authentic",
+    "subject_description": "COPY the character OR product description exactly as provided above - this is the MASTER template"
+  }},
+  "scenes": [
+    {{
+      "scene_number": 1,
+      "aida_stage": "Attention/Interest/Desire/Action",
+      "duration_seconds": 4,
+      "detailed_prompt": "Simple 40-80 word description for video AI",
+      "image_generation_prompt": "DETAILED 80-150 word prompt. IF character/product appears, START with their EXACT description from above, then add scene context (pose, angle, lighting, environment).",
+      "start_image_prompt": "DETAILED first frame description showing SPECIFIC starting pose/action",
+      "end_image_prompt": "DETAILED last frame description showing DIFFERENT ending pose/action",
+      "image_continuity_notes": "For scene 1: Foundation. For 2+: How subject from Scene 1 continues",
+      "visual_consistency_guidelines": "Specific consistency requirements",
+      "scene_transition_notes": "How this connects to next scene",
+      "subject_presence": "full" | "partial" | "none",
+      "scene_description": {{
+        "environment": "Where this takes place",
+        "character_action": "What's happening",
+        "camera_angle": "Camera perspective",
+        "composition": "Frame composition",
+        "visual_elements": "Key visual elements"
+      }}
+    }}
+  ]
+}}
+"""
+    
+    # Build user message with all scene details
+    scenes_summary = json.dumps(scenes, indent=2)
+    user_message = f"""Convert these {len(scenes)} scene descriptions into detailed visual storyboard prompts.
+
+SCENES TO CONVERT:
+{scenes_summary}
+
+For each scene, create:
+1. image_generation_prompt - Extremely detailed (80-150 words)
+2. start_image_prompt - Specific first frame
+3. end_image_prompt - Specific last frame
+
+Remember:
+- Character/product must be IDENTICAL across all scenes (copy exact description)
+- Each scene needs UNIQUE poses/actions/angles
+- Be extremely specific about visual details
+- Focus on IMAGE generation (still frames), not motion"""
+    
+    last_error = None
+    
+    try:
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"[Storyboard Planner Stage 3] Converting scenes to visual prompts, attempt {attempt}/{max_retries}")
+                
+                response = await async_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.6,
+                    max_tokens=6000,
+                )
+                
+                if not response.choices or not response.choices[0].message:
+                    error_msg = "Empty response from OpenAI API"
+                    logger.error(f"[Storyboard Planner Error] {error_msg}")
+                    if attempt < max_retries:
+                        last_error = error_msg
+                        continue
+                    raise ValueError(error_msg)
+                
+                content = response.choices[0].message.content
+                if not content:
+                    error_msg = "Response content is None"
+                    logger.error(f"[Storyboard Planner Error] {error_msg}")
+                    if attempt < max_retries:
+                        last_error = error_msg
+                        continue
+                    raise ValueError(error_msg)
+                
+                # Parse JSON
+                try:
+                    storyboard_plan = json.loads(content)
+                except json.JSONDecodeError as e:
+                    error_msg = f"Invalid JSON: {e}"
+                    logger.warning(f"[Storyboard Planner Error] {error_msg}")
+                    if attempt < max_retries:
+                        last_error = error_msg
+                        continue
+                    raise ValueError(error_msg)
+                
+                # Validate
+                storyboard_scenes = storyboard_plan.get("scenes", [])
+                if len(storyboard_scenes) < 1:
+                    raise ValueError(f"Expected at least 1 scene, got {len(storyboard_scenes)}")
+                
+                logger.info(f"✅ Storyboard visual prompts generated for {len(storyboard_scenes)} scenes")
+                
+                # Add metadata from previous stages
+                storyboard_plan["multi_stage_metadata"] = {
+                    "story_title": story.get("story_title"),
+                    "template_used": story.get("template_used"),
+                    "stage_1_story": story.get("narrative", {}),
+                    "stage_2_scenes": scenes_data.get("generation_metadata", {})
+                }
+                
+                return storyboard_plan
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[Storyboard Planner Error] Attempt {attempt} failed: {e}")
+                if attempt < max_retries:
+                    import asyncio
+                    await asyncio.sleep(min(2 ** attempt, 15))
+                    continue
+        
+        raise RuntimeError(f"Storyboard planning failed after {max_retries} attempts: {last_error}")
+    
+    finally:
+        await async_client.close()
 
 
 async def plan_storyboard(
@@ -360,7 +622,7 @@ async def plan_storyboard(
     max_retries: int = 3,
 ) -> dict:
     """
-    Create a detailed storyboard plan using LLM.
+    Create a detailed storyboard plan using LLM (LEGACY - Single-stage approach).
     
     Args:
         user_prompt: User's original prompt

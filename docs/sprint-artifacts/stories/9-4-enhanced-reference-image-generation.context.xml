@@ -1,0 +1,280 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>9</epicId>
+    <storyId>4</storyId>
+    <title>Enhanced Reference Image Generation with Prompt Enhancement and Quality Scoring</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/9-4-enhanced-reference-image-generation.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>reference images generated using enhanced prompts and quality scoring</iWant>
+    <soThat>I get higher quality, more consistent reference images for my video generation</soThat>
+    <tasks>
+- Task 1: Create enhanced reference image generation function (AC: #1, #2, #3, #4, #5)
+  - Create `generate_enhanced_reference_images_with_sequential_references()` function in `backend/app/services/pipeline/image_generation_batch.py`
+  - Implement prompt enhancement per scene:
+    - For each scene, call `enhance_prompt_iterative()` with scene's `image_generation_prompt`
+    - Use max_iterations=4, score_threshold=85.0 (configurable)
+    - Save trace files to `output/reference_image_traces/{generation_id}/scene_{N}/`
+    - Extract final enhanced prompt from result
+  - Implement image generation with variations:
+    - Generate 4 variations per scene using enhanced prompt
+    - Use `generate_images()` service with num_variations=4
+    - Maintain sequential chaining: first scene uses initial_reference_image, subsequent scenes use previous best
+  - Implement quality scoring and ranking:
+    - Score all 4 variations using `score_image()` (PickScore, CLIP-Score, Aesthetic)
+    - Rank variations using `rank_images_by_quality()`
+    - Select rank 1 image as reference for next scene
+    - Check quality threshold (≥30.0) and log warnings if below
+  - Implement trace file management:
+    - Save all prompt versions, scores, iteration history to trace directory
+    - Save generation metadata (variations, scores, rankings, selected image)
+    - Clean up trace files immediately after completion (delete trace directory)
+  - Implement error handling:
+    - Enhancement failure: Log error, use original prompt, generate single image, continue
+    - Generation failure: Retry once, then fall back to single image, continue
+    - Scoring failure: Log warning, use first generated image (no ranking), continue
+  - Unit tests: Prompt enhancement integration, quality scoring, ranking, threshold enforcement, sequential chaining, error handling
+
+- Task 2: Integrate into video generation pipeline (AC: #1, #3, #4)
+  - Locate `process_generation()` function (pipeline orchestration)
+  - Replace `generate_images_with_sequential_references()` call with `generate_enhanced_reference_images_with_sequential_references()`
+  - Update progress tracking:
+    - Add "Enhancing prompts for reference images" progress message
+    - Add "Generating reference image variations" progress message
+    - Add "Scoring and ranking reference images" progress message
+  - Maintain all existing consistency markers, continuity notes, and guidelines
+  - Integration tests: Full pipeline with enhanced reference images, progress updates, trace file cleanup
+
+- Task 3: Update function signature and documentation (All ACs)
+  - Update function signature to match existing pattern
+  - Add comprehensive docstring with usage examples
+  - Document configuration parameters (num_variations, max_enhancement_iterations, quality_threshold)
+  - Document trace file structure and cleanup behavior
+  - Document error handling and fallback behavior
+
+- Task 4: Testing and validation (All ACs)
+  - Unit tests: Prompt enhancement integration, quality scoring, ranking, threshold enforcement, sequential chaining, error handling
+  - Integration tests: Full pipeline execution, fallback scenarios, quality threshold warnings, trace file cleanup
+  - Performance tests: Measure latency per scene (~33-70s), total for 4 scenes (~132-280s)
+  - Quality validation: Compare reference image quality (enhanced vs. previous approach), measure quality score distribution, validate threshold enforcement
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Given** I start a video generation with the enhanced reference image feature enabled
+   **When** the system generates reference images for each scene
+   **Then** the system:
+   - Enhances each scene's image generation prompt using iterative two-agent enhancement:
+     - Agent 1 (Creative Director): Enhances prompt with visual details, style, composition, lighting
+     - Agent 2 (Prompt Engineer): Critiques and scores the enhanced prompt
+     - Iterates up to 4 rounds until score threshold is met or convergence detected
+     - Scores prompts on dimensions: Completeness, Specificity, Professionalism, Cinematography, Brand Alignment
+   - Generates 4 image variations per scene using the enhanced prompt
+   - Scores all 4 variations using quality metrics:
+     - PickScore (human preference prediction, 0-100)
+     - CLIP-Score (image-text alignment, 0-100)
+     - Aesthetic Predictor (aesthetic quality, 0-100)
+     - Overall Quality Score (weighted combination)
+   - Ranks all variations by overall quality score
+   - Selects the best-ranked image (rank 1) as the reference image for the scene
+   - Checks if selected image's quality score is ≥ 30:
+     - If score ≥ 30: Proceeds with selected image
+     - If score < 30: Logs warning with score but proceeds with selected image
+   - Uses selected reference image as input for next scene's generation (maintains sequential chaining)
+   - Saves trace files to `output/reference_image_traces/{generation_id}/scene_{N}/`
+   - Cleans up trace files immediately after reference image generation completes (no retention)
+   - Updates progress: "Enhancing prompts for reference images" → "Generating reference image variations" → "Scoring and ranking reference images"
+
+2. **Given** the system maintains sequential chaining for visual consistency
+   **Then** reference image generation:
+   - First scene: Uses user's initial reference image (if provided) as base for first scene's generation
+   - Subsequent scenes: Uses previous scene's best-ranked reference image as reference for next scene
+   - Maintains consistency markers, continuity notes, and consistency guidelines from LLM planning
+   - Ensures visual coherence across all scenes
+
+3. **Given** I start a video generation
+   **When** the system processes the generation request
+   **Then** the enhanced reference image generation is enabled by default for all users:
+   - No optional toggle required (feature is always on)
+   - No backward compatibility mode (replaces previous approach entirely)
+   - All new generations use enhanced prompt + quality scoring workflow
+
+4. **Given** reference image generation completes
+   **When** the system has selected the best reference images for all scenes
+   **Then** the system:
+   - Logs quality scores for each scene's selected reference image
+   - Logs warnings for any scenes where quality score < 30
+   - Continues with video generation pipeline using selected reference images
+   - Cleans up all trace files immediately after completion
+
+5. **Given** an error occurs during prompt enhancement or image generation
+   **When** the system encounters the error
+   **Then** the system:
+   - Logs the error with context (scene number, step, error details)
+   - Falls back gracefully: Uses original prompt (without enhancement) and generates single image
+   - Continues pipeline with fallback image
+   - Does not fail the entire generation due to enhancement errors
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/sprint-artifacts/9-4-enhanced-reference-image-generation.md" title="Story 9.4 Document">
+        <section>Complete story definition with acceptance criteria, technical notes, and Dev Notes</section>
+        <snippet>Story defines integration of prompt enhancement and quality scoring into reference image generation pipeline. Uses `image_prompt_enhancement.enhance_prompt_iterative()`, `generate_images()`, `score_image()`, and `rank_images_by_quality()`. Configuration: 4 variations per scene, 4 enhancement iterations, quality threshold 30.0, immediate trace cleanup.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-9.md" title="Epic 9 Technical Specification">
+        <section>Story 9.4: Enhanced Reference Image Generation</section>
+        <snippet>Tech spec defines acceptance criteria and technical implementation details for enhanced reference image generation with prompt enhancement and quality scoring. Integration points with existing services and pipeline orchestration.</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epics Document">
+        <section>Epic 9, Story 9.4</section>
+        <snippet>Original epic breakdown defines story acceptance criteria, prerequisites (Story 8.3, Story 8.4, Epic 3), and technical notes on replacing `generate_images_with_sequential_references()` call in `process_generation()`.</snippet>
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document">
+        <section>AI Video Generation Pipeline</section>
+        <snippet>PRD defines video generation pipeline stages including reference image generation for visual consistency. Reference images are used as input for video generation models to maintain coherence across scenes.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document">
+        <section>Pipeline Orchestration</section>
+        <snippet>Architecture defines pipeline orchestration pattern with single orchestration function coordinating stages. Service organization in `app/services/pipeline/`, configuration management via `app/core/config.py`.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/9-3-integrated-feedback-loop-cli.md" title="Story 9.3 Learnings">
+        <section>Dev Notes - Learnings from Previous Story</section>
+        <snippet>Story 9.3 provides learnings on service integration patterns, error handling, progress tracking, and trace file management. Prefer calling service functions directly rather than CLI tools via subprocess.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/8-2-image-generation-feedback-loop-cli.md" title="Story 8.2 Learnings">
+        <section>Dev Notes</section>
+        <snippet>Story 8.2 creates `generate_images()` service that supports generating multiple variations with quality scoring. Service returns `ImageGenerationResult` objects with image paths and metadata. Quality scoring via `score_image()` and `rank_images_by_quality()`.</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/8-1-image-prompt-feedback-loop-cli.md" title="Story 8.1 Learnings">
+        <section>Dev Notes</section>
+        <snippet>Story 8.1 creates `image_prompt_enhancement.enhance_prompt_iterative()` service that uses two-agent feedback loops (Cinematographer + Prompt Engineer) for image prompt enhancement. Returns `ImagePromptEnhancementResult` with enhanced prompt, scores, and iteration history.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/image_prompt_enhancement.py" kind="service" symbol="enhance_prompt_iterative" lines="143-200" reason="Two-agent iterative image prompt enhancement service. Used for enhancing each scene's image generation prompt before generating variations. Returns ImagePromptEnhancementResult with enhanced prompt, scores, and iteration history." />
+      <artifact path="backend/app/services/image_generation.py" kind="service" symbol="generate_images" lines="101-110" reason="Image generation service for creating multiple variations. Used for generating 4 variations per scene using enhanced prompt. Returns List[ImageGenerationResult] with image paths and metadata." />
+      <artifact path="backend/app/services/pipeline/image_quality_scoring.py" kind="service" symbol="score_image" lines="455-521" reason="Quality scoring service for evaluating image quality. Computes PickScore, CLIP-Score, VQAScore, and Aesthetic Predictor scores. Used for scoring all 4 variations per scene." />
+      <artifact path="backend/app/services/pipeline/image_quality_scoring.py" kind="service" symbol="rank_images_by_quality" lines="524-551" reason="Image ranking service for selecting best candidate. Ranks images by overall quality score (best first). Used for ranking and selecting best reference image (rank 1)." />
+      <artifact path="backend/app/services/pipeline/image_generation_batch.py" kind="service" symbol="generate_images_with_sequential_references" lines="97-222" reason="Current sequential reference image generation function. To be replaced with `generate_enhanced_reference_images_with_sequential_references()` that adds prompt enhancement and quality scoring steps." />
+      <artifact path="backend/app/api/routes/generations.py" kind="function" symbol="process_generation" lines="339" reason="Main pipeline orchestration function. Currently calls `generate_images_with_sequential_references()` at line 339. Needs update to use enhanced version with prompt enhancement and quality scoring." />
+      <artifact path="backend/app/services/pipeline/image_generation_batch.py" kind="function" symbol="_build_enhanced_image_prompt" lines="14-94" reason="Helper function for building enhanced prompts with consistency markers, continuity notes, and guidelines. Used by sequential reference generation to maintain visual consistency." />
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="openai" version=">=1.0.0" />
+        <package name="replicate" version=">=0.25.0" />
+        <package name="transformers" version=">=4.30.0" />
+        <package name="torch" version=">=2.0.0" />
+        <package name="pillow" version=">=10.0.0" />
+        <package name="numpy" version=">=1.24.0,<2.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="pytest-asyncio" version=">=0.21.0" />
+        <package name="httpx" version=">=0.24.0" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Backend Framework: FastAPI + Python 3.11, async/await pattern for API calls</constraint>
+    <constraint>Prompt Enhancement: Use `app.services.pipeline.image_prompt_enhancement.enhance_prompt_iterative()` with max_iterations=4, score_threshold=85.0</constraint>
+    <constraint>Image Generation: Use `app.services.image_generation.generate_images()` with num_variations=4 per scene</constraint>
+    <constraint>Quality Scoring: Use `app.services.pipeline.image_quality_scoring.score_image()` and `rank_images_by_quality()` services</constraint>
+    <constraint>Quality Threshold: Minimum score 30.0 (proceed with warning if below, never fail generation)</constraint>
+    <constraint>Sequential Chaining: Maintain existing behavior - first scene uses user's initial_reference_image (if provided), subsequent scenes use previous scene's best-ranked image</constraint>
+    <constraint>Trace Cleanup: Delete trace files immediately after reference image generation completes (no retention, keeps disk usage minimal)</constraint>
+    <constraint>Backward Compatibility: No backward compatibility mode - feature is always enabled by default for all users, replaces previous approach entirely</constraint>
+    <constraint>Error Handling: Never fail entire generation due to enhancement/generation/scoring errors - always fall back gracefully (original prompt → single image → continue pipeline)</constraint>
+    <constraint>Progress Tracking: Update progress at three steps: "Enhancing prompts for reference images" → "Generating reference image variations" → "Scoring and ranking reference images"</constraint>
+    <constraint>Logging: Structured logging at INFO level for progress, WARNING for quality threshold violations (<30), ERROR for failures with context (scene number, step, error details)</constraint>
+    <constraint>Configuration Management: Use `app/core/config.py` for API keys (OPENAI_API_KEY for prompt enhancement, REPLICATE_API_TOKEN for image generation)</constraint>
+    <constraint>Performance Target: ~33-70s per scene (enhancement: 10-20s, generation: 15-30s, scoring: 8-20s), total for 4 scenes: ~132-280s (2-5 minutes)</constraint>
+  </constraints>
+  <interfaces>
+    <interface name="generate_enhanced_reference_images_with_sequential_references" kind="function signature" signature="async def generate_enhanced_reference_images_with_sequential_references(
+    prompts: List[str],
+    output_dir: str,
+    generation_id: str,
+    consistency_markers: Optional[dict] = None,
+    continuity_notes: Optional[List[str]] = None,
+    consistency_guidelines: Optional[List[str]] = None,
+    transition_notes: Optional[List[str]] = None,
+    initial_reference_image: Optional[str] = None,
+    cancellation_check: Optional[callable] = None,
+    quality_threshold: float = 30.0,
+    num_variations: int = 4,
+    max_enhancement_iterations: int = 4,
+) -> List[str]" path="backend/app/services/pipeline/image_generation_batch.py" />
+    <interface name="enhance_prompt_iterative" kind="function signature" signature="async def enhance_prompt_iterative(
+    user_prompt: str,
+    max_iterations: int = 3,
+    score_threshold: float = 85.0,
+    creative_model: str = 'gpt-4-turbo',
+    critique_model: str = 'gpt-4-turbo',
+    trace_dir: Optional[Path] = None,
+    image_model_name: Optional[str] = None,
+    generate_negative: bool = True
+) -> ImagePromptEnhancementResult" path="backend/app/services/pipeline/image_prompt_enhancement.py" />
+    <interface name="generate_images" kind="function signature" signature="async def generate_images(
+    prompt: str,
+    num_variations: int = 8,
+    aspect_ratio: str = '16:9',
+    seed: Optional[int] = None,
+    model_name: str = 'black-forest-labs/flux-schnell',
+    output_dir: Optional[Path] = None,
+    image_input: Optional[List[str]] = None,
+    negative_prompt: Optional[str] = None
+) -> List[ImageGenerationResult]" path="backend/app/services/image_generation.py" />
+    <interface name="score_image" kind="function signature" signature="async def score_image(
+    image_path: str,
+    prompt_text: str
+) -> Dict[str, float]" path="backend/app/services/pipeline/image_quality_scoring.py" />
+    <interface name="rank_images_by_quality" kind="function signature" signature="def rank_images_by_quality(
+    image_results: list[tuple[str, Dict[str, float]]]
+) -> list[tuple[str, Dict[str, float], int]]" path="backend/app/services/pipeline/image_quality_scoring.py" />
+  </interfaces>
+  <tests>
+    <standards>
+      Backend testing uses pytest framework with pytest-asyncio for async tests. Mock external APIs (OpenAI, Replicate) in unit tests to avoid API costs. Integration tests verify complete pipeline flow. Unit tests target >80% code coverage. All tests should verify proper error handling, fallback logic, quality threshold enforcement, sequential chaining behavior, and trace file cleanup. Test files located in `backend/tests/` directory.
+    </standards>
+    <locations>
+      <location>backend/tests/test_enhanced_reference_image_generation.py - Unit tests for enhanced reference image generation function</location>
+      <location>backend/tests/test_integration_enhanced_reference_images.py - Integration tests for full pipeline with enhanced reference images</location>
+      <location>backend/tests/test_quality_threshold_enforcement.py - Tests for quality threshold checking and warning logging</location>
+      <location>backend/tests/test_reference_image_fallback.py - Tests for error handling and fallback logic</location>
+    </locations>
+    <ideas>
+      <idea acId="AC-9.4.1">Unit test: Prompt enhancement integration - verify `enhance_prompt_iterative()` called per scene with max_iterations=4</idea>
+      <idea acId="AC-9.4.1">Unit test: Image generation with 4 variations per scene using enhanced prompt</idea>
+      <idea acId="AC-9.4.1">Unit test: Quality scoring - verify all 4 variations scored using `score_image()` (PickScore, CLIP-Score, Aesthetic)</idea>
+      <idea acId="AC-9.4.1">Unit test: Ranking - verify `rank_images_by_quality()` ranks variations correctly, rank 1 selected</idea>
+      <idea acId="AC-9.4.1">Unit test: Quality threshold check (≥30.0) - verify warning logged if below threshold but proceeds</idea>
+      <idea acId="AC-9.4.1">Unit test: Sequential chaining - verify first scene uses initial_reference_image, subsequent scenes use previous best-ranked image</idea>
+      <idea acId="AC-9.4.1">Unit test: Trace file management - verify trace files saved during generation, cleaned up immediately after completion</idea>
+      <idea acId="AC-9.4.1">Unit test: Progress tracking - verify progress updates at enhancement, generation, and scoring steps</idea>
+      <idea acId="AC-9.4.2">Integration test: Full pipeline with enhanced reference images for 4 scenes</idea>
+      <idea acId="AC-9.4.2">Integration test: Sequential chaining across multiple scenes maintains visual consistency</idea>
+      <idea acId="AC-9.4.2">Integration test: Consistency markers, continuity notes, consistency guidelines maintained throughout</idea>
+      <idea acId="AC-9.4.3">Integration test: Feature enabled by default - no toggle required, all new generations use enhanced workflow</idea>
+      <idea acId="AC-9.4.4">Integration test: Quality score logging - verify scores logged for each scene's selected reference image</idea>
+      <idea acId="AC-9.4.4">Integration test: Warning logging - verify warnings logged for scenes where quality score < 30</idea>
+      <idea acId="AC-9.4.4">Integration test: Trace file cleanup verification - verify trace files deleted immediately after completion</idea>
+      <idea acId="AC-9.4.5">Unit test: Fallback when prompt enhancement fails - use original prompt, generate single image, continue pipeline</idea>
+      <idea acId="AC-9.4.5">Unit test: Fallback when image generation fails - retry once, then fall back to single image, continue pipeline</idea>
+      <idea acId="AC-9.4.5">Unit test: Fallback when scoring fails - use first generated image (no ranking), continue pipeline</idea>
+      <idea acId="AC-9.4.5">Integration test: Error handling does not fail entire generation - verify graceful fallback at each step</idea>
+      <idea acId="AC-9.4.1">Performance test: Measure latency per scene (~33-70s), total for 4 scenes (~132-280s)</idea>
+      <idea acId="AC-9.4.1">Quality validation: Compare reference image quality (enhanced vs. previous approach)</idea>
+      <idea acId="AC-9.4.1">Quality validation: Measure quality score distribution across scenes</idea>
+      <idea acId="AC-9.4.1">Quality validation: Validate threshold enforcement and warning behavior</idea>
+    </ideas>
+  </tests>
+</story-context>
