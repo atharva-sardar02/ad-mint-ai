@@ -26,7 +26,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Add backend to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services.pipeline.image_prompt_enhancement import enhance_prompt_iterative
 from app.core.config import settings

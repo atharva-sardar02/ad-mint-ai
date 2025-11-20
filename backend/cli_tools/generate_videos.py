@@ -35,7 +35,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # Add backend to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services.pipeline.video_generation_cli import (
     generate_text_to_video,

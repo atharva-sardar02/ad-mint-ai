@@ -106,3 +106,7 @@ development_status:
   9-3-integrated-feedback-loop-cli: drafted
   9-4-enhanced-reference-image-generation: done
   epic-9-retrospective: optional
+
+  epic-interactive-pipeline: contexted
+  interactive-pipeline-1-cli-tools-organization: review
+  epic-interactive-pipeline-retrospective: optional

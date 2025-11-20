@@ -1,0 +1,230 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>interactive-pipeline</epicId>
+    <storyId>1.1</storyId>
+    <title>CLI Tools Organization</title>
+    <status>Draft</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/story-interactive-pipeline-1.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>Epic 8-9 CLI tools organized in a separate `backend/cli_tools/` directory</iWant>
+    <soThat>they don't get confused with the main web application pipeline code and development tools are clearly separated from production code</soThat>
+    <tasks>
+**Preparation:**
+- Review current locations of all Epic 8-9 CLI tools (AC: #1, #2)
+- Identify any dependencies or import paths that need updating (AC: #5)
+
+**Directory Organization:**
+- Create `backend/cli_tools/` directory (AC: #1)
+- Move `enhance_image_prompt.py` to `cli_tools/` (AC: #2)
+- Move `generate_images.py` to `cli_tools/` (AC: #2)
+- Move `enhance_video_prompt.py` to `cli_tools/` (AC: #2)
+- Move `generate_videos.py` to `cli_tools/` (AC: #2)
+- Move `feedback_loop.py` to `cli_tools/` (AC: #2)
+
+**Import Path Updates:**
+- Update imports in CLI tools if needed (change relative to absolute) (AC: #5)
+- Test imports work correctly from new location (AC: #5)
+
+**Documentation:**
+- Create `cli_tools/README.md` with tool descriptions (AC: #4)
+- Document usage examples for each tool (AC: #4)
+- Add note that these are development tools (AC: #4)
+
+**Verification:**
+- Test each CLI tool execution: `python cli_tools/enhance_image_prompt.py --help` (AC: #3)
+- Verify all tools show correct help output (AC: #3)
+- Check no broken imports or missing dependencies (AC: #3, #5)
+
+**Cleanup:**
+- Remove any leftover files in `backend/` root (AC: #2)
+- Update any project documentation that references CLI tool locations (AC: #4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+**AC #1: Directory Structure Created**
+- GIVEN the Epic 8-9 CLI tools exist scattered in `backend/`
+- WHEN I create the new `backend/cli_tools/` directory
+- THEN all CLI tools are moved to this directory with proper organization
+
+**AC #2: All CLI Tools Moved**
+- GIVEN the following CLI tools from Epic 8-9:
+  - `enhance_image_prompt.py`
+  - `generate_images.py`
+  - `enhance_video_prompt.py`
+  - `generate_videos.py`
+  - `feedback_loop.py`
+- WHEN they are moved to `backend/cli_tools/`
+- THEN the directory contains all 5 CLI tools
+- AND no CLI tools remain in `backend/` root
+
+**AC #3: CLI Tools Function Correctly**
+- GIVEN each CLI tool in the new location
+- WHEN I run `python cli_tools/{tool_name}.py --help`
+- THEN the tool executes without import errors
+- AND displays correct usage information
+
+**AC #4: Documentation Updated**
+- GIVEN the new CLI tools directory
+- WHEN I create `backend/cli_tools/README.md`
+- THEN it documents the purpose of each tool
+- AND provides usage examples for each tool
+- AND explains that these are development/testing tools, not production code
+
+**AC #5: Import Paths Valid**
+- GIVEN the CLI tools may import from `app/services/pipeline/`
+- WHEN I check all import statements
+- THEN all imports use correct paths (absolute or relative)
+- AND tools can still access shared pipeline services
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification - Interactive Pipeline</title>
+        <section>CLI Tools (Epic 8-9)</section>
+        <snippet>CLI tools currently located in `backend/` (mixed with main codebase): enhance_image_prompt.py, generate_images.py, enhance_video_prompt.py, generate_videos.py, feedback_loop.py. These are development/testing tools that should be separated from production pipeline code.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification - Source Tree Changes</title>
+        <section>Source Tree Changes</section>
+        <snippet>Planned structure: backend/cli_tools/ (NEW DIRECTORY) to contain all Epic 8-9 CLI scripts with a README.md documenting usage. CLI tools will move from backend/ root to maintain clear separation between development tools and production code.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epic-interactive-pipeline.md</path>
+        <title>Epic: Interactive Video Generation Pipeline</title>
+        <section>Story 1: CLI Tools Organization</section>
+        <snippet>Goal: Move Epic 8-9 CLI tools to separate directory so they don't get confused with main web application pipeline code. Acceptance: All CLI tools in backend/cli_tools/, execute successfully, README documents purpose.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>Project Structure</section>
+        <snippet>Backend organized with services/pipeline/ containing 52 pipeline service files. CLI tools should be separated to avoid confusion with core pipeline orchestration (multi_stage_orchestrator.py, story_generator.py, etc.).</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/enhance_image_prompt.py</path>
+        <kind>CLI script</kind>
+        <symbol>main</symbol>
+        <lines>1-50</lines>
+        <reason>CLI tool for image prompt enhancement from Epic 8. Imports from app.services.pipeline.image_prompt_enhancement. Needs to move to cli_tools/ with import path updates.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/generate_images.py</path>
+        <kind>CLI script</kind>
+        <symbol>main</symbol>
+        <lines>1-50</lines>
+        <reason>CLI tool for image generation from Epic 8. Imports from app.services.image_generation and app.services.pipeline. Needs to move to cli_tools/.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/enhance_video_prompt.py</path>
+        <kind>CLI script</kind>
+        <symbol>main</symbol>
+        <lines>1-50</lines>
+        <reason>CLI tool for video prompt enhancement from Epic 9. Imports from app.services.pipeline. Needs to move to cli_tools/.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/generate_videos.py</path>
+        <kind>CLI script</kind>
+        <symbol>main</symbol>
+        <lines>1-50</lines>
+        <reason>CLI tool for video generation from Epic 9. Imports from app.services.pipeline.video_generation_cli. Needs to move to cli_tools/.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/</path>
+        <kind>service directory</kind>
+        <symbol>52 pipeline services</symbol>
+        <lines>N/A</lines>
+        <reason>Core pipeline services directory that CLI tools import from. Contains image_prompt_enhancement.py, video_generation_cli.py, storyboard_service.py, etc. CLI tools import these services after moving.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="pathlib" version="stdlib">Used by CLI tools for file path handling</package>
+        <package name="argparse" version="stdlib">Used by CLI tools for command-line argument parsing</package>
+        <package name="asyncio" version="stdlib">Used by CLI tools for async operations</package>
+        <package name="sys" version="stdlib">Used by CLI tools for path manipulation</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - CLI tools must remain functional after move (no breaking import changes)
+    - Import paths in CLI tools use absolute imports from app.* (e.g., from app.services.pipeline.image_prompt_enhancement import ...)
+    - CLI tools add parent directory to sys.path to access app/ module: sys.path.insert(0, str(Path(__file__).parent.parent))
+    - After move, CLI tools will need sys.path updated to parent.parent (to access backend/app from backend/cli_tools)
+    - No changes to core pipeline services in app/services/pipeline/ - only CLI tool location changes
+    - CLI tools are standalone utilities for development/testing, not part of web application
+    - All CLI tools must have --help flag showing usage information
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>CLI Tool Pattern</name>
+      <kind>Command-line interface</kind>
+      <signature>python cli_tools/{tool_name}.py [args] [--help]</signature>
+      <path>backend/cli_tools/</path>
+    </interface>
+    <interface>
+      <name>Pipeline Service Imports</name>
+      <kind>Python module imports</kind>
+      <signature>from app.services.pipeline.{service} import {function}</signature>
+      <path>backend/app/services/pipeline/</path>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+Testing for this story is primarily manual verification. No new unit tests are required since this is a pure organizational change (moving files). Testing approach:
+1. **Manual execution testing**: Run each CLI tool with --help flag to verify no import errors
+2. **Functional testing**: Execute each CLI tool with sample inputs to ensure they still produce expected outputs
+3. **Documentation verification**: Ensure README.md accurately describes each tool and provides working examples
+
+Testing framework: pytest 7.4+ with pytest-asyncio for the main codebase, but this story requires only manual CLI testing.
+    </standards>
+    <locations>
+No new test files needed for this story. Existing tests for pipeline services remain at:
+- backend/tests/test_image_prompt_enhancement.py
+- backend/tests/test_video_prompt_enhancement.py
+- backend/tests/services/ (various pipeline service tests)
+
+CLI tools are manually tested via direct execution.
+    </locations>
+    <ideas>
+**Test Ideas Mapped to Acceptance Criteria:**
+
+**AC #1, #2: Directory Structure and CLI Tools Moved**
+- Verify backend/cli_tools/ directory exists after implementation
+- Verify all 5 CLI tools present in cli_tools/ directory
+- Verify no CLI tool files remain in backend/ root (except other utility scripts)
+
+**AC #3: CLI Tools Function Correctly**
+- Test: python cli_tools/enhance_image_prompt.py --help (should show usage)
+- Test: python cli_tools/generate_images.py --help (should show usage)
+- Test: python cli_tools/enhance_video_prompt.py --help (should show usage)
+- Test: python cli_tools/generate_videos.py --help (should show usage)
+- Test: python cli_tools/feedback_loop.py --help (should show usage, if feedback_loop.py exists)
+- Each should execute without ImportError or ModuleNotFoundError
+
+**AC #4: Documentation Updated**
+- Verify backend/cli_tools/README.md exists
+- Verify README contains section for each CLI tool
+- Verify README has usage examples for each tool
+- Verify README explains these are development/testing tools
+
+**AC #5: Import Paths Valid**
+- Manually inspect each CLI tool's import statements
+- Verify sys.path manipulation uses correct relative path (parent.parent after move)
+- Verify imports from app.services.pipeline.* work correctly
+- Run a simple CLI tool with actual input to confirm end-to-end import chain works
+    </ideas>
+  </tests>
+</story-context>
