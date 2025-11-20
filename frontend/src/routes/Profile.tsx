@@ -5,8 +5,16 @@
 import React, { useEffect, useState } from "react";
 import { useAuthStore } from "../store/authStore";
 import { getUserProfile } from "../lib/userService";
+import { getBrandStyles, deleteBrandStyles } from "../lib/services/brandStyleService";
+import { getProductImages, deleteProductImages } from "../lib/services/productImageService";
 import type { UserProfile } from "../lib/types/api";
+import type { BrandStyleUploadResponse, BrandStyleListResponse } from "../lib/types/api";
+import type { ProductImageUploadResponse, ProductImageListResponse } from "../lib/types/api";
 import { Button } from "../components/ui/Button";
+import { BrandStyleUpload } from "../components/brand/BrandStyleUpload";
+import { ProductImageUpload } from "../components/product/ProductImageUpload";
+import { ImageThumbnailGrid } from "../components/ui/ImageThumbnail";
+import { API_BASE_URL } from "../lib/config";
 
 /**
  * Format account creation date as "Member since: {month} {year}".
@@ -65,25 +73,101 @@ export const Profile: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [brandStyles, setBrandStyles] = useState<BrandStyleListResponse | null>(null);
+  const [productImages, setProductImages] = useState<ProductImageListResponse | null>(null);
+  const [loadingImages, setLoadingImages] = useState(true);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
+        setLoadingImages(true);
         setError(null);
-        const data = await getUserProfile();
-        setProfile(data);
+
+        // Fetch profile
+        const profileData = await getUserProfile();
+        setProfile(profileData);
+
+        // Fetch brand styles and product images
+        try {
+          const brandStylesData = await getBrandStyles();
+          setBrandStyles(brandStylesData);
+        } catch (err) {
+          console.error("Error loading brand styles:", err);
+          setBrandStyles({ images: [] });
+        }
+
+        try {
+          const productImagesData = await getProductImages();
+          setProductImages(productImagesData);
+        } catch (err) {
+          console.error("Error loading product images:", err);
+          setProductImages({ images: [] });
+        }
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load profile";
         setError(errorMessage);
       } finally {
         setLoading(false);
+        setLoadingImages(false);
       }
     };
 
-    fetchProfile();
+    fetchData();
   }, []);
+
+  const handleBrandStyleUploadSuccess = async (_response: BrandStyleUploadResponse) => {
+    // Refresh brand styles list
+    try {
+      const brandStylesData = await getBrandStyles();
+      setBrandStyles(brandStylesData);
+    } catch (err) {
+      console.error("Error refreshing brand styles:", err);
+    }
+  };
+
+  const handleProductImageUploadSuccess = async (_response: ProductImageUploadResponse) => {
+    // Refresh product images list
+    try {
+      const productImagesData = await getProductImages();
+      setProductImages(productImagesData);
+    } catch (err) {
+      console.error("Error refreshing product images:", err);
+    }
+  };
+
+  const handleDeleteBrandStyles = async () => {
+    if (!confirm("Are you sure you want to delete all brand style images? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await deleteBrandStyles();
+      // Refresh brand styles list
+      const brandStylesData = await getBrandStyles();
+      setBrandStyles(brandStylesData);
+    } catch (err) {
+      console.error("Error deleting brand styles:", err);
+      alert("Failed to delete brand style images. Please try again.");
+    }
+  };
+
+  const handleDeleteProductImages = async () => {
+    if (!confirm("Are you sure you want to delete all product images? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await deleteProductImages();
+      // Refresh product images list
+      const productImagesData = await getProductImages();
+      setProductImages(productImagesData);
+    } catch (err) {
+      console.error("Error deleting product images:", err);
+      alert("Failed to delete product images. Please try again.");
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -197,6 +281,96 @@ export const Profile: React.FC = () => {
                     {formatRelativeTime(profile.last_login)}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Brand Style Images Section */}
+            <div className="border-t border-gray-200 pt-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+                Brand Style Images
+              </h2>
+              <div className="space-y-4">
+                <BrandStyleUpload
+                  onUploadSuccess={handleBrandStyleUploadSuccess}
+                  onUploadError={(err) => console.error("Brand style upload error:", err)}
+                />
+                {loadingImages ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="mt-4 text-gray-600">Loading images...</p>
+                    </div>
+                  </div>
+                ) : brandStyles && brandStyles.images.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-700">
+                        {brandStyles.images.length} image{brandStyles.images.length !== 1 ? "s" : ""} uploaded
+                      </p>
+                      <Button
+                        variant="secondary"
+                        onClick={handleDeleteBrandStyles}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        Delete All
+                      </Button>
+                    </div>
+                    <ImageThumbnailGrid
+                      images={brandStyles.images}
+                      baseUrl={API_BASE_URL}
+                      emptyMessage="No brand style images uploaded"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No brand style images uploaded yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Product Images Section */}
+            <div className="border-t border-gray-200 pt-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+                Product Images
+              </h2>
+              <div className="space-y-4">
+                <ProductImageUpload
+                  onUploadSuccess={handleProductImageUploadSuccess}
+                  onUploadError={(err) => console.error("Product image upload error:", err)}
+                />
+                {loadingImages ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="mt-4 text-gray-600">Loading images...</p>
+                    </div>
+                  </div>
+                ) : productImages && productImages.images.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-700">
+                        {productImages.images.length} image{productImages.images.length !== 1 ? "s" : ""} uploaded
+                      </p>
+                      <Button
+                        variant="secondary"
+                        onClick={handleDeleteProductImages}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        Delete All
+                      </Button>
+                    </div>
+                    <ImageThumbnailGrid
+                      images={productImages.images}
+                      baseUrl={API_BASE_URL}
+                      emptyMessage="No product images uploaded yet"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No product images uploaded yet</p>
+                  </div>
+                )}
               </div>
             </div>
 

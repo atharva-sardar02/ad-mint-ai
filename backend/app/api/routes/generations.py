@@ -93,6 +93,11 @@ async def process_generation(
     image_path: Optional[str] = None,
     refinement_instructions: Optional[dict] = None,
     brand_name: Optional[str] = None,
+    product_image_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    top_note: Optional[str] = None,
+    heart_note: Optional[str] = None,
+    base_note: Optional[str] = None,
 ):
     """
     Background task to process video generation.
@@ -107,6 +112,11 @@ async def process_generation(
     logger.info(f"[{generation_id}]   - image_path: {image_path}")
     logger.info(f"[{generation_id}]   - refinement_instructions: {refinement_instructions}")
     logger.info(f"[{generation_id}]   - brand_name: {brand_name}")
+    logger.info(f"[{generation_id}]   - product_image_id: {product_image_id}")
+    logger.info(f"[{generation_id}]   - user_id: {user_id}")
+    logger.info(f"[{generation_id}]   - top_note: {top_note}")
+    logger.info(f"[{generation_id}]   - heart_note: {heart_note}")
+    logger.info(f"[{generation_id}]   - base_note: {base_note}")
     
     # Track generation start time
     generation_start_time = time.time()
@@ -171,6 +181,20 @@ async def process_generation(
                     )
                     logger.info(f"[{generation_id}] ✅ plan_storyboard() completed successfully")
                     logger.info(f"[{generation_id}] Storyboard plan keys: {list(storyboard_plan.keys()) if storyboard_plan else 'None'}")
+                    
+                    # Log storyboard plan summary for this generation
+                    if storyboard_plan:
+                        scenes = storyboard_plan.get("scenes", [])
+                        consistency_markers = storyboard_plan.get("consistency_markers", {})
+                        logger.info(f"[{generation_id}] 📋 Storyboard Plan Summary:")
+                        logger.info(f"[{generation_id}]   - Number of scenes: {len(scenes)}")
+                        logger.info(f"[{generation_id}]   - Consistency markers: {list(consistency_markers.keys())}")
+                        for idx, scene in enumerate(scenes, 1):
+                            scene_num = scene.get("scene_number", idx)
+                            duration = scene.get("duration_seconds", 0)
+                            aida = scene.get("aida_stage", "N/A")
+                            detailed_prompt = scene.get("detailed_prompt", "")[:100] + "..." if len(scene.get("detailed_prompt", "")) > 100 else scene.get("detailed_prompt", "")
+                            logger.info(f"[{generation_id}]   - Scene {scene_num} ({aida}): {duration}s - {detailed_prompt}")
                     
                     # Extract consistency markers and detailed prompts
                     consistency_markers = storyboard_plan.get("consistency_markers", {})
@@ -528,7 +552,81 @@ async def process_generation(
                     logger.error(f"[{generation_id}] Failed to generate images: {e}", exc_info=True)
                     raise
             
-            # STEP 3: Create scene plan from storyboard for video generation
+            # STEP 3: Enhance storyboard prompts with brand/product style (LLM Scene Assembler)
+            # This happens AFTER image generation so it can use Stage 2 control frames as context
+            if storyboard_plan:
+                # Load brand/product style JSON
+                brand_style_json = None
+                product_style_json = None
+                
+                # Load brand style JSON if user_id is available
+                if user_id:
+                    try:
+                        from app.db.models.brand_style import BrandStyleFolder
+                        brand_folder = db.query(BrandStyleFolder).filter(
+                            BrandStyleFolder.user_id == user_id
+                        ).first()
+                        if brand_folder and brand_folder.extracted_style_json:
+                            brand_style_json = brand_folder.extracted_style_json
+                            logger.info(f"[{generation_id}] ✅ Loaded brand style JSON for user {user_id}")
+                        else:
+                            logger.debug(f"[{generation_id}] No brand style JSON found for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Failed to load brand style JSON: {e}. Continuing without brand style.")
+                
+                # Load product style JSON if product_image_id is available
+                if product_image_id:
+                    try:
+                        from app.db.models.uploaded_image import UploadedImage
+                        product_image = db.query(UploadedImage).filter(
+                            UploadedImage.id == product_image_id,
+                            UploadedImage.folder_type == "product"
+                        ).first()
+                        if product_image and product_image.extracted_product_style_json:
+                            product_style_json = product_image.extracted_product_style_json
+                            logger.info(f"[{generation_id}] ✅ Loaded product style JSON for product image {product_image_id}")
+                        else:
+                            logger.debug(f"[{generation_id}] No product style JSON found for product image {product_image_id}")
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Failed to load product style JSON: {e}. Continuing without product style.")
+                
+                # Generate scent profile if fragrance notes are provided (store for video generation enhancement)
+                scent_profile = None
+                if top_note or heart_note or base_note:
+                    logger.info(f"[{generation_id}] Generating scent profile from fragrance notes...")
+                    try:
+                        from app.services.pipeline.kling_stage3_prompt_enhancer import generate_scent_profile
+                        
+                        scent_profile = await generate_scent_profile(
+                            top_note=top_note,
+                            heart_note=heart_note,
+                            base_note=base_note,
+                            model="gpt-4o",
+                        )
+                        
+                        if scent_profile:
+                            logger.info(f"[{generation_id}] ✅ Scent profile generated successfully")
+                        else:
+                            logger.warning(f"[{generation_id}] Scent profile generation returned None")
+                    except Exception as e:
+                        logger.error(f"[{generation_id}] Failed to generate scent profile: {e}", exc_info=True)
+                        logger.warning(f"[{generation_id}] Continuing without scent profile")
+                
+                # Store scent profile, brand style, and product style for video generation enhancement (NOT storyboard)
+                # These will be used to enhance visual_prompt at video generation time
+                if scent_profile or brand_style_json or product_style_json:
+                    if generation.coherence_settings is None:
+                        generation.coherence_settings = {}
+                    if scent_profile:
+                        generation.coherence_settings["scent_profile"] = scent_profile
+                    if brand_style_json:
+                        generation.coherence_settings["brand_style_json"] = brand_style_json
+                    if product_style_json:
+                        generation.coherence_settings["product_style_json"] = product_style_json
+                    db.commit()
+                    logger.info(f"[{generation_id}] ✅ Stored scent profile, brand style, and product style for video generation enhancement")
+            
+            # STEP 4: Create scene plan from storyboard for video generation
             if storyboard_plan:
                 scenes_data = storyboard_plan.get("scenes", [])
                 scenes = []
@@ -626,6 +724,16 @@ async def process_generation(
             # Video Generation Stage (30-70% progress)
             logger.info(f"[{generation_id}] Starting video generation stage (30-70% progress)")
             logger.info(f"[{generation_id}] Will generate {len(scene_plan.scenes)} video clips")
+            
+            # Load brand/product style and scent profile from coherence_settings for video prompt enhancement
+            # (These were stored earlier and are used to enhance visual_prompt at video generation time)
+            video_enhancement_brand_style = None
+            video_enhancement_product_style = None
+            video_enhancement_scent_profile = None
+            if generation.coherence_settings:
+                video_enhancement_brand_style = generation.coherence_settings.get("brand_style_json")
+                video_enhancement_product_style = generation.coherence_settings.get("product_style_json")
+                video_enhancement_scent_profile = generation.coherence_settings.get("scent_profile")
             
             # Setup temp storage directory
             temp_dir = Path("output/temp")
@@ -743,6 +851,10 @@ async def process_generation(
                             end_image_path=scene_end_image,  # PRIMARY: Controls last frame (unique per scene)
                             reference_image_path=scene_reference_image,  # SECONDARY: Style consistency (shared across scenes)
                             consistency_markers=consistency_markers,  # Pass shared markers for cohesion
+                            # Pass brand/product style and scent profile for video prompt enhancement (NOT storyboard)
+                            brand_style_json=video_enhancement_brand_style,
+                            product_style_json=video_enhancement_product_style,
+                            scent_profile=video_enhancement_scent_profile,
                         )
                         logger.info(f"[{generation_id}] Clip {scene_number} generated successfully: {clip_path} (model: {model_used})")
                         
@@ -1374,6 +1486,68 @@ async def create_generation(
     logger.info(f"  - coherence_settings: {request.coherence_settings}")
     logger.info(f"  - refinement_instructions: {request.refinement_instructions}")
     logger.info(f"  - brand_name: {request.brand_name}")
+    logger.info(f"  - product_image_id: {request.product_image_id}")
+    logger.info(f"  - top_note: {request.top_note}")
+    logger.info(f"  - heart_note: {request.heart_note}")
+    logger.info(f"  - base_note: {request.base_note}")
+    
+    # Handle product_image_id if provided
+    product_image_path = None
+    if request.product_image_id:
+        try:
+            from app.db.models.uploaded_image import UploadedImage
+            from app.db.models.product_image import ProductImageFolder
+            
+            # Query product image and validate it belongs to current user
+            product_image = db.query(UploadedImage).filter(
+                UploadedImage.id == request.product_image_id,
+                UploadedImage.folder_type == "product"
+            ).first()
+            
+            if not product_image:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={
+                        "error": {
+                            "code": "PRODUCT_IMAGE_NOT_FOUND",
+                            "message": f"Product image with ID {request.product_image_id} not found"
+                        }
+                    }
+                )
+            
+            # Validate that the product image belongs to the current user
+            product_folder = db.query(ProductImageFolder).filter(
+                ProductImageFolder.id == product_image.folder_id
+            ).first()
+            
+            if not product_folder or product_folder.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": {
+                            "code": "PRODUCT_IMAGE_ACCESS_DENIED",
+                            "message": "You do not have access to this product image"
+                        }
+                    }
+                )
+            
+            # Get the file path
+            product_image_path = product_image.file_path
+            logger.info(f"Loaded product image path: {product_image_path} for product_image_id: {request.product_image_id}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error loading product image: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": {
+                        "code": "PRODUCT_IMAGE_LOAD_FAILED",
+                        "message": "Failed to load product image"
+                    }
+                }
+            )
     
     # Process coherence settings: apply defaults if not provided, validate if provided
     coherence_settings_dict = None
@@ -1412,7 +1586,7 @@ async def create_generation(
     logger.info(f"Created generation {generation_id}")
     
     # Add background task to process the generation
-    # Pass model, target_duration, use_llm, refinement_instructions, and brand_name if specified
+    # Pass model, target_duration, use_llm, refinement_instructions, brand_name, product_image_path, and fragrance notes if specified
     background_tasks.add_task(
         process_generation,
         generation_id,
@@ -1420,9 +1594,14 @@ async def create_generation(
         request.model,
         request.target_duration,  # Use target_duration instead of num_clips
         request.use_llm if request.use_llm is not None else True,
-        None,  # image_path (for /api/generate endpoint, no image)
+        product_image_path,  # image_path: use product_image_path if product_image_id was provided, otherwise None
         request.refinement_instructions,  # Pass refinement instructions
         request.brand_name,  # Pass brand name if provided
+        request.product_image_id,  # Pass product_image_id for pipeline orchestrator
+        current_user.id,  # Pass user_id for pipeline orchestrator to load brand style JSON
+        request.top_note,  # Pass top note if provided
+        request.heart_note,  # Pass heart note if provided
+        request.base_note,  # Pass base note if provided
     )
     logger.info(f"[{generation_id}] ✅ Background task added successfully")
     

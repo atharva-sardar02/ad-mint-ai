@@ -220,6 +220,9 @@ async def generate_video_clip(
     start_image_path: Optional[str] = None,
     end_image_path: Optional[str] = None,
     consistency_markers: Optional[dict] = None,
+    brand_style_json: Optional[dict] = None,
+    product_style_json: Optional[dict] = None,
+    scent_profile: Optional[dict] = None,
 ) -> tuple[str, str]:
     """
     Generate a video clip from a scene using Replicate API.
@@ -260,6 +263,29 @@ async def generate_video_clip(
     )
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
+    
+    # Enhance visual_prompt with brand/product style and scent profile (if provided)
+    # This happens at video generation time, NOT at storyboard time
+    enhanced_prompt = scene.visual_prompt
+    if brand_style_json or product_style_json or scent_profile:
+        try:
+            from app.services.pipeline.kling_stage3_prompt_enhancer import enhance_video_prompt
+            logger.info(f"[{generation_id}] Enhancing video prompt with brand/product/scent info for scene {scene_number}...")
+            enhanced_prompt = await enhance_video_prompt(
+                base_prompt=scene.visual_prompt,
+                brand_style_json=brand_style_json,
+                product_style_json=product_style_json,
+                scent_profile=scent_profile,
+                model="gpt-4o",
+            )
+            logger.info(f"[{generation_id}] ✅ Enhanced prompt for scene {scene_number}: {enhanced_prompt[:200]}...")
+        except Exception as e:
+            logger.error(f"[{generation_id}] ❌ Failed to enhance prompt with brand/product/scent info: {e}", exc_info=True)
+            logger.warning(f"[{generation_id}] Using original prompt for scene {scene_number}")
+            enhanced_prompt = scene.visual_prompt
+    
+    # Store the final cinematic prompt that gets sent to KLING
+    scene.final_cinematic_prompt = enhanced_prompt
     
     # Try models in order: preferred_model (if specified) -> default (Kling 2.5 Turbo Pro) -> fallback chain
     models_to_try = []
@@ -307,7 +333,7 @@ async def generate_video_clip(
             
             video_url = await _generate_with_retry(
                 model_name=model_name,
-                prompt=scene.visual_prompt,
+                prompt=enhanced_prompt,  # Use enhanced prompt (with brand/product/scent info)
                 duration=scene.duration,
                 cancellation_check=cancellation_check,
                 seed=seed,
@@ -605,7 +631,9 @@ async def _generate_with_retry(
                 logger.info("=" * 80)
                 logger.info(f"🎬 KLING 2.5 TURBO PRO INPUT FOR {scene_info} (duration: {duration}s):")
                 logger.info("=" * 80)
-                logger.info(f"PROMPT: {enhanced_prompt[:100]}...")
+                logger.info(f"PROMPT (first 200 chars): {enhanced_prompt[:200]}...")
+                logger.info(f"FULL PROMPT:")
+                logger.info(enhanced_prompt)
                 if reference_image_path:
                     logger.info(f"📷 Reference Image: {reference_image_path}")
                 if start_image_path:
@@ -613,6 +641,9 @@ async def _generate_with_retry(
                 if end_image_path:
                     logger.info(f"🎬 End Image: {end_image_path}")
                 logger.info("=" * 80)
+                
+                # Log complete JSON structure that will be sent to KLING (after seed is added below)
+                # This will be logged again after seed is added, but we log here for reference
             else:
                 # Other models use aspect ratio as ratio string
                 input_params = {
@@ -658,10 +689,10 @@ async def _generate_with_retry(
             # file_handles_to_close is initialized above and populated when opening image files
             
             # Log complete input parameters being sent to Replicate (for debugging)
-            if model_name == "openai/sora-2":
+            if model_name in ["openai/sora-2", "kwaivgi/kling-v2.5-turbo-pro"]:
                 scene_info = f"SCENE {scene_number}" if scene_number else "SCENE"
                 logger.info("=" * 80)
-                logger.info(f"📤 COMPLETE INPUT PARAMETERS FOR {scene_info}:")
+                logger.info(f"📤 COMPLETE JSON INPUT PARAMETERS FOR {scene_info} ({model_name}):")
                 logger.info("=" * 80)
                 # Log all parameters except file objects (which can't be serialized)
                 loggable_params = {}

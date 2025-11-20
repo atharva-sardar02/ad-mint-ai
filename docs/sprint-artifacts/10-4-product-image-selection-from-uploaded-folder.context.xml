@@ -1,0 +1,122 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>10</epicId>
+    <storyId>10.4</storyId>
+    <title>Product Image Selection from Uploaded Folder</title>
+    <status>drafted</status>
+    <generatedAt>2025-01-17</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/10-4-product-image-selection-from-uploaded-folder.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>select a product image from my uploaded product folder when generating videos</iWant>
+    <soThat>I don't need to browse my computer's file system each time</soThat>
+    <tasks>
+      <task id="1" ac="1,3">Create Product Image Selection Component</task>
+      <task id="2" ac="1,3,4">Integrate Product Image Selection into Dashboard</task>
+      <task id="3" ac="2,6">Update Generation Service to Support Product Image ID</task>
+      <task id="4" ac="6">Update Generation Request Schema</task>
+      <task id="5" ac="2,6">Update Generation API Endpoint to Handle Product Image ID</task>
+      <task id="6" ac="2,6">Update Pipeline Orchestrator to Use Product Image File Path</task>
+      <task id="7" ac="2,4">Update Dashboard Form Submission</task>
+      <task id="8" ac="1,3">Add Product Image Service Integration</task>
+      <task id="9" ac="1,3">Create Image Thumbnail Component</task>
+      <task id="10" ac="1,2,6">Update TypeScript Types</task>
+      <task id="11" ac="1,2,3,4,5,6">Testing</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <ac id="1">Product Image Selection UI: User sees "Select Product Image" button/dropdown with thumbnails, can select image, see preview, clear selection, and optionally upload from computer</ac>
+    <ac id="2">Product Image Selection Workflow: Selected product image is used for generation, product style JSON extracted via Vision LLM, passed to scene assembler, generation proceeds with brand + product style consistency</ac>
+    <ac id="3">UI Display and Interaction: Clear visual distinction between folder selection vs file upload, grid layout thumbnails, hover preview, image count display, graceful empty state</ac>
+    <ac id="4">Fallback and Backward Compatibility: Falls back to file system upload when no product images available, user can still upload from computer</ac>
+    <ac id="5">Product Image Updates: New images become available after folder update, previously selected images remain valid if still exist</ac>
+    <ac id="6">Backend Integration: Backend receives product_image_id, loads file path from database, passes to pipeline, maintains backward compatibility with file upload flow</ac>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 10.4: Product Image Selection from Uploaded Folder" snippet="User story and acceptance criteria for product image selection UI and workflow integration" />
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-050" snippet="Functional requirement: Product Image Selection from Uploaded Folder - System shall allow users to select a product image from their uploaded product folder when generating videos" />
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="NFR-013" snippet="Error handling format: All API error responses use simple JSON structure with code and message fields" />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary" snippet="Frontend: React 18 + TypeScript + Vite, Tailwind CSS, React Router, Zustand. Backend: FastAPI, SQLAlchemy 2.x, Pydantic" />
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure" snippet="Frontend routes in src/routes/, components in src/components/, services in src/lib/services/. Backend API routes in app/api/routes/, schemas in app/schemas/" />
+      <doc path="docs/sprint-artifacts/10-1-brand-product-image-folder-upload-storage.md" title="Story 10.1" section="Tasks" snippet="Created product image upload API endpoints, database models, and frontend service for product image management" />
+      <doc path="docs/sprint-artifacts/10-3-brand-style-json-integration-with-scene-assembler.md" title="Story 10.3" section="Completion Notes" snippet="Pipeline orchestrator already accepts product_image_id parameter and loads product style JSON from UploadedImage model" />
+    </docs>
+    <code>
+      <file path="frontend/src/routes/Dashboard.tsx" kind="component" symbol="Dashboard" lines="1-821" reason="Main dashboard component that needs product image selection UI integration. Currently has reference image file upload (lines 683-775)" />
+      <file path="frontend/src/lib/services/productImageService.ts" kind="service" symbol="getProductImages" lines="47-50" reason="API service function to fetch user's uploaded product images list" />
+      <file path="frontend/src/lib/generationService.ts" kind="service" symbol="startGeneration, startGenerationWithImage" lines="100-320" reason="Generation service functions that need to accept product_image_id parameter" />
+      <file path="frontend/src/lib/types/api.ts" kind="types" symbol="ProductImageListResponse, UploadedImageResponse" lines="212-247" reason="TypeScript types for product image API responses" />
+      <file path="frontend/src/components/ui/ImageThumbnail.tsx" kind="component" symbol="ImageThumbnail" reason="Existing image thumbnail component that may need enhancement for product image selection" />
+      <file path="backend/app/api/routes/products.py" kind="route" symbol="get_product_images" lines="186-231" reason="GET /api/products endpoint that returns list of user's product images with URLs" />
+      <file path="backend/app/api/routes/generations.py" kind="route" symbol="POST /api/generate" lines="200-400" reason="Generation API endpoint that needs to extract product_image_id from request and pass to pipeline" />
+      <file path="backend/app/schemas/generation.py" kind="schema" symbol="GenerateRequest" lines="42-65" reason="Pydantic schema for generation request. Already has product_image_id: Optional[str] field (line 62-65)" />
+      <file path="backend/app/services/pipeline/pipeline_orchestrator.py" kind="service" symbol="generate_sora_prompt" lines="28-176" reason="Pipeline orchestrator that already accepts product_image_id, user_id, db parameters and loads product style JSON" />
+      <file path="backend/app/db/models/uploaded_image.py" kind="model" symbol="UploadedImage" lines="13-46" reason="Database model storing product image metadata with extracted_product_style_json field" />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="axios" version="^1.13.2" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="typescript" version="~5.9.3" />
+        <package name="tailwindcss" version="^4.1.17" />
+        <package name="vitest" version="^1.6.0" />
+        <package name="@testing-library/react" version="^16.1.0" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="pytest" version=">=7.4.0" />
+        <package name="httpx" version=">=0.24.0" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="architecture">Frontend: React 18 + TypeScript + Vite with Tailwind CSS. Component-based architecture with feature-based organization (components/product/, components/ui/)</constraint>
+    <constraint type="architecture">Backend: FastAPI with SQLAlchemy ORM. Use dependency injection pattern for database sessions (get_db dependency)</constraint>
+    <constraint type="api">All API errors must follow PRD format: {"error": {"code": "...", "message": "..."}}</constraint>
+    <constraint type="security">Backend must validate that product_image_id belongs to current user before using it. Use get_current_user dependency for authentication</constraint>
+    <constraint type="compatibility">System must maintain backward compatibility: support both product_image_id selection and file upload. Mutually exclusive - user cannot select both simultaneously</constraint>
+    <constraint type="state">Frontend: Use local component state for form data (selectedProductImageId), Zustand for global auth/user state only</constraint>
+    <constraint type="testing">Unit tests for components, integration tests for API endpoints, end-to-end tests for full workflow. Use Vitest for frontend, pytest for backend</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="GET /api/products" kind="REST endpoint" signature="GET /api/products - Returns ProductImageListResponse with images array" path="backend/app/api/routes/products.py:186" />
+    <interface name="POST /api/generate" kind="REST endpoint" signature="POST /api/generate - Accepts GenerateRequest with optional product_image_id field" path="backend/app/api/routes/generations.py" />
+    <interface name="getProductImages" kind="function" signature="getProductImages(): Promise&lt;ProductImageListResponse&gt;" path="frontend/src/lib/services/productImageService.ts:47" />
+    <interface name="startGeneration" kind="function" signature="startGeneration(prompt, model?, targetDuration?, useLlm?, coherenceSettings?, title?, brandName?, productImageId?): Promise&lt;void&gt;" path="frontend/src/lib/generationService.ts" />
+    <interface name="generate_sora_prompt" kind="function" signature="generate_sora_prompt(user_prompt, user_scent_notes?, product_image_id?, user_id?, db?, ...): Dict[str, Any]" path="backend/app/services/pipeline/pipeline_orchestrator.py:28" />
+    <interface name="GenerateRequest" kind="Pydantic model" signature="GenerateRequest(prompt: str, product_image_id: Optional[str] = None, ...)" path="backend/app/schemas/generation.py:42" />
+    <interface name="UploadedImage" kind="SQLAlchemy model" signature="UploadedImage(id, folder_id, folder_type, filename, file_path, extracted_product_style_json, ...)" path="backend/app/db/models/uploaded_image.py:13" />
+  </interfaces>
+
+  <tests>
+    <standards>Frontend: Use Vitest with @testing-library/react for component testing. Test user interactions, state changes, and API integration. Backend: Use pytest with httpx for API endpoint testing. Test authentication, validation, database queries, and error handling. Follow AAA pattern (Arrange, Act, Assert).</standards>
+    <locations>
+      <location>frontend/src/**/*.test.tsx</location>
+      <location>frontend/src/**/*.test.ts</location>
+      <location>backend/tests/test_*.py</location>
+      <location>backend/tests/integration/test_*.py</location>
+    </locations>
+    <ideas>
+      <test ac="1">Test ProductImageSelector component: empty state display, image grid rendering, image selection, clear selection, hover preview</test>
+      <test ac="1,3,4">Test Dashboard integration: product image selector appears when images available, fallback to file upload when no images, both options cannot be selected simultaneously</test>
+      <test ac="2,6">Test form submission: with product image ID, with file upload (backward compatibility), product image ID passed to generation service</test>
+      <test ac="6">Test backend API: generation with valid product_image_id, invalid product_image_id (not found), product_image_id belonging to different user (security), without product_image_id (backward compatibility)</test>
+      <test ac="2">Test pipeline integration: product image file path loaded from database, passed to Vision LLM extractor, passed to scene assembler, product style JSON incorporated</test>
+      <test ac="5">Test product image updates: new images available after folder update, previously selected images remain valid</test>
+    </ideas>
+  </tests>
+</story-context>
+

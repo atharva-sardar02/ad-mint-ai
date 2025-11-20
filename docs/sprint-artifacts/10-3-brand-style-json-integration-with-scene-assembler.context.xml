@@ -1,0 +1,238 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>10</epicId>
+    <storyId>10.3</storyId>
+    <title>Brand Style JSON Integration with Scene Assembler</title>
+    <status>drafted</status>
+    <generatedAt>2025-01-17</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/10-3-brand-style-json-integration-with-scene-assembler.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>system</asA>
+    <iWant>to feed extracted brand style JSON into the scene assembler</iWant>
+    <soThat>generated scene text incorporates consistent brand styling</soThat>
+    <tasks>
+      <task id="1" ac="1,2,6">Update Database Models for Brand Style JSON Storage - check if BrandStyleFolder/ProductImageFolder/UploadedImage need extracted_style_json field, add JSON fields if needed, create migration</task>
+      <task id="2" ac="1,2,3,4">Modify Stage 3 Scene Assembler Function Signature - add optional brand_style_json and product_style_json parameters to run_stage3_scene_assembler()</task>
+      <task id="3" ac="3,4,5">Update Stage 3 Scene Assembler Prompt - add instructions for incorporating brand/product style information (colors, visual style, lighting, textures, atmosphere)</task>
+      <task id="4" ac="3,5">Integrate Brand Style JSON into Scene Assembler Prompt Context - append brand style JSON to prompt, format for LLM consumption</task>
+      <task id="5" ac="4,5">Integrate Product Style JSON into Scene Assembler Prompt Context - append product style JSON to prompt when available</task>
+      <task id="6" ac="1,6,7,8">Update Pipeline Orchestrator to Load Brand Style JSON - query BrandStyleFolder for user, load extracted_style_json, handle missing JSON gracefully, add logging</task>
+      <task id="7" ac="2,6,7,8">Update Pipeline Orchestrator to Load Product Style JSON - accept product_image_id parameter, query database for product style JSON, handle missing JSON</task>
+      <task id="8" ac="1,2,3,4,5">Pass Brand and Product Style JSON to Stage 3 - update pipeline_orchestrator.py to pass brand_style_json and product_style_json to run_stage3_scene_assembler()</task>
+      <task id="9" ac="1,2,3,4">Update LLM Schemas - add BrandStyleJSON and ProductStyleJSON Pydantic models if not already defined, match Story 10.2 structure</task>
+      <task id="10" ac="8">Add Logging for Brand Style Application - log when brand/product style JSON is loaded, applied, or missing</task>
+      <task id="11" ac="2,7">Update Generation API Endpoint - review POST /api/generate to accept product_image_id parameter if needed, update request schema</task>
+      <task id="12" ac="1,2,3,4,5,6,7,8">Testing - unit tests for run_stage3_scene_assembler() with/without brand/product style JSON, integration tests for pipeline orchestrator, full generation flow tests, error handling tests</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">Brand Style JSON Loading: System loads user's extracted brand style JSON from database when executing Stage 3</criterion>
+    <criterion id="2">Product Style JSON Loading: System loads product style JSON if product image was selected for this generation</criterion>
+    <criterion id="3">Brand Style Integration into Prompt: Brand style JSON appended to Stage 3 prompt context with instructions to incorporate colors, visual style, lighting, textures, atmosphere</criterion>
+    <criterion id="4">Product Style Integration into Prompt: Product style JSON included to inform product appearance and context when available</criterion>
+    <criterion id="5">Scene Text Generation with Brand Style: Generated scene text reflects brand color palette, visual style, lighting cues, atmosphere, and product characteristics</criterion>
+    <criterion id="6">Brand Style Persistence: Brand style JSON persists across all user generations, automatically applied, can be disabled per-generation (future)</criterion>
+    <criterion id="7">Backward Compatibility: Generations work without brand style JSON if user hasn't uploaded images</criterion>
+    <criterion id="8">Error Handling: System handles missing brand/product style JSON gracefully, logs when brand style is applied, continues generation without brand style if extraction failed</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 10: Brand &amp; Product Image Consistency - Story 10.3">
+        Story details: Brand Style JSON Integration with Scene Assembler (FR-049, FR-051). Includes acceptance criteria, technical notes, and prerequisites (Story 10.2 Vision LLM Style Extraction, Story 3.1 LLM Enhancement). Brand style JSON structure includes color_palette, visual_style, lighting_cues, texture_surfaces, atmosphere_density, brand_markers.
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 10: Brand &amp; Product Image Consistency - Story 10.2">
+        Story 10.2 defines brand style JSON structure: color_palette (primary/secondary/accent colors), visual_style (aesthetic, mood, composition_style), typography, lighting_cues, texture_surfaces, atmosphere_density, brand_markers. Product style JSON structure: product_characteristics (form_factor, material_appearance, surface_quality), visual_style, color_profile, product_usage_context.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-049, FR-051">
+        FR-049: Brand Style Integration - System shall incorporate extracted brand style JSON into scene generation to ensure consistent brand styling. FR-051: Product Style Integration - System shall incorporate product style JSON when product image is selected for generation.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="NFR-013">
+        Error Messages &amp; Basic Error Handling: All API error responses shall use simple JSON structure with error.code and error.message fields.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Project Structure">
+        Backend structure: app/services/pipeline/ for pipeline stages, app/db/models/ for database models, app/schemas/ for Pydantic schemas. Pipeline architecture: 3-stage pipeline (Stage 1: Blueprint, Stage 2: Scent Profile, Stage 3: Scene Assembler).
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Decision Summary">
+        Backend: FastAPI as HTTP API layer, SQLAlchemy + Pydantic for persistence and validation. Pipeline orchestration within single FastAPI process for MVP.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Implementation Patterns">
+        Pipeline Orchestration: Single orchestration function coordinates pipeline stages. Generation record created at start with status=pending and updated step-by-step. Error Handling: All API errors follow PRD JSON structure.
+      </doc>
+      <doc path="docs/sprint-artifacts/10-1-brand-product-image-folder-upload-storage.md" title="Story 10.1: Brand &amp; Product Image Folder Upload &amp; Storage" section="Dev Notes">
+        Database models created: BrandStyleFolder, ProductImageFolder, UploadedImage with relationships. Storage structure: backend/assets/users/{user_id}/brand_styles/ and products/. API endpoints: GET /api/brand-styles, GET /api/products. Database session pattern from FastAPI dependency injection.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/stage3_scene_assembler.py" kind="service" symbol="run_stage3_scene_assembler" lines="53-111" reason="Main function to modify - add optional brand_style_json and product_style_json parameters, integrate into prompt context">
+        Current function signature: run_stage3_scene_assembler(stage1_blueprint, scent_profile, model). Must add brand_style_json: Optional[Dict[str, Any]] and product_style_json: Optional[Dict[str, Any]] parameters. Function constructs user_message from stage1_text and stage2_text, then calls LLM with STAGE3_SCENE_ASSEMBLER_PROMPT.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/pipeline_orchestrator.py" kind="service" symbol="generate_sora_prompt" lines="24-117" reason="Pipeline orchestrator to modify - load brand/product style JSON from database, pass to Stage 3">
+        Current function signature: generate_sora_prompt(user_prompt, user_scent_notes, reference_image_path, reference_image_usage, style_tone). Must add product_image_id: Optional[str] parameter. Function orchestrates Stage 1, Stage 2, Stage 3. Must load brand style JSON before Stage 3, load product style JSON if product_image_id provided, pass both to run_stage3_scene_assembler().
+      </artifact>
+      <artifact path="backend/app/services/pipeline/prompts/stage3_scene_assembler_prompt.txt" kind="prompt" symbol="STAGE3_SCENE_ASSEMBLER_PROMPT" reason="Prompt file to update - add instructions for incorporating brand/product style information">
+        Current prompt receives Stage 1 Blueprint and Stage 2 Cinematic Profile. Must add section for brand style JSON integration: instructions to incorporate brand colors, visual style, lighting cues, textures, atmosphere. Add section for product style JSON integration when available.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/prompts/__init__.py" kind="module" symbol="load_prompt, STAGE3_SCENE_ASSEMBLER_PROMPT" lines="10-19" reason="Prompt loading utility - loads stage3_scene_assembler_prompt.txt from prompts directory">
+        Shows how prompts are loaded from .txt files in prompts/ directory. STAGE3_SCENE_ASSEMBLER_PROMPT loaded via load_prompt("stage3_scene_assembler_prompt.txt").
+      </artifact>
+      <artifact path="backend/app/services/pipeline/text_converters.py" kind="utility" symbol="stage1_to_text, stage2_to_text" lines="12-45" reason="Text conversion utilities - may need brand_style_to_text() and product_style_to_text() functions">
+        Functions convert Stage1Blueprint and ScentProfile to readable text format for LLM. May need similar functions to format brand style JSON and product style JSON as readable text for prompt context.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/llm_client.py" kind="service" symbol="call_chat_model" lines="15-101" reason="LLM client wrapper - used by stage3_scene_assembler to call OpenAI API">
+        Async function that calls OpenAI chat models. Takes messages list with role/content, model name, temperature, max_output_tokens. Used by run_stage3_scene_assembler() to generate scene text.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/llm_schemas.py" kind="schema" symbol="Stage1Blueprint, ScentProfile" lines="28-83" reason="Pydantic schemas for pipeline data - may need BrandStyleJSON and ProductStyleJSON schemas">
+        Contains Stage1Blueprint and ScentProfile Pydantic models. May need to add BrandStyleJSON and ProductStyleJSON Pydantic models matching structure from Story 10.2 (color_palette, visual_style, lighting_cues, etc.).
+      </artifact>
+      <artifact path="backend/app/db/models/brand_style.py" kind="model" symbol="BrandStyleFolder" lines="13-26" reason="Database model to query - may need to add extracted_style_json JSON field">
+        BrandStyleFolder model with id, user_id, uploaded_at, image_count. May need to add extracted_style_json: Column(JSON) field to store brand style JSON from Story 10.2.
+      </artifact>
+      <artifact path="backend/app/db/models/product_image.py" kind="model" symbol="ProductImageFolder" lines="13-26" reason="Database model to query - may need extracted_style_json field or check UploadedImage model">
+        ProductImageFolder model with id, user_id, uploaded_at, image_count. Product style JSON may be stored in UploadedImage model (per-image) or ProductImageFolder model (per-folder).
+      </artifact>
+      <artifact path="backend/app/db/models/uploaded_image.py" kind="model" symbol="UploadedImage" reason="Database model to query - may need extracted_style_json field for product images">
+        UploadedImage model stores individual image metadata. May need extracted_style_json: Column(JSON) field if product style JSON is stored per-image (when user selects specific product image).
+      </artifact>
+      <artifact path="backend/app/db/base.py" kind="base" symbol="Base, engine, SessionLocal" reason="SQLAlchemy base class and session factory - all models inherit from Base">
+        Base class for all ORM models. Use SessionLocal for database sessions. Pipeline orchestrator will need database session to query BrandStyleFolder and UploadedImage models.
+      </artifact>
+      <artifact path="backend/app/api/routes/generations.py" kind="controller" symbol="POST /api/generate" reason="Generation API endpoint - may need to accept product_image_id parameter">
+        POST /api/generate endpoint that initiates video generation. May need to accept product_image_id: Optional[str] in request body, pass to pipeline_orchestrator.generate_sora_prompt().
+      </artifact>
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_current_user" reason="Authentication dependency - used to get current user for database queries">
+        FastAPI dependency that extracts JWT token and returns User object. Pipeline orchestrator will need user_id to query BrandStyleFolder for current user.
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" purpose="HTTP API framework"/>
+        <package name="sqlalchemy" version=">=2.0.0" purpose="ORM for querying BrandStyleFolder, ProductImageFolder, UploadedImage models"/>
+        <package name="pydantic" version=">=2.0.0" purpose="Schema validation for BrandStyleJSON and ProductStyleJSON models"/>
+        <package name="openai" version=">=1.0.0" purpose="OpenAI API client for LLM calls in stage3_scene_assembler"/>
+        <package name="typing" version="built-in" purpose="Optional, Dict, Any type hints for function signatures"/>
+        <package name="json" version="built-in" purpose="JSON serialization for brand/product style JSON storage and formatting"/>
+        <package name="logging" version="built-in" purpose="Structured logging for brand style application tracking"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="backward-compatibility">All new parameters must be optional with default None values. Generations without brand/product style JSON must work exactly as before. Check if brand/product style JSON exists before incorporating into prompt.</constraint>
+    <constraint type="database-session">Use SQLAlchemy session from FastAPI dependency injection pattern. Query BrandStyleFolder for current user to get extracted_style_json field. Query UploadedImage or ProductImageFolder for product style JSON if product_image_id provided.</constraint>
+    <constraint type="prompt-integration">Brand style JSON must be formatted as readable text and appended to Stage 3 prompt context. Clearly label and separate from other context. Include in user message or system prompt appropriately.</constraint>
+    <constraint type="error-handling">If brand/product style JSON doesn't exist or is None, continue without it (backward compatibility). Log warning when brand style JSON is missing. Log when brand style JSON is loaded and applied.</constraint>
+    <constraint type="logging">Use structured logging format consistent with existing pipeline logging patterns. Log when brand/product style JSON is loaded, applied, or missing. Use logger from logging module.</constraint>
+    <constraint type="schema">Brand style JSON and product style JSON schemas must match structure expected from Story 10.2 (Vision LLM extraction). Add Pydantic models if not already defined in llm_schemas.py.</constraint>
+    <constraint type="function-signature">Modify run_stage3_scene_assembler() to accept optional brand_style_json and product_style_json parameters. Maintain backward compatibility with existing calls.</constraint>
+    <constraint type="prompt-update">Update STAGE3_SCENE_ASSEMBLER_PROMPT to include instructions for incorporating brand style information (colors, visual style, lighting, textures, atmosphere) and product style information when available.</constraint>
+    <constraint type="database-migration">If adding extracted_style_json fields to models, create database migration script. Ensure migration handles existing records (set to NULL if not available). Support both SQLite and PostgreSQL.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="run_stage3_scene_assembler" kind="function" signature="async def run_stage3_scene_assembler(
+    stage1_blueprint: Stage1Blueprint,
+    scent_profile: ScentProfile,
+    brand_style_json: Optional[Dict[str, Any]] = None,
+    product_style_json: Optional[Dict[str, Any]] = None,
+    model: str = DEFAULT_MODEL,
+) -> List[str]" path="backend/app/services/pipeline/stage3_scene_assembler.py">
+      Stage 3 scene assembler function. Must be modified to accept optional brand_style_json and product_style_json parameters. Incorporates brand/product style JSON into prompt context, generates 5 cinematic scene paragraphs.
+    </interface>
+    <interface name="generate_sora_prompt" kind="function" signature="async def generate_sora_prompt(
+    user_prompt: str,
+    user_scent_notes: Optional[str] = None,
+    product_image_id: Optional[str] = None,
+    *,
+    reference_image_path: str = "{{REFERENCE_IMAGE_PATH}}",
+    reference_image_usage: str = "inspiration for mood and composition",
+    style_tone: str = "cinematic, TikTok-ready, emotionally vivid",
+) -> Dict[str, Any]" path="backend/app/services/pipeline/pipeline_orchestrator.py">
+      Pipeline orchestrator function. Must be modified to accept optional product_image_id parameter, load brand style JSON from database, load product style JSON if product_image_id provided, pass both to run_stage3_scene_assembler().
+    </interface>
+    <interface name="BrandStyleFolder" kind="SQLAlchemy model" signature="class BrandStyleFolder(Base):
+      __tablename__ = 'brand_style_folders'
+      id: str (PK)
+      user_id: str (FK to users.id, unique)
+      uploaded_at: datetime
+      image_count: int
+      extracted_style_json: JSON (may need to add)
+      user: relationship('User', back_populates='brand_style_folder')
+      images: relationship('UploadedImage', back_populates='brand_style_folder')" path="backend/app/db/models/brand_style.py">
+      Database model for brand style folder. May need to add extracted_style_json: Column(JSON) field to store brand style JSON from Story 10.2. Query this model to get user's brand style JSON.
+    </interface>
+    <interface name="UploadedImage" kind="SQLAlchemy model" signature="class UploadedImage(Base):
+      __tablename__ = 'uploaded_images'
+      id: str (PK)
+      folder_id: str (FK)
+      folder_type: str (enum: 'brand_style' or 'product')
+      filename: str
+      file_path: str
+      file_size: int
+      uploaded_at: datetime
+      extracted_style_json: JSON (may need to add for product images)
+      brand_style_folder: relationship('BrandStyleFolder')
+      product_image_folder: relationship('ProductImageFolder')" path="backend/app/db/models/uploaded_image.py">
+      Database model for uploaded images. May need to add extracted_style_json: Column(JSON) field if product style JSON is stored per-image (when user selects specific product image for generation).
+    </interface>
+    <interface name="POST /api/generate" kind="REST endpoint" signature="POST /api/generate
+      Headers: Authorization: Bearer {jwt_token}
+      Body: {
+        prompt: string,
+        user_scent_notes?: string,
+        product_image_id?: string (may need to add),
+        reference_image_path?: string,
+        ...
+      }
+      Response: { generation_id: string, status: string }
+      Errors: 400 (validation), 401 (unauthorized), 500 (server error)" path="backend/app/api/routes/generations.py">
+      Generation API endpoint. May need to accept product_image_id: Optional[str] in request body, pass to pipeline_orchestrator.generate_sora_prompt().
+    </interface>
+    <interface name="STAGE3_SCENE_ASSEMBLER_PROMPT" kind="prompt template" signature="SYSTEM: STAGE 3 — CINEMATIC SCENE ASSEMBLER (Option C — Full Cinematic, TikTok-Style)
+
+ROLE:
+You receive:
+1. STAGE 1 BLUEPRINT (5 scenes with: visual, action, camera, lighting, mood, product_usage)
+2. STAGE 2 CINEMATIC PROFILE (lighting_cues, color_palette, motion_physics, surface_textures, atmosphere_density, sound_motifs, emotional_register)
+3. BRAND STYLE INFORMATION (optional - brand colors, visual style, lighting cues, textures, atmosphere)
+4. PRODUCT STYLE INFORMATION (optional - product characteristics, visual style, color profile)
+
+You must turn this into 5 **cinematic paragraphs**, one per scene, Sora-ready.
+
+[Instructions for incorporating brand/product style information must be added]" path="backend/app/services/pipeline/prompts/stage3_scene_assembler_prompt.txt">
+      Stage 3 scene assembler prompt. Must be updated to include instructions for incorporating brand style information (colors, visual style, lighting, textures, atmosphere) and product style information when available.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>Backend tests use pytest with pytest-asyncio for async function tests. Test run_stage3_scene_assembler() with brand style JSON, product style JSON, both, and neither (backward compatibility). Test pipeline orchestrator loading brand/product style JSON from database. Test full generation flow with brand/product style JSON. Test error handling when brand/product style JSON is missing. Verify logging statements. Test that generated scene text reflects brand style information. Use mocking for database queries and LLM calls in unit tests. Integration tests use test database with actual models.</standards>
+    <locations>Backend unit tests: `backend/tests/unit/test_stage3_scene_assembler.py` (create if doesn't exist), `backend/tests/unit/test_pipeline_orchestrator.py` (create if doesn't exist). Backend integration tests: `backend/tests/integration/test_brand_style_integration.py` (create), `backend/tests/integration/test_pipeline_with_brand_style.py` (create).</locations>
+    <ideas>
+      <test ac="1">Test run_stage3_scene_assembler() loads brand style JSON when provided, incorporates into prompt context</test>
+      <test ac="2">Test run_stage3_scene_assembler() loads product style JSON when provided, incorporates into prompt context</test>
+      <test ac="3">Test brand style JSON is formatted and appended to Stage 3 prompt context correctly</test>
+      <test ac="4">Test product style JSON is formatted and appended to Stage 3 prompt context when available</test>
+      <test ac="5">Test generated scene text reflects brand color palette, visual style, lighting cues, atmosphere</test>
+      <test ac="5">Test generated scene text reflects product characteristics from product style JSON when provided</test>
+      <test ac="6">Test brand style JSON persists across multiple generations for same user</test>
+      <test ac="7">Test run_stage3_scene_assembler() works without brand/product style JSON (backward compatibility)</test>
+      <test ac="7">Test pipeline orchestrator handles missing brand style JSON gracefully (user hasn't uploaded images)</test>
+      <test ac="8">Test error handling when brand style JSON extraction failed (missing or None)</test>
+      <test ac="8">Test error handling when product style JSON extraction failed (missing or None)</test>
+      <test ac="8">Test logging when brand style JSON is loaded and applied</test>
+      <test ac="8">Test logging when brand style JSON is missing (warning level)</test>
+      <test general="true">Test pipeline orchestrator queries BrandStyleFolder correctly for current user</test>
+      <test general="true">Test pipeline orchestrator queries UploadedImage/ProductImageFolder correctly when product_image_id provided</test>
+      <test general="true">Test database migration script adds extracted_style_json field correctly (if needed)</test>
+      <test general="true">Test POST /api/generate accepts product_image_id parameter and passes to pipeline orchestrator</test>
+      <test general="true">Test full generation flow with brand style JSON end-to-end</test>
+      <test general="true">Test full generation flow with product style JSON end-to-end</test>
+      <test general="true">Test full generation flow with both brand and product style JSON end-to-end</test>
+    </ideas>
+  </tests>
+</story-context>
+

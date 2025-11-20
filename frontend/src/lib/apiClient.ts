@@ -23,6 +23,7 @@ const apiClient: AxiosInstance = axios.create({
 /**
  * Request interceptor: Adds JWT token to Authorization header.
  * Reads token from localStorage and adds it to the request if available.
+ * Also handles FormData by removing Content-Type header to let browser set it with boundary.
  */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -30,6 +31,13 @@ apiClient.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // If the request body is FormData, remove Content-Type header
+    // to let the browser set it automatically with the boundary parameter
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers["Content-Type"];
+    }
+    
     return config;
   },
   (error) => {

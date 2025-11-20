@@ -17,7 +17,12 @@ import { StoryboardVisualizer } from "../components/storyboard";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse, GenerateRequest } from "../lib/generationService";
 import { getUserProfile } from "../lib/userService";
-import type { UserProfile } from "../lib/types/api";
+import type { UserProfile, UploadedImageResponse } from "../lib/types/api";
+import { getProductImages, deleteProductImages } from "../lib/services/productImageService";
+import { getBrandStyles, deleteBrandStyles } from "../lib/services/brandStyleService";
+import type { BrandStyleListResponse } from "../lib/types/api";
+import { ImageThumbnailGrid } from "../components/ui/ImageThumbnail";
+import { API_BASE_URL } from "../lib/config";
 
 const MIN_PROMPT_LENGTH = 10;
 
@@ -36,6 +41,9 @@ export const Dashboard: React.FC = () => {
   const [prompt, setPrompt] = useState("");
   const [title, setTitle] = useState("");
   const [brandName, setBrandName] = useState("");
+  const [topNote, setTopNote] = useState("");
+  const [heartNote, setHeartNote] = useState("");
+  const [baseNote, setBaseNote] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [apiError, setApiError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
@@ -64,8 +72,12 @@ export const Dashboard: React.FC = () => {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
-  const [referenceImage, setReferenceImage] = useState<File | null>(null);
-  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
+  const [productImages, setProductImages] = useState<UploadedImageResponse[]>([]);
+  const [selectedProductImageId, setSelectedProductImageId] = useState<string | null>(null);
+  const [productImagesLoading, setProductImagesLoading] = useState(false);
+  const [brandStyles, setBrandStyles] = useState<BrandStyleListResponse | null>(null);
+  const [brandStylesLoading, setBrandStylesLoading] = useState(false);
+  const [isImageGalleryOpen, setIsImageGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -95,6 +107,74 @@ export const Dashboard: React.FC = () => {
     };
 
     fetchProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  /**
+   * Fetch product images on component mount.
+   */
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchProductImages = async () => {
+      setProductImagesLoading(true);
+      try {
+        const response = await getProductImages();
+        
+        // Check if component is still mounted before updating state
+        if (!isMounted) return;
+        
+        setProductImages(response.images);
+      } catch (error) {
+        // Silently fail - user may not have uploaded product images yet
+        if (isMounted) {
+          console.warn("Failed to fetch product images:", error);
+        }
+      } finally {
+        if (isMounted) {
+          setProductImagesLoading(false);
+        }
+      }
+    };
+
+    fetchProductImages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  /**
+   * Fetch brand styles on component mount.
+   */
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchBrandStyles = async () => {
+      setBrandStylesLoading(true);
+      try {
+        const response = await getBrandStyles();
+        
+        // Check if component is still mounted before updating state
+        if (!isMounted) return;
+        
+        setBrandStyles(response);
+      } catch (error) {
+        // Silently fail - user may not have uploaded brand styles yet
+        if (isMounted) {
+          console.warn("Failed to fetch brand styles:", error);
+        }
+      } finally {
+        if (isMounted) {
+          setBrandStylesLoading(false);
+        }
+      }
+    };
+
+    fetchBrandStyles();
 
     return () => {
       isMounted = false;
@@ -180,16 +260,6 @@ export const Dashboard: React.FC = () => {
     setApiError(""); // Clear API error when user types
   }, [prompt]);
 
-  /**
-   * Cleanup object URL when reference image preview changes/unmounts.
-   */
-  useEffect(() => {
-    return () => {
-      if (referenceImagePreview) {
-        URL.revokeObjectURL(referenceImagePreview);
-      }
-    };
-  }, [referenceImagePreview]);
 
   /**
    * Poll status endpoint every 2 seconds when there's an active generation.
@@ -337,16 +407,10 @@ export const Dashboard: React.FC = () => {
     setErrors({});
 
     try {
-      if (referenceImage) {
-        // When a reference image is provided, use the dedicated image endpoint.
-        await generationService.startGenerationWithImage(
-          prompt,
-          referenceImage,
-          basicSettings.model || undefined,
-          basicSettings.targetDuration || undefined,
-          brandName || undefined
-        );
-      } else if (basicSettings.useSingleClip) {
+      // Use selected product image if available
+      const useProductImageId = selectedProductImageId !== null;
+      
+      if (basicSettings.useSingleClip) {
         if (!basicSettings.model) {
           setApiError("Please select a model for single clip generation");
           setIsLoading(false);
@@ -355,7 +419,8 @@ export const Dashboard: React.FC = () => {
         await generationService.startSingleClipGeneration(
           prompt,
           basicSettings.model,
-          basicSettings.targetDuration
+          basicSettings.targetDuration,
+          useProductImageId ? selectedProductImageId : undefined
         );
       } else {
         await generationService.startGeneration(
@@ -365,7 +430,11 @@ export const Dashboard: React.FC = () => {
           basicSettings.useLlm,
           coherenceSettings,
           title || undefined,
-          brandName || undefined
+          brandName || undefined,
+          useProductImageId ? selectedProductImageId : undefined,
+          topNote || undefined,
+          heartNote || undefined,
+          baseNote || undefined
         );
       }
       
@@ -373,11 +442,10 @@ export const Dashboard: React.FC = () => {
       setPrompt("");
       setTitle("");
       setBrandName("");
-      setReferenceImage(null);
-      if (referenceImagePreview) {
-        URL.revokeObjectURL(referenceImagePreview);
-        setReferenceImagePreview(null);
-      }
+      setTopNote("");
+      setHeartNote("");
+      setBaseNote("");
+      setSelectedProductImageId(null);
       setIsLoading(false);
       
       // Show notification
@@ -459,6 +527,75 @@ export const Dashboard: React.FC = () => {
     setErrors({});
   };
 
+  /**
+   * Handle deletion of brand styles.
+   */
+  const handleDeleteBrandStyles = async () => {
+    if (!confirm("Are you sure you want to delete all brand style images? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await deleteBrandStyles();
+      // Refresh brand styles list
+      const brandStylesData = await getBrandStyles();
+      setBrandStyles(brandStylesData);
+      setToast({
+        message: "Brand style images deleted successfully",
+        type: "success",
+        isVisible: true,
+      });
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
+    } catch (err) {
+      console.error("Error deleting brand styles:", err);
+      setToast({
+        message: "Failed to delete brand style images. Please try again.",
+        type: "error",
+        isVisible: true,
+      });
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
+    }
+  };
+
+  /**
+   * Handle deletion of product images.
+   */
+  const handleDeleteProductImages = async () => {
+    if (!confirm("Are you sure you want to delete all product images? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await deleteProductImages();
+      // Refresh product images list
+      const productImagesData = await getProductImages();
+      setProductImages(productImagesData.images);
+      setSelectedProductImageId(null);
+      setToast({
+        message: "Product images deleted successfully",
+        type: "success",
+        isVisible: true,
+      });
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
+    } catch (err) {
+      console.error("Error deleting product images:", err);
+      setToast({
+        message: "Failed to delete product images. Please try again.",
+        type: "error",
+        isVisible: true,
+      });
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
@@ -493,6 +630,7 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+
 
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
@@ -680,96 +818,185 @@ export const Dashboard: React.FC = () => {
                 required
               />
 
-              {/* Optional reference image upload */}
-              <div>
-                <label
-                  htmlFor="reference-image"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Reference Image (Optional)
-                </label>
-                <input
-                  id="reference-image"
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  disabled={isLoading}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    setErrors((prev) => ({ ...prev, image: undefined }));
-
-                    if (!file) {
-                      setReferenceImage(null);
-                      if (referenceImagePreview) {
-                        URL.revokeObjectURL(referenceImagePreview);
-                        setReferenceImagePreview(null);
-                      }
-                      return;
-                    }
-
-                    // Validate file type
-                    if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
-                      setErrors((prev) => ({
-                        ...prev,
-                        image: "Only JPG and PNG images are allowed",
-                      }));
-                      event.target.value = "";
-                      return;
-                    }
-
-                    // Validate file size (10MB max)
-                    const maxSizeBytes = 10 * 1024 * 1024;
-                    if (file.size > maxSizeBytes) {
-                      setErrors((prev) => ({
-                        ...prev,
-                        image: "Image size must be less than 10MB",
-                      }));
-                      event.target.value = "";
-                      return;
-                    }
-
-                    // Set file and preview
-                    setReferenceImage(file);
-                    if (referenceImagePreview) {
-                      URL.revokeObjectURL(referenceImagePreview);
-                    }
-                    const previewUrl = URL.createObjectURL(file);
-                    setReferenceImagePreview(previewUrl);
-                  }}
-                  className="block w-full text-sm text-gray-900 border border-gray-300 rounded-md cursor-pointer focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Optional. JPG or PNG up to 10MB. Used as a visual reference for the product.
+              {/* Fragrance Notes Section */}
+              <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                  Fragrance Notes (Optional)
+                </h3>
+                <p className="text-xs text-gray-600 mb-4">
+                  For luxury fragrance advertising, provide perfume notes to generate cinematic atmospheric cues.
                 </p>
-                {errors.image && (
-                  <p className="mt-1 text-xs text-red-600">{errors.image}</p>
-                )}
-
-                {referenceImagePreview && (
-                  <div className="mt-3 flex items-center space-x-4">
-                    <img
-                      src={referenceImagePreview}
-                      alt="Reference preview"
-                      className="h-20 w-20 object-cover rounded-md border"
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="top-note" className="block text-sm font-medium text-gray-700 mb-2">
+                      Top Note
+                    </label>
+                    <input
+                      type="text"
+                      id="top-note"
+                      value={topNote}
+                      onChange={(e) => setTopNote(e.target.value)}
+                      placeholder="e.g., Bergamot"
+                      disabled={isLoading}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        setReferenceImage(null);
-                        if (referenceImagePreview) {
-                          URL.revokeObjectURL(referenceImagePreview);
-                          setReferenceImagePreview(null);
-                        }
-                        const input = document.getElementById(
-                          "reference-image"
-                        ) as HTMLInputElement | null;
-                        if (input) {
-                          input.value = "";
-                        }
-                      }}
+                  </div>
+                  <div>
+                    <label htmlFor="heart-note" className="block text-sm font-medium text-gray-700 mb-2">
+                      Heart Note
+                    </label>
+                    <input
+                      type="text"
+                      id="heart-note"
+                      value={heartNote}
+                      onChange={(e) => setHeartNote(e.target.value)}
+                      placeholder="e.g., Rose"
+                      disabled={isLoading}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="base-note" className="block text-sm font-medium text-gray-700 mb-2">
+                      Base Note
+                    </label>
+                    <input
+                      type="text"
+                      id="base-note"
+                      value={baseNote}
+                      onChange={(e) => setBaseNote(e.target.value)}
+                      placeholder="e.g., Sandalwood"
+                      disabled={isLoading}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Image Gallery Dropdown */}
+              <div className="border border-gray-200 rounded-md">
+                <button
+                  type="button"
+                  onClick={() => setIsImageGalleryOpen(!isImageGalleryOpen)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-t-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  <span className="flex items-center">
+                    <svg
+                      className={`w-5 h-5 mr-2 transition-transform ${isImageGalleryOpen ? 'transform rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
-                      Remove Image
-                    </Button>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Image Gallery
+                    {selectedProductImageId && (
+                      <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                        {productImages.find(img => img.id === selectedProductImageId)?.filename}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {productImages.length} product, {brandStyles?.images.length || 0} brand style
+                  </span>
+                </button>
+
+                {isImageGalleryOpen && (
+                  <div className="p-4 border-t border-gray-200 bg-white">
+                    {/* Product Images Section */}
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800">
+                          Product Images
+                        </h4>
+                        {productImages.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={handleDeleteProductImages}
+                            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1"
+                          >
+                            Delete All
+                          </Button>
+                        )}
+                      </div>
+                      {productImagesLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        </div>
+                      ) : productImages.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-gray-600">
+                            Click an image to select it for video generation.
+                          </p>
+                          <ImageThumbnailGrid
+                            images={productImages}
+                            baseUrl={API_BASE_URL}
+                            onImageClick={(image) => {
+                              if (selectedProductImageId === image.id) {
+                                setSelectedProductImageId(null);
+                              } else {
+                                setSelectedProductImageId(image.id);
+                              }
+                            }}
+                            selectedImageId={selectedProductImageId}
+                            emptyMessage="No product images uploaded"
+                          />
+                          {selectedProductImageId && (
+                            <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
+                              <p className="text-xs text-blue-800">
+                                Selected: {productImages.find(img => img.id === selectedProductImageId)?.filename}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-gray-500">
+                          <p className="text-sm">No product images uploaded</p>
+                          <p className="text-xs mt-1">Go to Settings to upload</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Brand Styles Section */}
+                    <div className="border-t border-gray-200 pt-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800">
+                          Brand Style Images
+                        </h4>
+                        {brandStyles && brandStyles.images.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={handleDeleteBrandStyles}
+                            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1"
+                          >
+                            Delete All
+                          </Button>
+                        )}
+                      </div>
+                      {brandStylesLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        </div>
+                      ) : brandStyles && brandStyles.images.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-gray-600">
+                            Brand style images help the AI understand your brand's visual identity.
+                          </p>
+                          <ImageThumbnailGrid
+                            images={brandStyles.images}
+                            baseUrl={API_BASE_URL}
+                            emptyMessage="No brand style images uploaded"
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-gray-500">
+                          <p className="text-sm">No brand style images uploaded</p>
+                          <p className="text-xs mt-1">Go to Settings to upload</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

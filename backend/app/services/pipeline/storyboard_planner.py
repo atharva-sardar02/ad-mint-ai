@@ -388,6 +388,18 @@ async def plan_storyboard(
     else:
         user_content = f"I'm working on a creative video production project and need help creating a video storyboard with a target duration of {target_duration} seconds. This is for legitimate creative and educational purposes. Here's the concept I want to visualize: {user_prompt}\n\nPlease decide how many scenes to create and the duration of each scene (each scene can be 3-7 seconds, maximum 7 seconds per scene). The total duration should be close to {target_duration} seconds. Create a detailed storyboard with rich, cinematic descriptions for each scene. Write the prompts naturally, like you're describing shots to a film crew."
     
+    # Log the exact prompts being sent to LLM
+    logger.info("=" * 80)
+    logger.info("📝 EXACT PROMPTS SENT TO LLM FOR STORYBOARD CREATION:")
+    logger.info("=" * 80)
+    logger.info(f"SYSTEM PROMPT (first 500 chars):\n{system_prompt[:500]}...")
+    logger.info(f"\nSYSTEM PROMPT LENGTH: {len(system_prompt)} characters")
+    logger.info(f"\nUSER MESSAGE:\n{user_content}")
+    logger.info(f"\nUSER MESSAGE LENGTH: {len(user_content)} characters")
+    if reference_image_path:
+        logger.info(f"\nREFERENCE IMAGE: {reference_image_path}")
+    logger.info("=" * 80)
+    
     # Prepare messages - will be modified on retries if needed
     messages = []
     if reference_image_path:
@@ -591,6 +603,21 @@ async def plan_storyboard(
                 
                 logger.info(f"✅ Storyboard plan generated with {len(scenes)} detailed scenes")
                 logger.debug(f"Consistency markers: {storyboard_plan.get('consistency_markers', {})}")
+                
+                # Log the complete storyboard plan JSON structure
+                logger.info("=" * 80)
+                logger.info("📋 COMPLETE STAGE 1 STORYBOARD PLAN JSON:")
+                logger.info("=" * 80)
+                import json
+                # Create a loggable version (exclude very long raw_response if present)
+                loggable_plan = storyboard_plan.copy()
+                if "llm_output" in loggable_plan and "raw_response" in loggable_plan["llm_output"]:
+                    # Truncate raw_response for readability (keep first 500 chars)
+                    raw_resp = loggable_plan["llm_output"]["raw_response"]
+                    if isinstance(raw_resp, str) and len(raw_resp) > 500:
+                        loggable_plan["llm_output"]["raw_response"] = raw_resp[:500] + f"... [truncated, total length: {len(raw_resp)} chars]"
+                logger.info(json.dumps(loggable_plan, indent=2, ensure_ascii=False))
+                logger.info("=" * 80)
                 
                 # Store LLM input and output for complete flow tracking
                 storyboard_plan["llm_input"] = {

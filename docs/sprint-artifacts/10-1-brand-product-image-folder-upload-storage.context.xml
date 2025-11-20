@@ -1,0 +1,236 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>10</epicId>
+    <storyId>10.1</storyId>
+    <title>Brand & Product Image Folder Upload & Storage</title>
+    <status>drafted</status>
+    <generatedAt>2025-01-17</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/10-1-brand-product-image-folder-upload-storage.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user</asA>
+    <iWant>to upload folders containing my brand style images and product images</iWant>
+    <soThat>these images are stored and available for all my video generations</soThat>
+    <tasks>
+      <task id="1" ac="4,5">Create Database Models - BrandStyleFolder, ProductImageFolder, UploadedImage with relationships</task>
+      <task id="2" ac="5">Create Backend Storage Utilities - directory management, file validation, storage operations</task>
+      <task id="3" ac="1,2,4,5">Create Backend API Endpoints - Brand Styles (POST /api/brand-styles/upload, GET, DELETE)</task>
+      <task id="4" ac="1,3,4,5">Create Backend API Endpoints - Product Images (POST /api/products/upload, GET, DELETE)</task>
+      <task id="5" ac="4">Create Backend API Endpoints - List Images (GET /api/brand-styles, GET /api/products)</task>
+      <task id="6" ac="4">Create Backend API Endpoints - Delete Folders (DELETE /api/brand-styles, DELETE /api/products)</task>
+      <task id="7" ac="3,4,5">Create Pydantic Schemas - BrandStyleUploadResponse, ProductImageUploadResponse, UploadedImageResponse</task>
+      <task id="8" ac="3,4,5">Update Backend Main Router - register brand_styles and products routers</task>
+      <task id="9" ac="1,2,3">Create Frontend Folder Upload Components - BrandStyleUpload, ProductImageUpload with HTML5 folder selection</task>
+      <task id="10" ac="1,2,3,4">Update Profile Page with Upload UI - add upload sections, display thumbnails, success messages</task>
+      <task id="11" ac="2,3,4">Create Frontend API Services - brandStyleService, productImageService with upload/get/delete functions</task>
+      <task id="12" ac="4,5">Update Frontend Types - BrandStyleUploadResponse, ProductImageUploadResponse, UploadedImageResponse</task>
+      <task id="13" ac="4">Create Image Thumbnail Display Component - ImageThumbnail with preview support</task>
+      <task id="14" ac="1,2,3,4,5">Testing - unit tests for storage utilities and models, integration tests for endpoints and upload flow</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">Folder Upload UI: User sees two folder upload buttons on Profile or Settings page</criterion>
+    <criterion id="2">Brand Style Folder Upload: User can select folder with brand style images (max 100MB, 50 images, JPEG/PNG/WebP only)</criterion>
+    <criterion id="3">Product Image Folder Upload: User can select folder with product images (max 100MB, 50 images, JPEG/PNG/WebP only)</criterion>
+    <criterion id="4">Upload Success Handling: Images uploaded to backend storage, metadata stored, success message displayed, thumbnails visible, replacement supported</criterion>
+    <criterion id="5">Backend Storage and Validation: Images stored in organized directory structure, database records created, file types and sizes validated, errors handled gracefully</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 10: Brand & Product Image Consistency - Story 10.1">
+        Story details: Brand & Product Image Folder Upload & Storage (FR-045, FR-046). Includes acceptance criteria, technical notes, and prerequisites (Epic 2 User Authentication, Story 5.1 Profile Display).
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-045, FR-046">
+        FR-045: Brand Style Image Upload & Storage - System shall allow users to upload a folder of brand style images that persists across all their generations. FR-046: Product Image Upload & Storage - System shall allow users to upload a folder of product images that persists across all their generations.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="File Upload Security">
+        File Upload Security: File type validation (images only), file size limit: 100MB, virus scanning (optional). Future feature guidance.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="NFR-013">
+        Error Messages & Basic Error Handling: All API error responses shall use simple JSON structure with error.code and error.message fields.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Project Structure">
+        Backend structure: app/api/routes/, app/db/models/, app/schemas/, app/utils/, app/core/. Frontend structure: src/routes/, src/components/, src/lib/services/, src/lib/types/. Storage: Local disk storage under /output on EC2 instance, with path to S3 for production.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Decision Summary">
+        Backend: FastAPI as HTTP API layer, SQLAlchemy + Pydantic for persistence and validation. Frontend: React 18 + TypeScript + Vite, Tailwind CSS, React Router, Zustand for state management.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Documentation" section="Implementation Patterns">
+        Error Handling: All API errors follow PRD JSON structure with top-level error key containing code and message fields. Project Organization: Backend responsibilities separated into api (routing), schemas (Pydantic contracts), db (SQLAlchemy models), services (business logic), core (config, security, logging).
+      </doc>
+      <doc path="docs/sprint-artifacts/5-1-profile-display.md" title="Story 5.1: Profile Display" section="Dev Notes">
+        Profile page structure, authentication dependency pattern, API client configuration, user service pattern, error handling setup, component styling patterns.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/api/routes/generations_with_image.py" kind="controller" symbol="create_generation_with_image" lines="24-97" reason="Reference implementation for FastAPI file upload with UploadFile, Form, validation (content-type, size), Path directory creation, file saving pattern">
+        Shows pattern for handling single image upload: accepts UploadFile with Form data, validates content-type and size, saves to Path directory, handles errors with PRD error format. Use similar pattern for multiple file uploads.
+      </artifact>
+      <artifact path="backend/app/api/routes/auth.py" kind="controller" symbol="register, login" lines="23-150" reason="Reference for error handling pattern using PRD error format with error.code and error.message">
+        Shows standard error response format: HTTPException with detail containing error.code and error.message. Use same pattern for upload endpoint errors.
+      </artifact>
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_current_user" lines="16-70" reason="Authentication dependency for protected endpoints - use this for all upload/list/delete endpoints">
+        FastAPI dependency that extracts JWT token from Authorization header, verifies it, and returns User object. Use `Depends(get_current_user)` in all endpoints.
+      </artifact>
+      <artifact path="backend/app/api/routes/users.py" kind="controller" symbol="get_user_profile" lines="13-31" reason="Reference for protected endpoint pattern using get_current_user dependency">
+        Shows simple GET endpoint with authentication dependency. Use similar pattern for GET /api/brand-styles and GET /api/products endpoints.
+      </artifact>
+      <artifact path="backend/app/db/models/user.py" kind="model" symbol="User" lines="13-30" reason="Reference for SQLAlchemy model structure - follow same pattern for BrandStyleFolder, ProductImageFolder, UploadedImage models">
+        Shows model structure: Base class, tablename, columns, relationships. Add one-to-one relationship from User to BrandStyleFolder and ProductImageFolder.
+      </artifact>
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation, GenerationGroup" lines="13-28" reason="Reference for relationship patterns - use similar patterns for BrandStyleFolder/ProductImageFolder to UploadedImage relationships">
+        Shows relationship patterns with back_populates. Use similar pattern: BrandStyleFolder.images = relationship("UploadedImage"), UploadedImage.folder = relationship("BrandStyleFolder", back_populates="images").
+      </artifact>
+      <artifact path="backend/app/db/base.py" kind="base" symbol="Base, engine, SessionLocal" lines="10-28" reason="SQLAlchemy base class and session factory - all models must inherit from Base">
+        Base class for all ORM models. All new models must inherit from Base. Use SessionLocal for database sessions.
+      </artifact>
+      <artifact path="backend/app/db/models/__init__.py" kind="module" symbol="__all__" lines="1-9" reason="Model exports - must add new models to __all__ list">
+        Exports all database models. Must add BrandStyleFolder, ProductImageFolder, UploadedImage to __all__ list after creating them.
+      </artifact>
+      <artifact path="backend/app/schemas/user.py" kind="schema" symbol="UserProfile" lines="10-22" reason="Reference for Pydantic schema structure - follow same pattern for brand style and product image schemas">
+        Shows Pydantic schema with model_config, fields, Optional types. Use same pattern for BrandStyleUploadResponse, ProductImageUploadResponse, UploadedImageResponse.
+      </artifact>
+      <artifact path="backend/app/main.py" kind="application" symbol="app.include_router" lines="105-110" reason="Router registration pattern - must register brand_styles and products routers here">
+        Shows how to register routers: app.include_router(auth.router), app.include_router(users.router). Add brand_styles and products routers similarly.
+      </artifact>
+      <artifact path="frontend/src/routes/Profile.tsx" kind="component" symbol="Profile" lines="63-214" reason="Profile page component - add upload sections below statistics section, follow existing styling patterns">
+        Profile page with statistics display. Add "Brand Style Images" and "Product Images" sections below statistics section. Follow existing Tailwind CSS styling patterns.
+      </artifact>
+      <artifact path="frontend/src/lib/userService.ts" kind="service" symbol="getUserProfile" lines="15-18" reason="Reference for API service pattern - follow same pattern for brandStyleService and productImageService">
+        Shows service pattern: import apiClient, define function with typed return, use apiClient.get/post with API_ENDPOINTS. Follow same pattern for brand style and product image services.
+      </artifact>
+      <artifact path="frontend/src/lib/apiClient.ts" kind="client" symbol="apiClient, interceptors" lines="27-103" reason="API client with request/response interceptors - automatically adds JWT token and handles 401 errors">
+        Axios client with request interceptor that adds JWT token to Authorization header, response interceptor that handles 401 errors and redirects to login. All API calls automatically authenticated.
+      </artifact>
+      <artifact path="frontend/src/lib/types/api.ts" kind="type" symbol="UserProfile" reason="TypeScript type definitions - must add types for BrandStyleUploadResponse, ProductImageUploadResponse, UploadedImageResponse">
+        Type definitions matching backend Pydantic schemas. Add types for brand style and product image API responses.
+      </artifact>
+      <artifact path="backend/app/core/config.py" kind="config" symbol="Settings" reason="Application settings and configuration - may need to add storage directory paths or validation limits">
+        Central configuration module. May need to add storage directory configuration or validation limit constants (max folder size, max image count).
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="fastapi" version=">=0.104.0" purpose="HTTP API framework with file upload support via UploadFile"/>
+        <package name="python-multipart" version=">=0.0.20" purpose="Required for FastAPI file uploads (multipart/form-data)"/>
+        <package name="sqlalchemy" version=">=2.0.0" purpose="ORM for database models - BrandStyleFolder, ProductImageFolder, UploadedImage"/>
+        <package name="pydantic" version=">=2.0.0" purpose="Schema validation for request/response models"/>
+        <package name="pathlib" version="built-in" purpose="Path manipulation for file storage directories"/>
+      </ecosystem>
+      <ecosystem name="node">
+        <package name="react" version="18" purpose="Frontend component framework"/>
+        <package name="typescript" version="5" purpose="Type safety for frontend code"/>
+        <package name="axios" version="latest" purpose="HTTP client for API calls with interceptors"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="authentication">All endpoints must use `get_current_user` dependency from `app.api.deps` for authentication. Frontend automatically adds JWT token via apiClient interceptors.</constraint>
+    <constraint type="error-handling">All API errors must follow PRD format: `{ "error": { "code": "...", "message": "..." } }`. Use HTTPException with detail containing error dictionary.</constraint>
+    <constraint type="file-validation">File types limited to JPEG, PNG, WebP (MIME types: image/jpeg, image/jpg, image/png, image/webp). Validate both content-type and file extension. Maximum folder size: 100MB total. Maximum image count: 50 images per folder.</constraint>
+    <constraint type="storage">Images stored in `backend/assets/users/{user_id}/brand_styles/` and `backend/assets/users/{user_id}/products/` directories. Use Path from pathlib for directory operations. Ensure directories are created before saving files.</constraint>
+    <constraint type="database">All models must inherit from `Base` (app.db.base). Use SQLAlchemy relationships with proper foreign keys and cascade deletes. Update `app.db.models.__init__.py` to export new models.</constraint>
+    <constraint type="schema">All request/response schemas must use Pydantic BaseModel with model_config = ConfigDict(from_attributes=True) for SQLAlchemy model conversion. Ensure proper date/time serialization (ISO format).</constraint>
+    <constraint type="frontend">Use HTML5 file input with `webkitdirectory` attribute for folder selection. Validate files client-side before upload (type, size, count). Use FormData API to send multiple files. Show upload progress indicators.</constraint>
+    <constraint type="replacement">When uploading a new folder, delete existing folder and all related UploadedImage records before saving new files. Use transaction to ensure atomicity.</constraint>
+    <constraint type="testing">Backend tests in `backend/tests/`, frontend tests in `frontend/src/__tests__/`. Test file validation, storage operations, database relationships, error handling, and UI components.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/brand-styles/upload" kind="REST endpoint" signature="POST /api/brand-styles/upload
+      Headers: Authorization: Bearer {jwt_token}
+      Body: multipart/form-data
+        - files: List[UploadFile] (multiple files)
+      Response: { message: string, count: number }
+      Errors: 400 (validation), 401 (unauthorized), 413 (too large), 500 (server error)" path="backend/app/api/routes/brand_styles.py"/>
+    <interface name="POST /api/products/upload" kind="REST endpoint" signature="POST /api/products/upload
+      Headers: Authorization: Bearer {jwt_token}
+      Body: multipart/form-data
+        - files: List[UploadFile] (multiple files)
+      Response: { message: string, count: number }
+      Errors: 400 (validation), 401 (unauthorized), 413 (too large), 500 (server error)" path="backend/app/api/routes/products.py"/>
+    <interface name="GET /api/brand-styles" kind="REST endpoint" signature="GET /api/brand-styles
+      Headers: Authorization: Bearer {jwt_token}
+      Response: { images: List[UploadedImageResponse] }
+      Errors: 401 (unauthorized), 500 (server error)" path="backend/app/api/routes/brand_styles.py"/>
+    <interface name="GET /api/products" kind="REST endpoint" signature="GET /api/products
+      Headers: Authorization: Bearer {jwt_token}
+      Response: { images: List[UploadedImageResponse] }
+      Errors: 401 (unauthorized), 500 (server error)" path="backend/app/api/routes/products.py"/>
+    <interface name="DELETE /api/brand-styles" kind="REST endpoint" signature="DELETE /api/brand-styles
+      Headers: Authorization: Bearer {jwt_token}
+      Response: { message: string }
+      Errors: 401 (unauthorized), 500 (server error)" path="backend/app/api/routes/brand_styles.py"/>
+    <interface name="DELETE /api/products" kind="REST endpoint" signature="DELETE /api/products
+      Headers: Authorization: Bearer {jwt_token}
+      Response: { message: string }
+      Errors: 401 (unauthorized), 500 (server error)" path="backend/app/api/routes/products.py"/>
+    <interface name="get_current_user" kind="FastAPI dependency" signature="get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> User" path="backend/app/api/deps.py">
+      Authentication dependency that extracts JWT token, verifies it, and returns User object. Use in all protected endpoints.
+    </interface>
+    <interface name="BrandStyleFolder" kind="SQLAlchemy model" signature="class BrandStyleFolder(Base):
+      __tablename__ = 'brand_style_folders'
+      id: str (PK)
+      user_id: str (FK to users.id, unique)
+      uploaded_at: datetime
+      image_count: int
+      user: relationship('User', back_populates='brand_style_folder')
+      images: relationship('UploadedImage', back_populates='brand_style_folder', cascade='all, delete-orphan')" path="backend/app/db/models/brand_style.py"/>
+    <interface name="ProductImageFolder" kind="SQLAlchemy model" signature="class ProductImageFolder(Base):
+      __tablename__ = 'product_image_folders'
+      id: str (PK)
+      user_id: str (FK to users.id, unique)
+      uploaded_at: datetime
+      image_count: int
+      user: relationship('User', back_populates='product_image_folder')
+      images: relationship('UploadedImage', back_populates='product_image_folder', cascade='all, delete-orphan')" path="backend/app/db/models/product_image.py"/>
+    <interface name="UploadedImage" kind="SQLAlchemy model" signature="class UploadedImage(Base):
+      __tablename__ = 'uploaded_images'
+      id: str (PK)
+      folder_id: str (FK to brand_style_folders.id or product_image_folders.id)
+      folder_type: str (enum: 'brand_style' or 'product')
+      filename: str
+      file_path: str
+      file_size: int
+      uploaded_at: datetime
+      brand_style_folder: relationship('BrandStyleFolder', back_populates='images')
+      product_image_folder: relationship('ProductImageFolder', back_populates='images')" path="backend/app/db/models/uploaded_image.py"/>
+  </interfaces>
+
+  <tests>
+    <standards>Backend tests use pytest with pytest-asyncio for async endpoint tests. Test file validation (types, sizes, counts), storage operations (directory creation, file saving, deletion), database operations (model creation, relationships, cascade deletes), and error handling. Frontend tests use React Testing Library for component tests and Jest for unit tests. Test file selection, validation, upload flow, error handling, and UI rendering. All tests should verify authentication requirements and error response formats.</standards>
+    <locations>Backend unit tests: `backend/tests/unit/test_storage.py`, `backend/tests/unit/test_models.py` (if they exist, otherwise create). Backend integration tests: `backend/tests/integration/test_brand_styles.py`, `backend/tests/integration/test_products.py`. Frontend unit tests: `frontend/src/__tests__/components/brand/BrandStyleUpload.test.tsx`, `frontend/src/__tests__/components/product/ProductImageUpload.test.tsx`, `frontend/src/__tests__/routes/Profile.test.tsx`. Frontend integration tests: `frontend/src/__tests__/integration/uploadFlow.test.tsx`.</locations>
+    <ideas>
+      <test ac="1">Test Profile page displays two upload buttons when user is logged in</test>
+      <test ac="2">Test brand style folder upload accepts only JPEG/PNG/WebP files, rejects invalid types</test>
+      <test ac="2">Test brand style folder upload rejects folders exceeding 100MB total size</test>
+      <test ac="2">Test brand style folder upload rejects folders with more than 50 images</test>
+      <test ac="3">Test product image folder upload accepts only JPEG/PNG/WebP files, rejects invalid types</test>
+      <test ac="3">Test product image folder upload rejects folders exceeding 100MB total size</test>
+      <test ac="3">Test product image folder upload rejects folders with more than 50 images</test>
+      <test ac="4">Test successful upload creates database records (BrandStyleFolder/ProductImageFolder and UploadedImage records)</test>
+      <test ac="4">Test successful upload saves files to correct directory structure (backend/assets/users/{user_id}/brand_styles/ or products/)</test>
+      <test ac="4">Test upload replacement deletes old folder and images before saving new ones</test>
+      <test ac="4">Test thumbnails display correctly after upload</test>
+      <test ac="4">Test success message displays with correct image count</test>
+      <test ac="5">Test backend validates file types before storage (reject non-image files)</test>
+      <test ac="5">Test backend validates folder size before processing (reject >100MB)</test>
+      <test ac="5">Test backend validates image count before processing (reject >50 images)</test>
+      <test ac="5">Test backend handles storage errors gracefully (disk full, permission errors)</test>
+      <test ac="5">Test backend handles database errors gracefully (transaction rollback on failure)</test>
+      <test general="true">Test authentication required for all endpoints (401 if no token)</test>
+      <test general="true">Test user can only access their own brand style and product folders</test>
+      <test general="true">Test HTML5 folder selection works in supported browsers (Chrome, Firefox, Edge)</test>
+      <test general="true">Test frontend validation provides immediate feedback before upload</test>
+      <test general="true">Test upload progress indicators display during upload</test>
+      <test general="true">Test error messages are user-friendly and actionable</test>
+      <test general="true">Test responsive design works on mobile, tablet, desktop</test>
+    </ideas>
+  </tests>
+</story-context>
+

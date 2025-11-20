@@ -1,0 +1,123 @@
+{
+  "stage1_blueprint": {
+    "framework": "Perfume-5-Scene",
+    "total_duration_seconds": 20,
+    "reference_image_path": "{{REFERENCE_IMAGE_PATH}}",
+    "reference_image_usage": "inspiration for abstract motion and light",
+    "style_tone": "cinematic, intimate, abstract perfume-focused",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "stage": "First Impression",
+        "duration_seconds": 4,
+        "scene_description": {
+          "visual": "narrow geometric frame, luminous bottle silhouette",
+          "action": "gentle reveal, subtle expansion, poised stillness",
+          "camera": "static",
+          "lighting": "soft golden edge, crisp highlight, deep contrast",
+          "mood": "elegant",
+          "product_usage": "refined radiant lift"
+        },
+        "sound_design": "delicate shimmer, velvet hush",
+        "voiceover": "",
+        "overlay_text": ""
+      },
+      {
+        "scene_number": 2,
+        "stage": "Awakening",
+        "duration_seconds": 4,
+        "scene_description": {
+          "visual": "floating layered contours, smooth gradient arcs",
+          "action": "gradual unfolding, upward drift, graceful bloom",
+          "camera": "slow dolly",
+          "lighting": "warm ambient glow, gentle diffusion",
+          "mood": "uplifting",
+          "product_usage": "silken luminous ascent"
+        },
+        "sound_design": "soft resonance, airy swell",
+        "voiceover": "",
+        "overlay_text": ""
+      },
+      {
+        "scene_number": 3,
+        "stage": "Radiance",
+        "duration_seconds": 4,
+        "scene_description": {
+          "visual": "expansive halo, radiant abstract core",
+          "action": "pulsing light waves, shimmering outward motion",
+          "camera": "glide",
+          "lighting": "intense brilliance, golden radiance, subtle flares",
+          "mood": "opulent",
+          "product_usage": "glowing elegant clarity"
+        },
+        "sound_design": "crystal chime, luminous pulse",
+        "voiceover": "",
+        "overlay_text": ""
+      },
+      {
+        "scene_number": 4,
+        "stage": "Momentum",
+        "duration_seconds": 4,
+        "scene_description": {
+          "visual": "interwoven reflective planes, rhythmic lines",
+          "action": "flowing transitions, continuous ripple, sustained motion",
+          "camera": "slow pan",
+          "lighting": "deep highlights, soft shadow play, rich undertones",
+          "mood": "sophisticated",
+          "product_usage": "velvet rhythmic flow"
+        },
+        "sound_design": "gentle echo, smooth cadence",
+        "voiceover": "",
+        "overlay_text": ""
+      },
+      {
+        "scene_number": 5,
+        "stage": "Lasting Impression",
+        "duration_seconds": 4,
+        "scene_description": {
+          "visual": "dim diffused backdrop, bottle outline in halo",
+          "action": "slow fade, lingering glow, gentle dissolve",
+          "camera": "static",
+          "lighting": "subtle afterglow, muted warmth, soft reflection",
+          "mood": "serene",
+          "product_usage": "warm lingering aura"
+        },
+        "sound_design": "faint shimmer, distant resonance",
+        "voiceover": "",
+        "overlay_text": ""
+      }
+    ],
+    "music": {
+      "style": "",
+      "energy": "",
+      "notes": ""
+    }
+  },
+  "stage2_scent_profile": {
+    "scent_profile_source": "user_provided",
+    "top_notes": [
+      "jasmine"
+    ],
+    "heart_notes": [
+      "jasmine"
+    ],
+    "base_notes": [
+      "vanilla",
+      "amber"
+    ],
+    "lighting_cues": "Soft, radiant halos diffuse outward, layering gentle luminosity with subtle intensifications and lingering, warm glimmers.",
+    "color_palette": "Translucent ivory gradients merge into golden ambers, with fleeting blushes of pale honey and diffused, creamy highlights.",
+    "motion_physics": "Light undulates in slow, silken waves, rising and folding back in a seamless, rhythmic, upward drift.",
+    "surface_textures": "Velvet-matte sheens alternate with glossy, fluid contours, evoking a tactile interplay of smoothness and gentle depth.",
+    "atmosphere_density": "Air feels plush and enveloping, with a serene, weightless density that softly cushions each luminous transition.",
+    "sound_motifs": "Distant crystalline chimes shimmer over a warm, resonant hum, punctuated by delicate, ascending melodic echoes.",
+    "emotional_register": "A serene, luminous opulence radiates with refined clarity and a tranquil, uplifting sense of sophisticated comfort."
+  },
+  "stage3_scenes": [
+    "Scene 1: First Impression  \nA narrow geometric frame emerges, encasing a luminous bottle silhouette poised in elegant stillness, its edges kissed by a soft golden halo and crisp highlights that carve deep, refined contrasts. Velvet-matte sheens and glossy contours interplay across the form, while radiant halos gently diffuse outward, layering the scene in plush, enveloping light. The atmosphere feels weightless and serene, cushioned by a distant crystalline chime and a warm, resonant hum, evoking a sense of poised anticipation. A subtle expansion of light hints at a refined, radiant lift, setting the stage with tranquil opulence.",
+    "Scene 2: Awakening  \nFloating, layered contours begin a gradual unfolding, arcs of smooth gradient drifting upward in a silken, seamless ascent. Warm ambient glow and gentle diffusion bathe the forms in translucent ivory and golden amber, with fleeting blushes of pale honey illuminating their graceful bloom. The camera’s slow dolly movement amplifies the sensation of silken waves rising and folding, while the air remains plush and softly buoyant. Delicate, ascending echoes shimmer through the atmosphere, infusing the moment with an uplifting, luminous clarity.",
+    "Scene 3: Radiance  \nAn expansive halo pulses from a radiant abstract core, shimmering outward in waves of intense brilliance and golden radiance, punctuated by subtle flares. The viewpoint glides through this opulent field, where glossy and velvet textures ripple with glowing, elegant clarity. Light undulates in rhythmic, upward surges, amplifying the sense of luminous abundance and sophisticated comfort. Crystalline chimes and resonant hums intertwine, heightening the feeling of radiant, unfolding splendor.",
+    "Scene 4: Momentum  \nInterwoven reflective planes and rhythmic lines flow in continuous, velvet ripples, sustaining a dynamic yet sophisticated motion. Deep highlights and soft shadow play sculpt rich undertones across the surfaces, as the camera’s slow pan reveals the seamless transitions of light and form. The plush density of the atmosphere cushions each movement, while delicate echoes and a warm hum maintain a steady, refined pulse. The scene exudes a velvet rhythmic flow, embodying sustained elegance and tranquil energy.",
+    "Scene 5: Lasting Impression  \nA dim, diffused backdrop cradles the bottle outline, now encircled by a gentle halo that lingers in soft afterglow and muted warmth. The slow fade and gentle dissolve of light create creamy reflections and a serene, enveloping aura, as translucent golds and ivories melt into one another. Stillness returns, with only the faintest shimmer of chime and a residual warmth echoing in the plush air. The impression is one of serene completion—a warm, lingering aura that softly endures."
+  ]
+}

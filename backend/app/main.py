@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, editor, generations, generations_with_image, users
+from app.api.routes import auth, brand_styles, editor, generations, generations_with_image, products, users
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -108,6 +108,8 @@ app.include_router(generations.router)
 app.include_router(generations_with_image.router)
 app.include_router(users.router)
 app.include_router(editor.router)
+app.include_router(brand_styles.router)
+app.include_router(products.router)
 
 # Mount static files for serving videos and thumbnails
 # This allows the frontend to access files at /output/videos/ and /output/thumbnails/
@@ -117,6 +119,17 @@ if output_dir.exists():
     logger.info("Static files mounted at /output")
 else:
     logger.warning("Output directory not found - static file serving disabled")
+
+# Mount static files for serving user-uploaded assets (brand styles and product images)
+# This allows the frontend to access files at /api/assets/users/{user_id}/brand_styles/ and /api/assets/users/{user_id}/products/
+# Use BACKEND_DIR to ensure consistent path regardless of where the app is run from
+from app.core.config import BACKEND_DIR
+assets_dir = BACKEND_DIR / "assets"
+if assets_dir.exists():
+    app.mount("/api/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    logger.info(f"User assets mounted at /api/assets from {assets_dir.absolute()}")
+else:
+    logger.warning(f"Assets directory not found at {assets_dir.absolute()} - user asset serving disabled")
 
 
 @app.on_event("startup")

@@ -109,11 +109,18 @@ export const authService = {
       );
       return response.data;
     } catch (error: unknown) {
+      // Log error for debugging
+      console.error("Login error:", error);
+      
       // Handle API errors with user-friendly messages
       if (error && typeof error === "object" && "response" in error) {
         const axiosError = error as { response?: { data?: ApiError } };
         if (axiosError.response?.data?.error) {
           throw new Error(axiosError.response.data.error.message);
+        }
+        // If there's a response but no error structure, log it
+        if (axiosError.response) {
+          console.error("API error response:", axiosError.response.status, axiosError.response.data);
         }
       }
 

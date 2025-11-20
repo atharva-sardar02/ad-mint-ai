@@ -105,3 +105,10 @@ development_status:
   9-2-video-generation-feedback-loop-cli: in-progress
   9-3-integrated-feedback-loop-cli: drafted
   epic-9-retrospective: optional
+
+  epic-10: backlog
+  10-1-brand-product-image-folder-upload-storage: in-progress
+  10-2-vision-llm-brand-product-style-extraction: in-progress
+  10-3-brand-style-json-integration-with-scene-assembler: done
+  10-4-product-image-selection-from-uploaded-folder: in-progress
+  epic-10-retrospective: optional
