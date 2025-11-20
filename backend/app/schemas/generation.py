@@ -50,6 +50,45 @@ class GenerateRequest(BaseModel):
     model: Optional[str] = Field(None, description="Specific model to use (optional, uses default fallback chain if not specified)")
     target_duration: Optional[int] = Field(None, ge=9, le=60, description="Target total video duration in seconds (default: 15). LLM will decide number of scenes and duration per scene (max 7s per scene)")
     use_llm: Optional[bool] = Field(True, description="Whether to use LLM enhancement (default: True)")
+    
+    # Multi-stage workflow options
+    use_multi_stage: Optional[bool] = Field(
+        False,
+        description="Use new multi-stage story-driven workflow (Stage 0: Template Selection, Stage 1: Story, Stage 2: Scenes, Stage 3: Visual Prompts). Default: False (uses legacy single-stage)"
+    )
+    use_fill_in_template: Optional[bool] = Field(
+        False,
+        description="Use fill-in-the-blank template system with ~290 structured fields for maximum control and consistency. Default: False"
+    )
+    template_override: Optional[str] = Field(
+        None,
+        description="Manually specify story template (aida, problem-agitate-solve, before-after-bridge, hero-journey, emotional-arc, teaser-reveal, social-proof, sensory-experience). If not provided, AI will select optimal template."
+    )
+    
+    # Advanced image generation options
+    use_advanced_image_generation: Optional[bool] = Field(
+        False,
+        description="Use advanced image generation with 2-agent prompt enhancement and 4-model quality scoring. Generates 4 variations per scene and selects best. Higher quality but 5x cost and 6x time. Default: False"
+    )
+    advanced_image_quality_threshold: Optional[float] = Field(
+        30.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum quality score threshold for advanced image generation (0-100). Images below this score will log warnings. Default: 30.0"
+    )
+    advanced_image_num_variations: Optional[int] = Field(
+        4,
+        ge=2,
+        le=8,
+        description="Number of image variations to generate per scene in advanced mode. Best variation is selected automatically. Default: 4"
+    )
+    advanced_image_max_enhancement_iterations: Optional[int] = Field(
+        4,
+        ge=1,
+        le=6,
+        description="Maximum number of prompt enhancement iterations in advanced mode. Default: 4"
+    )
+    
     refinement_instructions: Optional[dict] = Field(
         default=None,
         description="Optional refinement instructions for storyboard. Dict mapping scene_number (int) to refinement instruction (str), or 'all' to refine all scenes. Example: {1: 'make lighting more dramatic', 2: 'add more product details', 'all': 'increase visual detail'}"
@@ -74,6 +113,16 @@ class StatusResponse(BaseModel):
     available_clips: int = 0  # Number of clips currently available for download
     seed_value: Optional[int] = None  # Seed value used for visual consistency across scenes
     storyboard_plan: Optional[dict] = None  # Storyboard plan with scenes and images
+    
+    # Multi-stage workflow data
+    workflow_type: Optional[str] = None  # "multi_stage_story_driven" or "legacy_single_stage"
+    template_used: Optional[str] = None  # Story template ID if multi-stage
+    story_title: Optional[str] = None  # Story title if multi-stage
+    multi_stage_data: Optional[dict] = None  # Complete multi-stage output (stage_0, stage_1, stage_2, stage_3)
+    
+    # Advanced image generation metadata
+    advanced_image_generation_used: Optional[bool] = None  # Whether advanced image generation was used
+    image_quality_scores: Optional[dict] = None  # Quality scores for each scene's selected image
 
 
 class GenerateResponse(BaseModel):

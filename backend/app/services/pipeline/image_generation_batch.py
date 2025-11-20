@@ -2,11 +2,17 @@
 Batch image generation with sequential reference image consistency.
 Generates multiple images where each subsequent image uses the previous one as reference.
 """
+import json
 import logging
+import shutil
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
 
 from app.services.pipeline.image_generation import generate_image
+from app.services.pipeline.image_prompt_enhancement import enhance_prompt_iterative, ImagePromptEnhancementResult
+from app.services.image_generation import generate_images, ImageGenerationResult
+from app.services.pipeline.image_quality_scoring import score_image, rank_images_by_quality
 
 logger = logging.getLogger(__name__)
 
@@ -220,4 +226,324 @@ async def generate_images_with_sequential_references(
     
     logger.info(f"[{generation_id}] ✅ All {len(image_paths)} images generated with sequential references")
     return image_paths
+
+
+async def generate_enhanced_reference_images_with_sequential_references(
+    prompts: List[str],
+    output_dir: str,
+    generation_id: str,
+    consistency_markers: Optional[dict] = None,
+    continuity_notes: Optional[List[str]] = None,
+    consistency_guidelines: Optional[List[str]] = None,
+    transition_notes: Optional[List[str]] = None,
+    initial_reference_image: Optional[str] = None,
+    cancellation_check: Optional[callable] = None,
+    quality_threshold: float = 30.0,
+    num_variations: int = 4,
+    max_enhancement_iterations: int = 4,
+) -> List[str]:
+    """
+    Generate enhanced reference images with prompt enhancement and quality scoring.
+    
+    For each scene:
+    1. Enhances the image generation prompt using iterative two-agent enhancement
+    2. Generates 4 image variations using the enhanced prompt (using google/nano-banana model)
+    3. Scores all 4 variations using quality metrics (PickScore, CLIP-Score, Aesthetic)
+    4. Ranks variations by overall quality score
+    5. Selects the best-ranked image (rank 1) as the reference image for the scene
+    6. Checks quality threshold (≥30.0) and logs warnings if below
+    7. Uses selected reference image as input for next scene's generation (sequential chaining via nano-banana image-to-image)
+    8. Saves trace files and cleans them up immediately after completion
+    
+    Note: Always uses google/nano-banana model for image generation to support image-to-image
+    sequential chaining, which ensures visual consistency across scenes.
+    
+    Args:
+        prompts: List of base prompts, one per scene (should be detailed image_generation_prompt from LLM)
+        output_dir: Directory to save generated images
+        generation_id: Generation ID for logging and trace file organization
+        consistency_markers: Optional dict with style markers for consistency
+        continuity_notes: Optional list of continuity notes for each scene
+        consistency_guidelines: Optional list of per-scene visual consistency guidelines
+        transition_notes: Optional list of scene transition notes
+        initial_reference_image: Optional base reference image to start the chain (first scene)
+        cancellation_check: Optional function to check if generation should be cancelled
+        quality_threshold: Minimum quality score to proceed (default: 30.0, logs warning if below)
+        num_variations: Number of image variations to generate per scene (default: 4)
+        max_enhancement_iterations: Maximum number of prompt enhancement iterations (default: 4)
+    
+    Returns:
+        List[str]: List of paths to selected reference images (one per scene, in order)
+    
+    Raises:
+        RuntimeError: If cancellation is requested
+        ValueError: If prompts list is empty
+    
+    Example:
+        reference_images = await generate_enhanced_reference_images_with_sequential_references(
+            prompts=["A person jogging in a park", "The same person checking their phone"],
+            output_dir="output/images",
+            generation_id="gen-123",
+            consistency_markers={"style": "dynamic modern"},
+            num_variations=4,
+            max_enhancement_iterations=4
+        )
+        # Returns: ["scene_1_best.png", "scene_2_best.png"]
+    """
+    if not prompts:
+        raise ValueError("prompts list cannot be empty")
+    
+    # Create trace directory root
+    trace_root = Path(output_dir).parent / "reference_image_traces" / generation_id
+    trace_root.mkdir(parents=True, exist_ok=True)
+    
+    reference_image_paths = []
+    previous_reference_image = initial_reference_image  # Start with initial reference if provided
+    
+    try:
+        for scene_idx, base_prompt in enumerate(prompts, start=1):
+            # Check cancellation
+            if cancellation_check and cancellation_check():
+                raise RuntimeError("Reference image generation cancelled by user")
+            
+            logger.info(f"[{generation_id}] Processing scene {scene_idx}/{len(prompts)}")
+            
+            # Create scene-specific trace directory
+            scene_trace_dir = trace_root / f"scene_{scene_idx}"
+            scene_trace_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Step 1: Enhance prompt using iterative two-agent enhancement
+            enhanced_prompt = base_prompt
+            enhancement_result = None
+            try:
+                logger.info(f"[{generation_id}] Enhancing prompt for scene {scene_idx}...")
+                enhancement_result = await enhance_prompt_iterative(
+                    user_prompt=base_prompt,
+                    max_iterations=max_enhancement_iterations,
+                    score_threshold=85.0,
+                    trace_dir=scene_trace_dir,
+                    generate_negative=True
+                )
+                enhanced_prompt = enhancement_result.final_prompt
+                
+                # Save final enhanced prompt
+                (scene_trace_dir / "final_enhanced_prompt.txt").write_text(
+                    enhanced_prompt, encoding="utf-8"
+                )
+                
+                # Save prompt trace summary
+                prompt_trace_summary = {
+                    "original_prompt": base_prompt,
+                    "final_prompt": enhanced_prompt,
+                    "iterations": enhancement_result.total_iterations,
+                    "final_score": enhancement_result.final_score,
+                    "iteration_history": enhancement_result.iterations,
+                    "timestamp": datetime.now().isoformat()
+                }
+                (scene_trace_dir / "prompt_trace_summary.json").write_text(
+                    json.dumps(prompt_trace_summary, indent=2), encoding="utf-8"
+                )
+                
+                logger.info(
+                    f"[{generation_id}] Prompt enhanced for scene {scene_idx} "
+                    f"(iterations: {enhancement_result.total_iterations}, "
+                    f"score: {enhancement_result.final_score.get('overall', 0):.1f})"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[{generation_id}] Prompt enhancement failed for scene {scene_idx}: {e}. "
+                    "Falling back to original prompt."
+                )
+                # Fallback: use original prompt, generate single image
+                enhanced_prompt = base_prompt
+            
+            # Step 2: Generate 4 image variations using enhanced prompt
+            generated_images = []
+            try:
+                logger.info(f"[{generation_id}] Generating {num_variations} variations for scene {scene_idx}...")
+                
+                # Build enhanced prompt with consistency markers (for image generation)
+                enhanced_prompt_with_markers = _build_enhanced_image_prompt(
+                    base_prompt=enhanced_prompt,
+                    consistency_markers=consistency_markers,
+                    continuity_note=continuity_notes[scene_idx - 1] if continuity_notes and scene_idx - 1 < len(continuity_notes) else None,
+                    consistency_guideline=consistency_guidelines[scene_idx - 1] if consistency_guidelines and scene_idx - 1 < len(consistency_guidelines) else None,
+                    transition_note=transition_notes[scene_idx - 1] if transition_notes and scene_idx - 1 < len(transition_notes) else None,
+                    scene_number=scene_idx,
+                )
+                
+                # Prepare image_input for sequential chaining
+                image_input_list = None
+                if previous_reference_image and Path(previous_reference_image).exists():
+                    # Use previous scene's best reference image as input for this scene
+                    image_input_list = [previous_reference_image]
+                    logger.info(
+                        f"[{generation_id}] Using previous scene's reference image "
+                        f"({previous_reference_image}) for sequential chaining"
+                    )
+                elif scene_idx == 1 and initial_reference_image and Path(initial_reference_image).exists():
+                    # First scene: use user's initial reference image if provided
+                    image_input_list = [initial_reference_image]
+                    logger.info(
+                        f"[{generation_id}] Using initial reference image "
+                        f"({initial_reference_image}) for first scene"
+                    )
+                
+                # Generate variations using nano-banana (supports image-to-image for sequential chaining)
+                generation_results = await generate_images(
+                    prompt=enhanced_prompt_with_markers,
+                    num_variations=num_variations,
+                    aspect_ratio="16:9",
+                    output_dir=Path(output_dir),
+                    model_name="google/nano-banana",  # Always use nano-banana for image-to-image support
+                    image_input=image_input_list,
+                    negative_prompt=enhancement_result.negative_prompt if enhancement_result else None
+                )
+                
+                generated_images = generation_results
+                logger.info(
+                    f"[{generation_id}] Generated {len(generated_images)} variations for scene {scene_idx}"
+                )
+                
+            except Exception as e:
+                logger.error(
+                    f"[{generation_id}] Image generation failed for scene {scene_idx}: {e}. "
+                    "Retrying once..."
+                )
+                try:
+                    # Retry once with original prompt using nano-banana
+                    generation_results = await generate_images(
+                        prompt=base_prompt,
+                        num_variations=1,  # Fallback: single image
+                        aspect_ratio="16:9",
+                        output_dir=Path(output_dir),
+                        model_name="google/nano-banana",  # Always use nano-banana
+                        image_input=[previous_reference_image] if previous_reference_image and Path(previous_reference_image).exists() else None
+                    )
+                    generated_images = generation_results
+                    logger.info(f"[{generation_id}] Fallback generation succeeded for scene {scene_idx}")
+                except Exception as retry_error:
+                    logger.error(
+                        f"[{generation_id}] Fallback generation also failed for scene {scene_idx}: {retry_error}"
+                    )
+                    # Last resort: use first generated image if available, otherwise skip
+                    if not generated_images:
+                        logger.warning(
+                            f"[{generation_id}] No images generated for scene {scene_idx}, skipping..."
+                        )
+                        continue
+            
+            # Step 3: Score all variations
+            scored_images = []
+            try:
+                logger.info(f"[{generation_id}] Scoring {len(generated_images)} variations for scene {scene_idx}...")
+                for img_result in generated_images:
+                    scores = await score_image(
+                        image_path=img_result.image_path,
+                        prompt_text=enhanced_prompt
+                    )
+                    scored_images.append((img_result.image_path, scores))
+                
+                logger.info(
+                    f"[{generation_id}] Scored {len(scored_images)} variations for scene {scene_idx}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[{generation_id}] Quality scoring failed for scene {scene_idx}: {e}. "
+                    "Using first generated image without ranking."
+                )
+                # Fallback: use first image without ranking
+                if generated_images:
+                    scored_images = [(generated_images[0].image_path, {"overall": 0.0})]
+                else:
+                    logger.error(f"[{generation_id}] No images available for scene {scene_idx}, skipping...")
+                    continue
+            
+            # Step 4: Rank variations by quality
+            ranked_images = []
+            try:
+                ranked_images = rank_images_by_quality(scored_images)
+                logger.info(
+                    f"[{generation_id}] Ranked {len(ranked_images)} variations for scene {scene_idx}. "
+                    f"Best score: {ranked_images[0][1].get('overall', 0):.1f}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[{generation_id}] Ranking failed for scene {scene_idx}: {e}. "
+                    "Using first image."
+                )
+                # Fallback: use first image
+                if scored_images:
+                    ranked_images = [(scored_images[0][0], scored_images[0][1], 1)]
+                else:
+                    logger.error(f"[{generation_id}] No scored images available for scene {scene_idx}, skipping...")
+                    continue
+            
+            # Step 5: Select best-ranked image (rank 1)
+            best_image_path, best_scores, best_rank = ranked_images[0]
+            
+            # Step 6: Check quality threshold
+            overall_score = best_scores.get("overall", 0.0)
+            if overall_score < quality_threshold:
+                logger.warning(
+                    f"[{generation_id}] Scene {scene_idx} selected reference image quality score "
+                    f"({overall_score:.1f}) is below threshold ({quality_threshold}). "
+                    "Proceeding with selected image."
+                )
+            else:
+                logger.info(
+                    f"[{generation_id}] Scene {scene_idx} selected reference image quality score: "
+                    f"{overall_score:.1f} (threshold: {quality_threshold})"
+                )
+            
+            # Save generation trace metadata
+            generation_trace = {
+                "scene_number": scene_idx,
+                "variations": [
+                    {
+                        "image_path": img_result.image_path,
+                        "scores": scores,
+                        "rank": rank
+                    }
+                    for img_result, (_, scores, rank) in zip(generated_images, ranked_images)
+                ],
+                "selected_image": {
+                    "image_path": best_image_path,
+                    "scores": best_scores,
+                    "rank": best_rank
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            (scene_trace_dir / "generation_trace.json").write_text(
+                json.dumps(generation_trace, indent=2), encoding="utf-8"
+            )
+            
+            # Add selected image to results
+            reference_image_paths.append(best_image_path)
+            
+            # Update previous_reference_image for next scene
+            previous_reference_image = best_image_path
+            
+            logger.info(
+                f"[{generation_id}] ✅ Scene {scene_idx} completed: selected reference image "
+                f"(score: {overall_score:.1f}, rank: {best_rank})"
+            )
+        
+        logger.info(
+            f"[{generation_id}] ✅ All {len(reference_image_paths)} enhanced reference images "
+            "generated with sequential chaining"
+        )
+        
+    finally:
+        # Step 7: Clean up trace files immediately after completion
+        try:
+            if trace_root.exists():
+                shutil.rmtree(trace_root)
+                logger.info(f"[{generation_id}] Cleaned up trace files: {trace_root}")
+        except Exception as e:
+            logger.warning(
+                f"[{generation_id}] Failed to clean up trace files {trace_root}: {e}"
+            )
+    
+    return reference_image_paths
 

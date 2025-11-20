@@ -59,11 +59,11 @@ BMAD rules have been installed to: `.cursor/rules/bmad/`
 - @bmad/bmm/workflows/product-brief - product-brief
 - @bmad/bmm/workflows/research - research
 - @bmad/bmm/workflows/create-ux-design - create-ux-design
-- @bmad/bmm/workflows/create-epics-and-stories - create-epics-and-stories
 - @bmad/bmm/workflows/prd - prd
 - @bmad/bmm/workflows/tech-spec - tech-spec
 - @bmad/bmm/workflows/architecture - architecture
-- @bmad/bmm/workflows/solutioning-gate-check - solutioning-gate-check
+- @bmad/bmm/workflows/create-epics-and-stories - create-epics-and-stories
+- @bmad/bmm/workflows/implementation-readiness - implementation-readiness
 - @bmad/bmm/workflows/code-review - code-review
 - @bmad/bmm/workflows/correct-course - correct-course
 - @bmad/bmm/workflows/create-story - create-story
@@ -74,6 +74,10 @@ BMAD rules have been installed to: `.cursor/rules/bmad/`
 - @bmad/bmm/workflows/story-context - story-context
 - @bmad/bmm/workflows/story-done - story-done
 - @bmad/bmm/workflows/story-ready - story-ready
+- @bmad/bmm/workflows/create-excalidraw-dataflow - create-excalidraw-dataflow
+- @bmad/bmm/workflows/create-excalidraw-diagram - create-excalidraw-diagram
+- @bmad/bmm/workflows/create-excalidraw-flowchart - create-excalidraw-flowchart
+- @bmad/bmm/workflows/create-excalidraw-wireframe - create-excalidraw-wireframe
 - @bmad/bmm/workflows/document-project - document-project
 - @bmad/bmm/workflows/workflow-init - workflow-init
 - @bmad/bmm/workflows/workflow-status - workflow-status

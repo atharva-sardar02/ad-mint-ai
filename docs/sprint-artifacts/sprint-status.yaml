@@ -102,6 +102,7 @@ development_status:
 
   epic-9: contexted
   9-1-video-prompt-feedback-loop-cli: done
-  9-2-video-generation-feedback-loop-cli: in-progress
+  9-2-video-generation-feedback-loop-cli: done
   9-3-integrated-feedback-loop-cli: drafted
+  9-4-enhanced-reference-image-generation: done
   epic-9-retrospective: optional

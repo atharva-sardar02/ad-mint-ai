@@ -122,6 +122,10 @@ async def create_generation_with_image(
         str(image_path),
         refinement_instructions_dict,  # Pass refinement instructions
         brand_name,  # Pass brand name if provided
+        False,  # use_advanced_image_generation (default to False for image endpoint)
+        30.0,   # advanced_image_quality_threshold
+        4,      # advanced_image_num_variations
+        4,      # advanced_image_max_enhancement_iterations
     )
 
     # Initial status update
