@@ -247,13 +247,16 @@ async def generate_enhanced_reference_images_with_sequential_references(
     
     For each scene:
     1. Enhances the image generation prompt using iterative two-agent enhancement
-    2. Generates 4 image variations using the enhanced prompt
+    2. Generates 4 image variations using the enhanced prompt (using google/nano-banana model)
     3. Scores all 4 variations using quality metrics (PickScore, CLIP-Score, Aesthetic)
     4. Ranks variations by overall quality score
     5. Selects the best-ranked image (rank 1) as the reference image for the scene
     6. Checks quality threshold (≥30.0) and logs warnings if below
-    7. Uses selected reference image as input for next scene's generation (sequential chaining)
+    7. Uses selected reference image as input for next scene's generation (sequential chaining via nano-banana image-to-image)
     8. Saves trace files and cleans them up immediately after completion
+    
+    Note: Always uses google/nano-banana model for image generation to support image-to-image
+    sequential chaining, which ensures visual consistency across scenes.
     
     Args:
         prompts: List of base prompts, one per scene (should be detailed image_generation_prompt from LLM)
@@ -386,12 +389,13 @@ async def generate_enhanced_reference_images_with_sequential_references(
                         f"({initial_reference_image}) for first scene"
                     )
                 
-                # Generate variations
+                # Generate variations using nano-banana (supports image-to-image for sequential chaining)
                 generation_results = await generate_images(
                     prompt=enhanced_prompt_with_markers,
                     num_variations=num_variations,
                     aspect_ratio="16:9",
                     output_dir=Path(output_dir),
+                    model_name="google/nano-banana",  # Always use nano-banana for image-to-image support
                     image_input=image_input_list,
                     negative_prompt=enhancement_result.negative_prompt if enhancement_result else None
                 )
@@ -407,12 +411,13 @@ async def generate_enhanced_reference_images_with_sequential_references(
                     "Retrying once..."
                 )
                 try:
-                    # Retry once with original prompt
+                    # Retry once with original prompt using nano-banana
                     generation_results = await generate_images(
                         prompt=base_prompt,
                         num_variations=1,  # Fallback: single image
                         aspect_ratio="16:9",
                         output_dir=Path(output_dir),
+                        model_name="google/nano-banana",  # Always use nano-banana
                         image_input=[previous_reference_image] if previous_reference_image and Path(previous_reference_image).exists() else None
                     )
                     generated_images = generation_results

@@ -1782,7 +1782,7 @@ So that final videos maintain brand identity while improving visual coherence.
 - Optimizes crossfade durations based on scene analysis
 - Adjusts transition easing for smoother flow
 - Uses motion matching for seamless scene linking
-- Applies appropriate transition types (hard cut, crossfade, dissolve) based on scene relationship
+- Applies appropriate transition types (cut, crossfade, wipe, flash, zoom_blur, whip_pan, glitch) based on scene relationship and target audience
 
 **Lighting and Style Normalization:**
 **Given** clips may have varying lighting and style

@@ -246,6 +246,7 @@ class Scene(BaseModel):
     - End image path (last frame for Kling 2.5 Turbo)
     - Model-specific optimized prompts (different for each video model)
     - Standard scene metadata
+    - Transition to next scene
     """
     model_config = {"protected_namespaces": ()}  # Allow model_prompts field
     
@@ -260,6 +261,10 @@ class Scene(BaseModel):
     text_overlay: Optional[TextOverlay] = None
     duration: int = Field(..., ge=3, le=7, description="Duration in seconds (4 seconds for AIDA framework)")
     sound_design: Optional[str] = Field(None, description="Sound design description for ambient SFX (e.g., 'gentle room tone, faint fabric movement')")
+    transition_to_next: Optional[str] = Field(
+        default="crossfade",
+        description="Transition effect to next scene: crossfade, cut, wipe_left, wipe_right, wipe_up, wipe_down, flash, zoom_blur, whip_pan_left, whip_pan_right, whip_pan_up, whip_pan_down, glitch"
+    )
 
 
 class AdSpec(BaseModel):
