@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, editor, generations, generations_with_image, users
+from app.api.routes import auth, editor, generations, generations_with_image, users, master_mode
+from app.api.routes import master_mode_progress
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -108,6 +109,8 @@ app.include_router(generations.router)
 app.include_router(generations_with_image.router)
 app.include_router(users.router)
 app.include_router(editor.router)
+app.include_router(master_mode.router)
+app.include_router(master_mode_progress.router)
 
 # Mount static files for serving videos and thumbnails
 # This allows the frontend to access files at /output/videos/ and /output/thumbnails/
@@ -117,6 +120,17 @@ if output_dir.exists():
     logger.info("Static files mounted at /output")
 else:
     logger.warning("Output directory not found - static file serving disabled")
+
+# Mount temp directory for serving master mode videos
+temp_dir = Path("temp")
+if temp_dir.exists():
+    app.mount("/temp", StaticFiles(directory="temp"), name="temp")
+    logger.info("Static files mounted at /temp")
+else:
+    logger.warning("Temp directory not found - creating it now")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/temp", StaticFiles(directory="temp"), name="temp")
+    logger.info("Static files mounted at /temp")
 
 
 @app.on_event("startup")

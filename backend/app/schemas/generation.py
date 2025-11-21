@@ -153,6 +153,7 @@ class GenerationListItem(BaseModel):
     num_clips: Optional[int] = Field(None, description="Number of clips requested")
     use_llm: Optional[bool] = Field(None, description="Whether LLM enhancement was used")
     generation_time_seconds: Optional[int] = Field(None, description="Time taken to generate the video in seconds")
+    framework: Optional[str] = Field(None, description="Framework used (e.g., 'PAS', 'BAB', 'AIDA', 'master_mode')")
 
     class Config:
         from_attributes = True

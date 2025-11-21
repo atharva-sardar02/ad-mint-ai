@@ -54,9 +54,34 @@
 
 ### Supported Models (via Replicate)
 
+#### Google Veo 3.1 (Default)
+- **Model**: `google/veo-3.1`
+- **Default**: Yes (recommended)
+- **Features**:
+  - Top-tier cinematic quality with stunning HD visuals
+  - Native audio generation with lip-synced dialogue
+  - Reference-to-Video (R2V) mode with 1-3 reference images
+  - Start/end frame control for precise video interpolation
+  - Resolution control (720p or 1080p)
+- **Parameters**:
+  - `prompt`: Enhanced detailed prompt
+  - `duration`: 4, 6, or 8 seconds (rounded to nearest valid value)
+  - `aspect_ratio`: "9:16" or "16:9" (16:9 required for reference_images)
+  - `resolution`: "720p" or "1080p" (default: "1080p")
+  - `generate_audio`: boolean (default: true)
+  - `negative_prompt`: Optional text description of what to exclude
+  - `seed`: Optional integer for reproducibility
+  - **R2V Mode** (when `reference_images` provided):
+    - `reference_images`: Array of 1-3 reference images
+    - Requires 16:9 aspect ratio and 8-second duration
+    - `last_frame` is ignored when reference_images are provided
+  - **Start/End Frame Mode** (when no `reference_images`):
+    - `image`: Start image (input image to start from)
+    - `last_frame`: End image (for interpolation between start and end)
+- **Cost**: ~$0.12 per second
+
 #### Sora-2 (OpenAI)
 - **Model**: `openai/sora-2`
-- **Default**: Yes (recommended)
 - **Features**:
   - State-of-the-art realism
   - Exceptional physics
@@ -69,19 +94,6 @@
   - `quality`: "high"
   - `input_reference`: Generated reference image
 - **Cost**: ~$0.10 per second
-
-#### Veo-3 (Google)
-- **Model**: `google/veo-3`
-- **Features**:
-  - Top-tier cinematic quality
-  - Stunning HD visuals
-  - Native audio generation
-  - Lip-synced dialogue
-- **Parameters**:
-  - `prompt`: Enhanced detailed prompt
-  - `duration`: 4, 6, or 8 seconds (rounded)
-  - `aspect_ratio`: "9:16"
-- **Cost**: ~$0.12 per second
 
 #### PixVerse V5
 - **Model**: `pixverse/pixverse-v5`
