@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 # Default model: Google Veo 3.1 - Premium cinematic quality with native audio, reference images, and start/end frame control
 # Top models ranked by quality: Sora 2, Veo 3.1, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
-    "default": "google/veo-3.1",  # Google Veo 3.1 - Default with premium cinematic quality and native audio
-    "veo_3": "google/veo-3.1",
+    "default": "google/veo-3",  # Default to Veo 3 per requirements
+    "veo_3": "google/veo-3",
     "veo_3_1": "google/veo-3.1",
     "pixverse_v5": "pixverse/pixverse-v5",
     "kling_2_5": "kwaivgi/kling-v2.5-turbo-pro",  # Kling 2.5 Turbo Pro on Replicate
@@ -294,7 +294,7 @@ async def generate_video_clip(
     # - bytedance/seedance-1 (404)
     # - minimax-ai/hailuo-02 (404)
     models_to_try.extend([
-        REPLICATE_MODELS["veo_3"],  # May have rate limits but exists
+        REPLICATE_MODELS["veo_3_1"],  # Backup Veo model
         REPLICATE_MODELS["pixverse_v5"],  # Reliable fallback
         # Legacy fallbacks (verified to exist)
         REPLICATE_MODELS["primary"],  # bytedance/seedance-1-lite

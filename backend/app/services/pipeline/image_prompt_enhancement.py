@@ -1176,3 +1176,36 @@ Refine the prompt to improve image quality scores. Focus on:
         model_name=image_model_name
     )
 
+
+# Alias for backward compatibility with interactive pipeline
+async def enhance_image_prompt(
+    base_prompt: str,
+    story_context: str = "",
+    target_style: str = "cinematic",
+    max_iterations: int = 1,
+    **kwargs
+) -> Dict[str, any]:
+    """
+    Simple wrapper for interactive pipeline compatibility.
+    Returns a dict with 'enhanced_prompt' key.
+    """
+    # Combine prompt with story context
+    full_prompt = f"{base_prompt}"
+    if story_context:
+        full_prompt = f"{full_prompt}. Context: {story_context}"
+    if target_style:
+        full_prompt = f"{full_prompt}. Style: {target_style}"
+
+    # Use the iterative enhancement but with minimal iterations for speed
+    result = await enhance_prompt_iterative(
+        user_prompt=full_prompt,
+        max_iterations=max_iterations,
+        score_threshold=100.0,  # Never stop early
+        **kwargs
+    )
+
+    return {
+        "enhanced_prompt": result.final_prompt,
+        "negative_prompt": result.negative_prompt,
+        "score": result.final_score
+    }

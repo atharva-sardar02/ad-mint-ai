@@ -1,0 +1,66 @@
+The camera ascends swiftly, transitioning from the intimate close-ups of rustling silk curtains to the grandeur of Paris at twilight, with the movement punctuated by the rustling of leaves and a distant echo of laughter, as the focus shifts subtly from the abstract play of shadows to the iconic Parisian backdrop, gradually uncovering the Dior CANUE bottle that reflects the city's enchanting ambiance.
+
+
+UNIFIED NARRATIVE CONTEXT:
+- Overall Story: The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.
+- Emotional Arc: {
+  "scene_1": {
+    "scene_type": "Discovery",
+    "emotional_state": "Anticipation, curiosity, mystery",
+    "visual_mood": "Abstract, mysterious, ethereal",
+    "product_visibility": "hidden",
+    "narrative_purpose": "Create intrigue and anticipation with sensory close-ups"
+  },
+  "scene_2": {
+    "scene_type": "Transformation",
+    "emotional_state": "Recognition, connection, understanding",
+    "visual_mood": "Product-focused, revealing, engaging",
+    "product_visibility": "partial",
+    "narrative_purpose": "Showcase the emotional connection with the backdrop of the Eiffel Tower"
+  },
+  "scene_3": {
+    "scene_type": "Desire",
+    "emotional_state": "Aspiration, desire, action",
+    "visual_mood": "Lifestyle, elegant, aspirational",
+    "product_visibility": "full",
+    "narrative_purpose": "Inspire desire and action with a full product reveal"
+  }
+}
+- Visual Progression: {
+  "scene_1": "Abstract shapes, shadows, reflections, mysterious lighting",
+  "scene_2": "Product details emerge, clearer composition, focused lighting",
+  "scene_3": "Full product reveal, lifestyle integration, aspirational setting"
+}
+- Scene Connections: {
+  "scene_1_to_2": {
+    "narrative_transition": "Transition from abstract sensory elements to a focused view of the Eiffel Tower",
+    "visual_transition": "Shift from ethereal to clearer, more structured visuals",
+    "emotional_transition": "From mystery to recognition and budding connection"
+  },
+  "scene_2_to_3": {
+    "narrative_transition": "From the emotional backdrop to the intimate product reveal",
+    "visual_transition": "From partial visibility to full product showcase",
+    "emotional_transition": "Building from connection to deep desire and aspiration"
+  }
+}
+- Product Reveal Strategy: {
+  "scene_1": "Product hidden or very subtle (abstract shapes suggesting product)",
+  "scene_2": "Product partially visible (side angle, close-up details, application)",
+  "scene_3": "Product fully visible (hero shot, lifestyle integration)"
+}
+
+
+
+VISUAL CONTEXT (for image-to-video generation):
+- Start Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_001_start.png
+- End Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_001_end.png
+- Motion should transition smoothly from start to end frame
+
+
+Enhance this motion description to:
+- Maintain story coherence with overall narrative
+- Follow the emotional arc progression from the narrative
+- Apply consistent visual progression strategy
+- Create smooth narrative transitions between clips
+- Align with scene connections and product reveal strategy
+- Reference start/end frames for image-to-video generation

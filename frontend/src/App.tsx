@@ -2,7 +2,7 @@
  * Main App component with React Router setup.
  */
 import React, { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Navbar } from "./components/layout/Navbar";
@@ -17,7 +17,23 @@ import { ComparisonDetail } from "./routes/ComparisonDetail";
 import { Queue } from "./routes/Queue";
 import { Editor } from "./routes/Editor";
 import { Storyboard } from "./routes/Storyboard";
+import { InteractivePipeline } from "./components/generation/InteractivePipeline";
 import "./App.css";
+
+/**
+ * Wrapper component to pass location state to InteractivePipeline.
+ */
+function InteractivePipelineWrapper() {
+  const location = useLocation();
+  const state = location.state as { prompt?: string; targetDuration?: number; title?: string } | null;
+
+  return (
+    <InteractivePipeline
+      initialPrompt={state?.prompt}
+      targetDuration={state?.targetDuration || 15}
+    />
+  );
+}
 
 /**
  * App component.
@@ -145,6 +161,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Storyboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interactive"
+            element={
+              <ProtectedRoute>
+                <InteractivePipelineWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interactive/:sessionId"
+            element={
+              <ProtectedRoute>
+                <InteractivePipelineWrapper />
               </ProtectedRoute>
             }
           />

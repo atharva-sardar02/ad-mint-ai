@@ -1,0 +1,94 @@
+{
+  "storyboard_path": "output/pipeline_runs/20251119_205736/03_storyboard/storyboard_metadata.json",
+  "unified_narrative_path": "output/pipeline_runs/20251119_205736/03_storyboard/storyboard_enhancement_trace/unified_narrative.md",
+  "clips": [
+    {
+      "clip_number": 1,
+      "original_motion_description": "The camera ascends swiftly, transitioning from the intimate close-ups of rustling silk curtains to the grandeur of Paris at twilight, with the movement punctuated by the rustling of leaves and a distant echo of laughter, as the focus shifts subtly from the abstract play of shadows to the iconic Parisian backdrop, gradually uncovering the Dior CANUE bottle that reflects the city's enchanting ambiance.",
+      "enhanced_motion_prompt": "The camera ascends swiftly, transitioning from the intimate close-ups of rustling silk curtains to the grandeur of Paris at twilight, with the movement punctuated by the rustling of leaves and a distant echo of laughter, as the focus shifts subtly from the abstract play of shadows to the iconic Parisian backdrop, gradually uncovering the Dior CANUE bottle that reflects the city's enchanting ambiance.\n\n\nUNIFIED NARRATIVE CONTEXT:\n- Overall Story: The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.\n- Emotional Arc: {\n  \"scene_1\": {\n    \"scene_type\": \"Discovery\",\n    \"emotional_state\": \"Anticipation, curiosity, mystery\",\n    \"visual_mood\": \"Abstract, mysterious, ethereal\",\n    \"product_visibility\": \"hidden\",\n    \"narrative_purpose\": \"Create intrigue and anticipation with sensory close-ups\"\n  },\n  \"scene_2\": {\n    \"scene_type\": \"Transformation\",\n    \"emotional_state\": \"Recognition, connection, understanding\",\n    \"visual_mood\": \"Product-focused, revealing, engaging\",\n    \"product_visibility\": \"partial\",\n    \"narrative_purpose\": \"Showcase the emotional connection with the backdrop of the Eiffel Tower\"\n  },\n  \"scene_3\": {\n    \"scene_type\": \"Desire\",\n    \"emotional_state\": \"Aspiration, desire, action\",\n    \"visual_mood\": \"Lifestyle, elegant, aspirational\",\n    \"product_visibility\": \"full\",\n    \"narrative_purpose\": \"Inspire desire and action with a full product reveal\"\n  }\n}\n- Visual Progression: {\n  \"scene_1\": \"Abstract shapes, shadows, reflections, mysterious lighting\",\n  \"scene_2\": \"Product details emerge, clearer composition, focused lighting\",\n  \"scene_3\": \"Full product reveal, lifestyle integration, aspirational setting\"\n}\n- Scene Connections: {\n  \"scene_1_to_2\": {\n    \"narrative_transition\": \"Transition from abstract sensory elements to a focused view of the Eiffel Tower\",\n    \"visual_transition\": \"Shift from ethereal to clearer, more structured visuals\",\n    \"emotional_transition\": \"From mystery to recognition and budding connection\"\n  },\n  \"scene_2_to_3\": {\n    \"narrative_transition\": \"From the emotional backdrop to the intimate product reveal\",\n    \"visual_transition\": \"From partial visibility to full product showcase\",\n    \"emotional_transition\": \"Building from connection to deep desire and aspiration\"\n  }\n}\n- Product Reveal Strategy: {\n  \"scene_1\": \"Product hidden or very subtle (abstract shapes suggesting product)\",\n  \"scene_2\": \"Product partially visible (side angle, close-up details, application)\",\n  \"scene_3\": \"Product fully visible (hero shot, lifestyle integration)\"\n}\n\n\n\nVISUAL CONTEXT (for image-to-video generation):\n- Start Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_001_start.png\n- End Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_001_end.png\n- Motion should transition smoothly from start to end frame\n\n\nEnhance this motion description to:\n- Maintain story coherence with overall narrative\n- Follow the emotional arc progression from the narrative\n- Apply consistent visual progression strategy\n- Create smooth narrative transitions between clips\n- Align with scene connections and product reveal strategy\n- Reference start/end frames for image-to-video generation\n",
+      "motion_prompt": null,
+      "scores": {
+        "completeness": 100.0,
+        "specificity": 100.0,
+        "professionalism": 90.0,
+        "cinematography": 100.0,
+        "temporal_coherence": 80.0,
+        "brand_alignment": 100.0,
+        "overall": 95.5
+      },
+      "iterations": 0,
+      "camera_movement": "Push in from wide to medium",
+      "shot_size": "Wide shot",
+      "perspective": "Eye level, establishing",
+      "lens_type": "24-35mm wide angle",
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_001_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_001_end.png"
+    },
+    {
+      "clip_number": 2,
+      "original_motion_description": "The camera performs a dramatic crane movement upwards and shifts from a close-up side profile to a wide high angle, transitioning the focus from the intimate details of the fluttering silk curtains and subtle glimpses of the bottle, through a parallax effect that gracefully reveals the Eiffel Tower in the background, while the evening light deepens to a rich amber, casting dynamic reflections on the bottle's glass surface and transforming the visual mood from mysterious allure to a clear, romantic connection.",
+      "enhanced_motion_prompt": "The camera performs a dramatic crane movement upwards and shifts from a close-up side profile to a wide high angle, transitioning the focus from the intimate details of the fluttering silk curtains and subtle glimpses of the bottle, through a parallax effect that gracefully reveals the Eiffel Tower in the background, while the evening light deepens to a rich amber, casting dynamic reflections on the bottle's glass surface and transforming the visual mood from mysterious allure to a clear, romantic connection.\n\n\nUNIFIED NARRATIVE CONTEXT:\n- Overall Story: The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.\n- Emotional Arc: {\n  \"scene_1\": {\n    \"scene_type\": \"Discovery\",\n    \"emotional_state\": \"Anticipation, curiosity, mystery\",\n    \"visual_mood\": \"Abstract, mysterious, ethereal\",\n    \"product_visibility\": \"hidden\",\n    \"narrative_purpose\": \"Create intrigue and anticipation with sensory close-ups\"\n  },\n  \"scene_2\": {\n    \"scene_type\": \"Transformation\",\n    \"emotional_state\": \"Recognition, connection, understanding\",\n    \"visual_mood\": \"Product-focused, revealing, engaging\",\n    \"product_visibility\": \"partial\",\n    \"narrative_purpose\": \"Showcase the emotional connection with the backdrop of the Eiffel Tower\"\n  },\n  \"scene_3\": {\n    \"scene_type\": \"Desire\",\n    \"emotional_state\": \"Aspiration, desire, action\",\n    \"visual_mood\": \"Lifestyle, elegant, aspirational\",\n    \"product_visibility\": \"full\",\n    \"narrative_purpose\": \"Inspire desire and action with a full product reveal\"\n  }\n}\n- Visual Progression: {\n  \"scene_1\": \"Abstract shapes, shadows, reflections, mysterious lighting\",\n  \"scene_2\": \"Product details emerge, clearer composition, focused lighting\",\n  \"scene_3\": \"Full product reveal, lifestyle integration, aspirational setting\"\n}\n- Scene Connections: {\n  \"scene_1_to_2\": {\n    \"narrative_transition\": \"Transition from abstract sensory elements to a focused view of the Eiffel Tower\",\n    \"visual_transition\": \"Shift from ethereal to clearer, more structured visuals\",\n    \"emotional_transition\": \"From mystery to recognition and budding connection\"\n  },\n  \"scene_2_to_3\": {\n    \"narrative_transition\": \"From the emotional backdrop to the intimate product reveal\",\n    \"visual_transition\": \"From partial visibility to full product showcase\",\n    \"emotional_transition\": \"Building from connection to deep desire and aspiration\"\n  }\n}\n- Product Reveal Strategy: {\n  \"scene_1\": \"Product hidden or very subtle (abstract shapes suggesting product)\",\n  \"scene_2\": \"Product partially visible (side angle, close-up details, application)\",\n  \"scene_3\": \"Product fully visible (hero shot, lifestyle integration)\"\n}\n\n\n\nVISUAL CONTEXT (for image-to-video generation):\n- Start Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_002_start.png\n- End Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_002_end.png\n- Motion should transition smoothly from start to end frame\n\n\nEnhance this motion description to:\n- Maintain story coherence with overall narrative\n- Follow the emotional arc progression from the narrative\n- Apply consistent visual progression strategy\n- Create smooth narrative transitions between clips\n- Align with scene connections and product reveal strategy\n- Reference start/end frames for image-to-video generation\n",
+      "motion_prompt": null,
+      "scores": {
+        "completeness": 100.0,
+        "specificity": 100.0,
+        "professionalism": 90.0,
+        "cinematography": 100.0,
+        "temporal_coherence": 80.0,
+        "brand_alignment": 100.0,
+        "overall": 95.5
+      },
+      "iterations": 0,
+      "camera_movement": "Smooth pan or dolly movement",
+      "shot_size": "Medium shot",
+      "perspective": "Eye level, dynamic",
+      "lens_type": "35-50mm standard",
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_002_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_002_end.png"
+    },
+    {
+      "clip_number": 3,
+      "original_motion_description": "Throughout the scene, the camera executes a dynamic orbital rotation around the bottle, transitioning from a mysterious backlit silhouette to a vividly lit hero shot, while the background subtly shifts from detailed Parisian street scenes to a soft, dreamlike focus on the Eiffel Tower, enhancing the bottle's journey from the shadows into a captivating beam of light that seems to draw all of Paris into its allure.",
+      "enhanced_motion_prompt": "Throughout the scene, the camera executes a dynamic orbital rotation around the bottle, transitioning from a mysterious backlit silhouette to a vividly lit hero shot, while the background subtly shifts from detailed Parisian street scenes to a soft, dreamlike focus on the Eiffel Tower, enhancing the bottle's journey from the shadows into a captivating beam of light that seems to draw all of Paris into its allure.\n\n\nUNIFIED NARRATIVE CONTEXT:\n- Overall Story: The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.\n- Emotional Arc: {\n  \"scene_1\": {\n    \"scene_type\": \"Discovery\",\n    \"emotional_state\": \"Anticipation, curiosity, mystery\",\n    \"visual_mood\": \"Abstract, mysterious, ethereal\",\n    \"product_visibility\": \"hidden\",\n    \"narrative_purpose\": \"Create intrigue and anticipation with sensory close-ups\"\n  },\n  \"scene_2\": {\n    \"scene_type\": \"Transformation\",\n    \"emotional_state\": \"Recognition, connection, understanding\",\n    \"visual_mood\": \"Product-focused, revealing, engaging\",\n    \"product_visibility\": \"partial\",\n    \"narrative_purpose\": \"Showcase the emotional connection with the backdrop of the Eiffel Tower\"\n  },\n  \"scene_3\": {\n    \"scene_type\": \"Desire\",\n    \"emotional_state\": \"Aspiration, desire, action\",\n    \"visual_mood\": \"Lifestyle, elegant, aspirational\",\n    \"product_visibility\": \"full\",\n    \"narrative_purpose\": \"Inspire desire and action with a full product reveal\"\n  }\n}\n- Visual Progression: {\n  \"scene_1\": \"Abstract shapes, shadows, reflections, mysterious lighting\",\n  \"scene_2\": \"Product details emerge, clearer composition, focused lighting\",\n  \"scene_3\": \"Full product reveal, lifestyle integration, aspirational setting\"\n}\n- Scene Connections: {\n  \"scene_1_to_2\": {\n    \"narrative_transition\": \"Transition from abstract sensory elements to a focused view of the Eiffel Tower\",\n    \"visual_transition\": \"Shift from ethereal to clearer, more structured visuals\",\n    \"emotional_transition\": \"From mystery to recognition and budding connection\"\n  },\n  \"scene_2_to_3\": {\n    \"narrative_transition\": \"From the emotional backdrop to the intimate product reveal\",\n    \"visual_transition\": \"From partial visibility to full product showcase\",\n    \"emotional_transition\": \"Building from connection to deep desire and aspiration\"\n  }\n}\n- Product Reveal Strategy: {\n  \"scene_1\": \"Product hidden or very subtle (abstract shapes suggesting product)\",\n  \"scene_2\": \"Product partially visible (side angle, close-up details, application)\",\n  \"scene_3\": \"Product fully visible (hero shot, lifestyle integration)\"\n}\n\n\n\nVISUAL CONTEXT (for image-to-video generation):\n- Start Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_003_start.png\n- End Frame: output/pipeline_runs/20251119_205736/03_storyboard/clip_003_end.png\n- Motion should transition smoothly from start to end frame\n\n\nEnhance this motion description to:\n- Maintain story coherence with overall narrative\n- Follow the emotional arc progression from the narrative\n- Apply consistent visual progression strategy\n- Create smooth narrative transitions between clips\n- Align with scene connections and product reveal strategy\n- Reference start/end frames for image-to-video generation\n",
+      "motion_prompt": null,
+      "scores": {
+        "completeness": 100.0,
+        "specificity": 100.0,
+        "professionalism": 90.0,
+        "cinematography": 100.0,
+        "temporal_coherence": 80.0,
+        "brand_alignment": 100.0,
+        "overall": 95.5
+      },
+      "iterations": 0,
+      "camera_movement": "Pull back slightly, static finish",
+      "shot_size": "Medium to close-up",
+      "perspective": "Eye level, slightly elevated",
+      "lens_type": "50-85mm standard to telephoto",
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_003_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_003_end.png"
+    }
+  ],
+  "clip_frame_paths": {
+    "1": {
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_001_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_001_end.png"
+    },
+    "2": {
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_002_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_002_end.png"
+    },
+    "3": {
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_003_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_003_end.png"
+    }
+  },
+  "summary": {
+    "total_clips": 3,
+    "average_score": 95.5,
+    "min_score": 95.5,
+    "max_score": 95.5,
+    "total_iterations": 0,
+    "timestamp": "2025-11-19T21:04:15.401502"
+  }
+}

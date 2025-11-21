@@ -17,8 +17,8 @@ from app.services.pipeline.video_generation import MAX_RETRIES, POLL_INTERVAL
 
 logger = logging.getLogger(__name__)
 
-# Nano Banana model on Replicate
-NANO_BANANA_MODEL = "google/nano-banana"
+# Nano Banana Pro model on Replicate
+NANO_BANANA_MODEL = "google/nano-banana-pro"
 
 # Cost per image (approximate)
 IMAGE_COST = 0.01  # $0.01 per image (estimate)
@@ -172,56 +172,25 @@ async def _generate_image_with_retry(
                 f"Calling Nano Banana API (attempt {attempt}/{MAX_RETRIES})"
             )
             
-            # Prepare input parameters for Nano Banana
-            # Based on Replicate docs, nano-banana accepts:
-            # - prompt: text prompt
-            # - num_outputs: number of images (default 1)
-            # - aspect_ratio: "1:1", "16:9", "9:16", etc.
-            # - seed: optional seed for consistency
-            # - reference_image: optional reference image for character/style consistency
+            # Prepare input parameters for Nano Banana Pro
             input_params = {
                 "prompt": prompt,
-                "num_outputs": 1,
-                "aspect_ratio": "9:16",  # Vertical for mobile ads
+                "resolution": "2K",
+                "aspect_ratio": "9:16",
+                "output_format": "png",
+                "safety_filter_level": "block_only_high",
+                "image_input": [],
             }
-            
-            # Add reference image if provided (for visual consistency)
-            # Nano Banana supports character and style consistency via reference images
-            file_handles_to_close = []
-            if reference_image_path:
-                try:
-                    image_path_obj = Path(reference_image_path)
-                    if not image_path_obj.exists():
-                        logger.warning(f"Reference image not found: {reference_image_path}, continuing without reference")
-                    else:
-                        # Open file as binary for Replicate SDK
-                        image_file_handle = open(image_path_obj, "rb")
-                        input_params["reference_image"] = image_file_handle
-                        file_handles_to_close.append(image_file_handle)
-                        logger.info(
-                            f"✅ Using reference image for consistency: {reference_image_path} "
-                            f"(size: {image_path_obj.stat().st_size} bytes)"
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to load reference image: {e}, continuing without reference")
             
             logger.info(f"Generating image with Nano Banana: {prompt[:80]}...")
             if reference_image_path:
                 logger.info(f"  Using reference image for visual consistency")
             
             # Create prediction
-            try:
-                prediction = client.predictions.create(
-                    model=NANO_BANANA_MODEL,
-                    input=input_params
-                )
-            finally:
-                # Close file handles after API call (Replicate SDK reads them immediately)
-                for fh in file_handles_to_close:
-                    try:
-                        fh.close()
-                    except Exception:
-                        pass
+            prediction = client.predictions.create(
+                model=NANO_BANANA_MODEL,
+                input=input_params
+            )
             
             # Poll for completion
             poll_start_time = time.time()

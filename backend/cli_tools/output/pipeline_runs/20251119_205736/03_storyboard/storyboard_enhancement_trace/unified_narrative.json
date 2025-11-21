@@ -1,0 +1,88 @@
+{
+  "overall_story": {
+    "narrative": "The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.",
+    "framework": "Sensory Journey",
+    "total_scenes": 3,
+    "target_duration": 15
+  },
+  "scene_durations": {
+    "scene_1": 4,
+    "scene_2": 5,
+    "scene_3": 6
+  },
+  "emotional_arc": {
+    "scene_1": {
+      "scene_type": "Discovery",
+      "emotional_state": "Anticipation, curiosity, mystery",
+      "visual_mood": "Abstract, mysterious, ethereal",
+      "product_visibility": "hidden",
+      "narrative_purpose": "Create intrigue and anticipation with sensory close-ups"
+    },
+    "scene_2": {
+      "scene_type": "Transformation",
+      "emotional_state": "Recognition, connection, understanding",
+      "visual_mood": "Product-focused, revealing, engaging",
+      "product_visibility": "partial",
+      "narrative_purpose": "Showcase the emotional connection with the backdrop of the Eiffel Tower"
+    },
+    "scene_3": {
+      "scene_type": "Desire",
+      "emotional_state": "Aspiration, desire, action",
+      "visual_mood": "Lifestyle, elegant, aspirational",
+      "product_visibility": "full",
+      "narrative_purpose": "Inspire desire and action with a full product reveal"
+    }
+  },
+  "scene_connections": {
+    "scene_1_to_2": {
+      "narrative_transition": "Transition from abstract sensory elements to a focused view of the Eiffel Tower",
+      "visual_transition": "Shift from ethereal to clearer, more structured visuals",
+      "emotional_transition": "From mystery to recognition and budding connection"
+    },
+    "scene_2_to_3": {
+      "narrative_transition": "From the emotional backdrop to the intimate product reveal",
+      "visual_transition": "From partial visibility to full product showcase",
+      "emotional_transition": "Building from connection to deep desire and aspiration"
+    }
+  },
+  "visual_progression": {
+    "scene_1": "Abstract shapes, shadows, reflections, mysterious lighting",
+    "scene_2": "Product details emerge, clearer composition, focused lighting",
+    "scene_3": "Full product reveal, lifestyle integration, aspirational setting"
+  },
+  "product_reveal_strategy": {
+    "scene_1": "Product hidden or very subtle (abstract shapes suggesting product)",
+    "scene_2": "Product partially visible (side angle, close-up details, application)",
+    "scene_3": "Product fully visible (hero shot, lifestyle integration)"
+  },
+  "brand_narrative": {
+    "brand_identity": "Elegant and minimalist representation of Dior throughout",
+    "color_palette": {
+      "dominant_colors": [
+        "#1F1F2E",
+        "#D09C67"
+      ],
+      "usage_across_scenes": "Warm tones dominate with dark accents, maintaining elegance"
+    },
+    "style_consistency": "Luxury and sophistication consistent in each scene",
+    "brand_message": "Capturing the essence of Parisian elegance with an unforgettable sensory experience"
+  },
+  "motion_and_cinematography_strategy": {
+    "scene_1": {
+      "camera_movements": "Dramatic camera movements (orbital rotation, dramatic push-in, parallax movements) to create mystery",
+      "environmental_dynamics": "Leaves rustling, soft breeze through curtains, warm city hues",
+      "lighting_transformations": "From dim evening to glowing highlights"
+    },
+    "scene_2": {
+      "camera_movements": "Creative camera work (Dutch angle shifts, rack focus pulls, crane movements) to build connection",
+      "environmental_dynamics": "Close-up of reflective surfaces, shifting light on the Eiffel Tower",
+      "lighting_transformations": "Evening light transitions to a deeper amber"
+    },
+    "scene_3": {
+      "camera_movements": "Cinematic camera movements (fluid arcs, cinematic sweeps, dynamic transitions) to inspire desire",
+      "environmental_dynamics": "Intimate focus on bottle details, background lifestyle elements",
+      "lighting_transformations": "Spotlight on the product, luxurious glow"
+    },
+    "overall_approach": "Emphasize dynamic motion, dramatic visual distinctions, and creative camera work. Avoid formulaic language like 'slowly', 'gradually', 'subtly'. Use creative terms that describe dramatic transformations and cinematic movements."
+  }
+}

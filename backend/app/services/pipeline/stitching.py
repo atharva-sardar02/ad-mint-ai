@@ -15,6 +15,64 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def _validate_clip(clip: VideoFileClip, clip_name: str = "clip") -> bool:
+    """
+    Validate that a clip has valid dimensions and can be processed.
+
+    Args:
+        clip: Video clip to validate
+        clip_name: Name for logging purposes
+
+    Returns:
+        bool: True if clip is valid, False otherwise
+    """
+    try:
+        if not clip or not hasattr(clip, 'size') or not clip.size:
+            logger.warning(f"{clip_name} has no size")
+            return False
+
+        try:
+            size = clip.size
+            if not isinstance(size, (tuple, list)) or len(size) != 2:
+                logger.warning(f"{clip_name} has invalid size format: {size}")
+                return False
+            w, h = size
+        except (TypeError, ValueError) as e:
+            logger.warning(f"{clip_name} size cannot be unpacked: {e}")
+            return False
+
+        if w <= 0 or h <= 0:
+            logger.warning(f"{clip_name} has invalid dimensions: {w}x{h}")
+            return False
+
+        if not hasattr(clip, 'duration') or not clip.duration or clip.duration <= 0:
+            logger.warning(f"{clip_name} has invalid duration: {clip.duration if hasattr(clip, 'duration') else 'N/A'}")
+            return False
+
+        # Try to read first and last frames to verify clip is readable
+        try:
+            first_frame = clip.get_frame(0)
+            if first_frame is None or first_frame.shape[0] <= 0 or first_frame.shape[1] <= 0:
+                logger.warning(f"{clip_name} first frame has invalid shape")
+                return False
+
+            # Check last frame (or near end to avoid corrupted tail)
+            last_frame_time = max(0, clip.duration - 0.1)
+            last_frame = clip.get_frame(last_frame_time)
+            if last_frame is None or last_frame.shape[0] <= 0 or last_frame.shape[1] <= 0:
+                logger.warning(f"{clip_name} last frame has invalid shape")
+                return False
+
+        except Exception as e:
+            logger.warning(f"{clip_name} cannot read frames: {e}")
+            return False
+
+        return True
+    except Exception as e:
+        logger.warning(f"Error validating {clip_name}: {e}")
+        return False
+
+
 def _apply_crossfade_transition(clip1: VideoFileClip, clip2: VideoFileClip, duration: float = 0.5) -> tuple:
     """Apply crossfade transition between two clips."""
     # Apply fade out to end of clip1
@@ -361,13 +419,18 @@ def stitch_video_clips(
             
             logger.debug(f"Loading clip {i}/{len(clip_paths)}: {clip_path}")
             clip = VideoFileClip(str(clip_path))
-            
+
+            # Validate clip integrity
+            if not _validate_clip(clip, f"clip_{i}"):
+                logger.error(f"Clip {i} ({clip_path}) is corrupted or invalid")
+                raise RuntimeError(f"Clip {i} is corrupted or has invalid frames. Please regenerate this video clip.")
+
             # Normalize frame rate to 24 fps (default) for consistency
             # MoviePy will handle frame rate conversion
             if clip.fps and clip.fps != 24:
                 logger.debug(f"Normalizing clip {i} frame rate from {clip.fps} to 24 fps")
                 clip = clip.with_fps(24)
-            
+
             clips.append(clip)
         
         if not clips:
@@ -415,22 +478,38 @@ def stitch_video_clips(
                     result = apply_transition(
                         prev_clip, current_clip, transition_type, duration=0.5
                     )
-                    
+
                     # Handle both 2-tuple and 3-tuple returns
                     if len(result) == 2:
                         # Simple transition (crossfade, cut)
                         processed_prev, processed_current = result
+
+                        # Validate results
+                        if not _validate_clip(processed_prev, f"processed_clip_{i-1}"):
+                            raise ValueError(f"Processed clip {i-1} became invalid after transition")
+                        if not _validate_clip(processed_current, f"processed_clip_{i}"):
+                            raise ValueError(f"Processed clip {i} became invalid after transition")
+
                         processed_clips[-1] = processed_prev
                         processed_clips.append(processed_current)
                     elif len(result) == 3:
                         # Complex transition with composite (wipe, flash, zoom_blur, whip_pan, glitch)
                         shortened_prev, transition_composite, shortened_current = result
+
+                        # Validate all three clips
+                        if not _validate_clip(shortened_prev, f"shortened_clip_{i-1}"):
+                            raise ValueError(f"Shortened clip {i-1} became invalid")
+                        if not _validate_clip(transition_composite, f"transition_{i-1}_{i}"):
+                            raise ValueError(f"Transition composite {i-1}->{i} is invalid")
+                        if not _validate_clip(shortened_current, f"shortened_clip_{i}"):
+                            raise ValueError(f"Shortened clip {i} became invalid")
+
                         processed_clips[-1] = shortened_prev
                         processed_clips.append(transition_composite)
                         processed_clips.append(shortened_current)
                     else:
                         raise ValueError(f"Invalid transition result length: {len(result)}")
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to apply transition '{transition_type}': {e}. Using crossfade fallback.")
                     # Fallback to crossfade if transition fails
@@ -438,11 +517,19 @@ def stitch_video_clips(
                         processed_prev, processed_current = apply_transition(
                             prev_clip, current_clip, "crossfade", duration=0.5
                         )
+
+                        # Validate crossfade results
+                        if not _validate_clip(processed_prev, f"crossfade_clip_{i-1}"):
+                            raise ValueError("Crossfade produced invalid previous clip")
+                        if not _validate_clip(processed_current, f"crossfade_clip_{i}"):
+                            raise ValueError("Crossfade produced invalid current clip")
+
                         processed_clips[-1] = processed_prev
                         processed_clips.append(processed_current)
                     except Exception as fallback_error:
-                        logger.error(f"Fallback transition also failed: {fallback_error}. Using hard cut.")
-                        # Last resort: hard cut
+                        logger.error(f"Fallback crossfade also failed: {fallback_error}. Using hard cut.")
+                        # Last resort: hard cut (no processing, just use original clips)
+                        # The prev_clip is already in processed_clips, just add current_clip
                         processed_clips.append(current_clip)
             
             clips = processed_clips

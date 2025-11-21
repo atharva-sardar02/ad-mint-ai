@@ -51,6 +51,11 @@ class Settings:
         "STATIC_BASE_URL", "http://localhost:8000/output"
     )
 
+    # Output directory for generated files
+    OUTPUT_BASE_DIR: str = os.getenv(
+        "OUTPUT_BASE_DIR", str(BACKEND_DIR / "cli_tools" / "output")
+    )
+
     # AWS S3 configuration
     AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -70,6 +75,9 @@ class Settings:
     # When False: Quality is evaluated and stored, but regeneration is not triggered automatically
     # Quality metrics are still available via API for manual review
     ENABLE_AUTOMATIC_REGENERATION: bool = os.getenv("ENABLE_AUTOMATIC_REGENERATION", "false").lower() == "true"
+
+    # Redis configuration (for session storage)
+    REDIS_URL: Optional[str] = os.getenv("REDIS_URL")  # e.g., "redis://localhost:6379/0"
 
 
 settings = Settings()

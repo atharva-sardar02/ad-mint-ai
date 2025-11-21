@@ -218,3 +218,4 @@ def get_default_negative_prompt(model_name: str) -> str:
     defaults = strategy.get("negative_prompt_defaults", [])
     return ", ".join(defaults)
 
+

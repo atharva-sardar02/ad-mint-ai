@@ -53,6 +53,8 @@ def test_stitch_video_clips_basic(
         clip = MagicMock()
         clip.duration = 5.0
         clip.fps = 24.0
+        clip.size = (1920, 1080)
+        clip.get_frame = MagicMock(return_value=Mock(shape=(1080, 1920, 3)))
         clip.close = MagicMock()
         mock_clips.append(clip)
     
@@ -141,8 +143,20 @@ def test_stitch_video_clips_frame_rate_normalization(
         clip = MagicMock()
         clip.duration = 5.0
         clip.fps = fps
-        clip.set_fps = MagicMock(return_value=clip)
+        clip.size = (1920, 1080)
+        clip.get_frame = MagicMock(return_value=Mock(shape=(1080, 1920, 3)))
         clip.close = MagicMock()
+
+        # Mock with_fps to return self (preserving all properties)
+        normalized_clip = MagicMock()
+        normalized_clip.duration = 5.0
+        normalized_clip.fps = 24.0
+        normalized_clip.size = (1920, 1080)
+        normalized_clip.get_frame = MagicMock(return_value=Mock(shape=(1080, 1920, 3)))
+        normalized_clip.close = MagicMock()
+        normalized_clip.with_fps = MagicMock(return_value=normalized_clip)
+
+        clip.with_fps = MagicMock(return_value=normalized_clip)
         mock_clips.append(clip)
     
     mock_video_clip_class.side_effect = mock_clips
@@ -162,8 +176,70 @@ def test_stitch_video_clips_frame_rate_normalization(
         transitions=False  # Skip transitions for simpler test
     )
     
-    # Verify set_fps was called for clips with non-24 fps
-    assert mock_clips[0].set_fps.called  # 30 fps → should normalize
-    assert mock_clips[1].set_fps.called  # 25 fps → should normalize
-    # Clip 3 already 24 fps, may or may not call set_fps
+    # Verify with_fps was called for clips with non-24 fps
+    assert mock_clips[0].with_fps.called  # 30 fps → should normalize
+    assert mock_clips[1].with_fps.called  # 25 fps → should normalize
+    # Clip 3 already 24 fps, should not call with_fps
+    assert not mock_clips[2].with_fps.called
+
+
+@patch('app.services.pipeline.stitching.VideoFileClip')
+def test_stitch_video_clips_corrupted_clip(
+    mock_video_clip_class,
+    sample_clip_paths,
+    tmp_path
+):
+    """Test stitching with corrupted clip that fails validation."""
+    # Setup mock with corrupted clip (invalid dimensions)
+    corrupted_clip = MagicMock()
+    corrupted_clip.duration = 5.0
+    corrupted_clip.fps = 24.0
+    corrupted_clip.size = (1920, 0)  # Zero height - corrupted!
+    corrupted_clip.close = MagicMock()
+
+    mock_video_clip_class.return_value = corrupted_clip
+
+    # Test
+    output_path = str(tmp_path / "stitched.mp4")
+
+    with pytest.raises(RuntimeError, match="corrupted or has invalid frames"):
+        stitch_video_clips(
+            clip_paths=[sample_clip_paths[0]],
+            output_path=output_path,
+            transitions=False
+        )
+
+    # Verify clip was attempted to be loaded
+    assert mock_video_clip_class.called
+
+
+@patch('app.services.pipeline.stitching.VideoFileClip')
+def test_stitch_video_clips_unreadable_frames(
+    mock_video_clip_class,
+    sample_clip_paths,
+    tmp_path
+):
+    """Test stitching with clip that has unreadable frames."""
+    # Setup mock with unreadable frames
+    corrupted_clip = MagicMock()
+    corrupted_clip.duration = 5.0
+    corrupted_clip.fps = 24.0
+    corrupted_clip.size = (1920, 1080)
+    corrupted_clip.get_frame = MagicMock(side_effect=Exception("Cannot read frame"))
+    corrupted_clip.close = MagicMock()
+
+    mock_video_clip_class.return_value = corrupted_clip
+
+    # Test
+    output_path = str(tmp_path / "stitched.mp4")
+
+    with pytest.raises(RuntimeError, match="corrupted or has invalid frames"):
+        stitch_video_clips(
+            clip_paths=[sample_clip_paths[0]],
+            output_path=output_path,
+            transitions=False
+        )
+
+    # Verify get_frame was called during validation
+    assert corrupted_clip.get_frame.called
 

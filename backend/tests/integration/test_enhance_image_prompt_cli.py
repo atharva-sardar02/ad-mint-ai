@@ -199,3 +199,4 @@ def test_cli_trace_files_created(sample_prompt_file, mock_enhancement_result):
             trace_dirs = list(output_dir.parent.glob("*"))
             assert len(trace_dirs) > 0
 
+

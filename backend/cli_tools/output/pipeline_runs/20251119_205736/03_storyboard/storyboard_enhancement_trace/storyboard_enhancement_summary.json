@@ -1,0 +1,415 @@
+{
+  "original_prompt": "Create an ad of a bottle of luxury Dior perfume positioned against a backdrop of  Paris.",
+  "reference_image_path": "output/pipeline_runs/20251119_205736/02_reference_images/image_001.png",
+  "extracted_visual_elements": {
+    "brand_identity": {
+      "brand_name": "Dior",
+      "brand_colors": [
+        "#282828",
+        "#F2F2F2"
+      ],
+      "logo_style": "minimalist and elegant"
+    },
+    "product_details": {
+      "bottle_shape": "rectangular with slightly rounded edges",
+      "materials": "transparent glass",
+      "distinctive_elements": "centered label, reflective finish",
+      "bottle_text": "Dior\nCANUE",
+      "label_design": "centered square label with bold serif font for 'Dior' and smaller font for 'CANUE'",
+      "cap_design": "cylindrical, matte black material with a metallic band at the base",
+      "exact_bottle_description": "A rectangular transparent glass bottle with slightly rounded edges, holding a central square label with 'Dior' in bold serif font and 'CANUE' beneath it in a smaller font. The cap is cylindrical and matte black, with a metallic band at the base, providing a sleek and modern appearance."
+    },
+    "color_palette": {
+      "dominant_colors": [
+        "#1F1F2E",
+        "#D09C67"
+      ],
+      "accent_colors": [
+        "#F2F2F2"
+      ],
+      "scheme": "warm with dark accents"
+    },
+    "style_aesthetic": {
+      "visual_style": "luxury and sophisticated",
+      "mood": "elegant and alluring",
+      "composition": "bottle centered with Eiffel Tower in the blurred background",
+      "lighting_characteristics": "dim, evening lighting with glowy highlights"
+    },
+    "composition_elements": {
+      "framing": "centered",
+      "perspective": "eye-level shot",
+      "background_style": "blurred cityscape with Eiffel Tower in the evening"
+    }
+  },
+  "num_scenes": 3,
+  "story_type": "sensory_experience",
+  "story_type_info": {
+    "name": "The Sensory Experience Story",
+    "focus": "Pure mood, emotion, and texture rather than narrative structure",
+    "best_for": "Perfume and fragrances, Food and beverage, Luxury fashion, Cosmetics",
+    "visual_pattern": "Sensory close-ups \u2192 Emotional tone \u2192 Product as culmination, Texture, color, movement, Atmospheric and abstract",
+    "why_use": "Relies on visuals and atmosphere, not actors or plot, Creates emotional connection through sensory appeal, Allows for artistic and abstract imagery, Builds brand feeling rather than product features",
+    "examples": "Perfume: Flowing fabric, natural elements \u2192 Fragrance bottle; Chocolate: Melting texture, rich colors \u2192 Product reveal; Cosmetics: Skin texture, light play \u2192 Product application"
+  },
+  "high_level_story": {
+    "high_level_story": "As the video begins, the camera immerses us in the seductive allure of Paris at twilight. We experience a series of sensory close-ups\u2014a soft breeze rustling through elegant silk curtains, reflecting the warm golden hues of the city. The sound of distant laughter echoes through the cobblestone streets, while the subtle aroma of blooming jasmine fills the air. The scene transitions to an emotional tone; the Eiffel Tower, a majestic silhouette against an amber sky, symbolizes romance and timeless elegance.\n\nIn a graceful reveal, the Dior CANUE bottle emerges as the culmination of this sensory journey. Its sleek, reflective glass glimmers against the iconic Parisian backdrop, capturing the essence of elegance and sophistication. The camera draws closer to the bottle, highlighting the minimalist label and the rich, luxurious liquid within, as if inviting the viewer to experience the fragrance's opulent allure. This moment encapsulates the heart of Paris\u2014an eternal dance of mystery and warmth, promising an experience as unforgettable as the city itself.",
+    "emotional_journey": "The viewer's emotions evolve from initial intrigue, spurred by sensory close-ups, to a deep sense of romance and nostalgia as the Parisian setting unfolds. As the Dior CANUE bottle is revealed, emotions crescendo into awe and desire, leaving the audience with a lingering sense of timeless elegance.",
+    "core_message": "Dior CANUE captures the essence of Parisian elegance, offering an unforgettable sensory experience that evokes romance and sophistication.",
+    "mood_and_atmosphere": "The advertisement exudes an elegant and alluring mood, infused with the warmth and romance of a Parisian evening. The atmosphere is sophisticated yet inviting, promising luxury and timeless beauty.",
+    "aspirational_qualities": "This perfume represents an aspirational lifestyle of elegance, romance, and timeless sophistication, akin to the allure of a Parisian evening.",
+    "visual_storytelling_potential": "The story can be told through a series of artful close-ups and atmospheric shots. Dynamic lighting and a soft focus on textures\u2014such as flowing silk and glistening glass\u2014create a rich sensory experience. The camera should move fluidly to convey movement and grace, enhancing the emotional rhythm of the narrative.",
+    "thematic_elements": [
+      "Elegance",
+      "Romance",
+      "Timelessness",
+      "Parisian allure"
+    ],
+    "story_structure": "1. Sensory close-ups of Parisian elements (silk, breeze, laughter). 2. Transition to an emotional tone with the Eiffel Tower in the background. 3. Product reveal\u2014Dior CANUE bottle, capturing the essence of Paris."
+  },
+  "unified_narrative": {
+    "narrative_json": {
+      "overall_story": {
+        "narrative": "The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.",
+        "framework": "Sensory Journey",
+        "total_scenes": 3,
+        "target_duration": 15
+      },
+      "scene_durations": {
+        "scene_1": 4,
+        "scene_2": 5,
+        "scene_3": 6
+      },
+      "emotional_arc": {
+        "scene_1": {
+          "scene_type": "Discovery",
+          "emotional_state": "Anticipation, curiosity, mystery",
+          "visual_mood": "Abstract, mysterious, ethereal",
+          "product_visibility": "hidden",
+          "narrative_purpose": "Create intrigue and anticipation with sensory close-ups"
+        },
+        "scene_2": {
+          "scene_type": "Transformation",
+          "emotional_state": "Recognition, connection, understanding",
+          "visual_mood": "Product-focused, revealing, engaging",
+          "product_visibility": "partial",
+          "narrative_purpose": "Showcase the emotional connection with the backdrop of the Eiffel Tower"
+        },
+        "scene_3": {
+          "scene_type": "Desire",
+          "emotional_state": "Aspiration, desire, action",
+          "visual_mood": "Lifestyle, elegant, aspirational",
+          "product_visibility": "full",
+          "narrative_purpose": "Inspire desire and action with a full product reveal"
+        }
+      },
+      "scene_connections": {
+        "scene_1_to_2": {
+          "narrative_transition": "Transition from abstract sensory elements to a focused view of the Eiffel Tower",
+          "visual_transition": "Shift from ethereal to clearer, more structured visuals",
+          "emotional_transition": "From mystery to recognition and budding connection"
+        },
+        "scene_2_to_3": {
+          "narrative_transition": "From the emotional backdrop to the intimate product reveal",
+          "visual_transition": "From partial visibility to full product showcase",
+          "emotional_transition": "Building from connection to deep desire and aspiration"
+        }
+      },
+      "visual_progression": {
+        "scene_1": "Abstract shapes, shadows, reflections, mysterious lighting",
+        "scene_2": "Product details emerge, clearer composition, focused lighting",
+        "scene_3": "Full product reveal, lifestyle integration, aspirational setting"
+      },
+      "product_reveal_strategy": {
+        "scene_1": "Product hidden or very subtle (abstract shapes suggesting product)",
+        "scene_2": "Product partially visible (side angle, close-up details, application)",
+        "scene_3": "Product fully visible (hero shot, lifestyle integration)"
+      },
+      "brand_narrative": {
+        "brand_identity": "Elegant and minimalist representation of Dior throughout",
+        "color_palette": {
+          "dominant_colors": [
+            "#1F1F2E",
+            "#D09C67"
+          ],
+          "usage_across_scenes": "Warm tones dominate with dark accents, maintaining elegance"
+        },
+        "style_consistency": "Luxury and sophistication consistent in each scene",
+        "brand_message": "Capturing the essence of Parisian elegance with an unforgettable sensory experience"
+      },
+      "motion_and_cinematography_strategy": {
+        "scene_1": {
+          "camera_movements": "Dramatic camera movements (orbital rotation, dramatic push-in, parallax movements) to create mystery",
+          "environmental_dynamics": "Leaves rustling, soft breeze through curtains, warm city hues",
+          "lighting_transformations": "From dim evening to glowing highlights"
+        },
+        "scene_2": {
+          "camera_movements": "Creative camera work (Dutch angle shifts, rack focus pulls, crane movements) to build connection",
+          "environmental_dynamics": "Close-up of reflective surfaces, shifting light on the Eiffel Tower",
+          "lighting_transformations": "Evening light transitions to a deeper amber"
+        },
+        "scene_3": {
+          "camera_movements": "Cinematic camera movements (fluid arcs, cinematic sweeps, dynamic transitions) to inspire desire",
+          "environmental_dynamics": "Intimate focus on bottle details, background lifestyle elements",
+          "lighting_transformations": "Spotlight on the product, luxurious glow"
+        },
+        "overall_approach": "Emphasize dynamic motion, dramatic visual distinctions, and creative camera work. Avoid formulaic language like 'slowly', 'gradually', 'subtly'. Use creative terms that describe dramatic transformations and cinematic movements."
+      }
+    },
+    "narrative_summary": "The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curt...",
+    "final_score": {
+      "narrative_coherence": 92,
+      "emotional_arc": 90,
+      "scene_connections": 85,
+      "visual_progression": 95,
+      "brand_integration": 93,
+      "framework_alignment": 90,
+      "overall": 90.8
+    },
+    "narrative_iterations": [
+      {
+        "iteration": 1,
+        "narrative_json": {
+          "overall_story": {
+            "narrative": "The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.",
+            "framework": "Sensory Journey",
+            "total_scenes": 3,
+            "target_duration": 15
+          },
+          "scene_durations": {
+            "scene_1": 4,
+            "scene_2": 5,
+            "scene_3": 6
+          },
+          "emotional_arc": {
+            "scene_1": {
+              "scene_type": "Discovery",
+              "emotional_state": "Anticipation, curiosity, mystery",
+              "visual_mood": "Abstract, mysterious, ethereal",
+              "product_visibility": "hidden",
+              "narrative_purpose": "Create intrigue and anticipation with sensory close-ups"
+            },
+            "scene_2": {
+              "scene_type": "Transformation",
+              "emotional_state": "Recognition, connection, understanding",
+              "visual_mood": "Product-focused, revealing, engaging",
+              "product_visibility": "partial",
+              "narrative_purpose": "Showcase the emotional connection with the backdrop of the Eiffel Tower"
+            },
+            "scene_3": {
+              "scene_type": "Desire",
+              "emotional_state": "Aspiration, desire, action",
+              "visual_mood": "Lifestyle, elegant, aspirational",
+              "product_visibility": "full",
+              "narrative_purpose": "Inspire desire and action with a full product reveal"
+            }
+          },
+          "scene_connections": {
+            "scene_1_to_2": {
+              "narrative_transition": "Transition from abstract sensory elements to a focused view of the Eiffel Tower",
+              "visual_transition": "Shift from ethereal to clearer, more structured visuals",
+              "emotional_transition": "From mystery to recognition and budding connection"
+            },
+            "scene_2_to_3": {
+              "narrative_transition": "From the emotional backdrop to the intimate product reveal",
+              "visual_transition": "From partial visibility to full product showcase",
+              "emotional_transition": "Building from connection to deep desire and aspiration"
+            }
+          },
+          "visual_progression": {
+            "scene_1": "Abstract shapes, shadows, reflections, mysterious lighting",
+            "scene_2": "Product details emerge, clearer composition, focused lighting",
+            "scene_3": "Full product reveal, lifestyle integration, aspirational setting"
+          },
+          "product_reveal_strategy": {
+            "scene_1": "Product hidden or very subtle (abstract shapes suggesting product)",
+            "scene_2": "Product partially visible (side angle, close-up details, application)",
+            "scene_3": "Product fully visible (hero shot, lifestyle integration)"
+          },
+          "brand_narrative": {
+            "brand_identity": "Elegant and minimalist representation of Dior throughout",
+            "color_palette": {
+              "dominant_colors": [
+                "#1F1F2E",
+                "#D09C67"
+              ],
+              "usage_across_scenes": "Warm tones dominate with dark accents, maintaining elegance"
+            },
+            "style_consistency": "Luxury and sophistication consistent in each scene",
+            "brand_message": "Capturing the essence of Parisian elegance with an unforgettable sensory experience"
+          },
+          "motion_and_cinematography_strategy": {
+            "scene_1": {
+              "camera_movements": "Dramatic camera movements (orbital rotation, dramatic push-in, parallax movements) to create mystery",
+              "environmental_dynamics": "Leaves rustling, soft breeze through curtains, warm city hues",
+              "lighting_transformations": "From dim evening to glowing highlights"
+            },
+            "scene_2": {
+              "camera_movements": "Creative camera work (Dutch angle shifts, rack focus pulls, crane movements) to build connection",
+              "environmental_dynamics": "Close-up of reflective surfaces, shifting light on the Eiffel Tower",
+              "lighting_transformations": "Evening light transitions to a deeper amber"
+            },
+            "scene_3": {
+              "camera_movements": "Cinematic camera movements (fluid arcs, cinematic sweeps, dynamic transitions) to inspire desire",
+              "environmental_dynamics": "Intimate focus on bottle details, background lifestyle elements",
+              "lighting_transformations": "Spotlight on the product, luxurious glow"
+            },
+            "overall_approach": "Emphasize dynamic motion, dramatic visual distinctions, and creative camera work. Avoid formulaic language like 'slowly', 'gradually', 'subtly'. Use creative terms that describe dramatic transformations and cinematic movements."
+          }
+        },
+        "scores": {
+          "narrative_coherence": 92,
+          "emotional_arc": 90,
+          "scene_connections": 85,
+          "visual_progression": 95,
+          "brand_integration": 93,
+          "framework_alignment": 90,
+          "overall": 90.8
+        },
+        "critique": "The narrative document for the Dior CANUE advertisement is highly effective in creating a cohesive and engaging story that aligns well with the Sensory Journey framework. The narrative coherence is strong, with a clear progression from abstract sensory experiences to a focused product reveal, effectively capturing the essence of Parisian elegance. The emotional arc is well-constructed, moving smoothly from anticipation and curiosity in the Discovery scene, through recognition and connection in the Transformation scene, to aspiration and desire in the Desire scene. Scene connections are mostly well-defined, though the transition from Scene 2 to Scene 3 could be enhanced to ensure a smoother emotional and visual flow. The visual progression is excellently planned, with each scene building upon the last to culminate in a powerful product reveal. Brand integration is consistent and sophisticated, effectively utilizing Dior's color palette and style to enhance the luxury feel of the advertisement. Overall, the narrative aligns well with the framework, though there are minor areas for improvement to ensure maximum impact.",
+        "improvements": [
+          "Enhance the emotional transition between Scene 2 and Scene 3 to ensure a seamless flow. This could involve a more detailed depiction of the emotional shift from connection to deep desire, perhaps through a more dramatic or poignant moment that highlights the product's impact.",
+          "Consider integrating more direct references to the brand's heritage or philosophy in the narrative to deepen the brand integration. This could be achieved through subtle visual symbols or dialogue that reflects Dior's brand values, enhancing the narrative depth.",
+          "Increase the clarity of the visual transition between Scene 1 and Scene 2. While the shift from abstract to clearer visuals is noted, a more dramatic change in lighting or color saturation could help to emphasize this transition and make the narrative progression more impactful."
+        ],
+        "timestamp": "2025-11-19T21:01:46.496709"
+      }
+    ]
+  },
+  "scene_prompts": [
+    {
+      "scene_number": 1,
+      "scene_type": "Discovery",
+      "start_frame_prompt": "As twilight descends over Paris, the scene opens with a mysterious low angle worm's eye view from ground level, focusing on abstract shadows and warm golden hues that dance across the elegant silk curtains stirred by a soft breeze, hinting at the hidden presence of the Dior CANUE bottle, which remains obscured from view, creating a sense of anticipation and curiosity.",
+      "end_frame_prompt": "Transitioning to a dramatically different high angle bird's eye view from above, the camera captures the Parisian skyline at dusk, where the distant silhouette of the Eiffel Tower emerges against the fading amber sky, and the bottle, now partially revealed, sits elegantly on a classic Parisian balcony railing, bathed in the soft glow of city lights, inviting closer inspection.",
+      "motion_description": "The camera ascends swiftly, transitioning from the intimate close-ups of rustling silk curtains to the grandeur of Paris at twilight, with the movement punctuated by the rustling of leaves and a distant echo of laughter, as the focus shifts subtly from the abstract play of shadows to the iconic Parisian backdrop, gradually uncovering the Dior CANUE bottle that reflects the city's enchanting ambiance.",
+      "product_visibility": "hidden"
+    },
+    {
+      "scene_number": 2,
+      "scene_type": "Transformation",
+      "start_frame_prompt": "As twilight descends on Paris, the Dior CANUE bottle is subtly glimpsed through a veil of delicate, flowing silk curtains that flutter in the soft evening breeze, captured in a close-up side profile shot from the left, with the warm golden hues of the city faintly illuminating the scene from behind, the bottle positioned in the foreground on the left side of the frame, creating a mysterious and inviting atmosphere.",
+      "end_frame_prompt": "The scene dramatically transitions to a wide shot from a high angle bird's eye view, with the Dior CANUE bottle now placed off-center in the background, as the camera moves to reveal a breathtaking view of the Eiffel Tower standing majestically against an amber sky, the bottle's sleek reflective glass now fully catching the deeper amber light of the setting sun, highlighting the minimalist label and the luxurious liquid within, symbolizing the timeless elegance and romance of Paris.",
+      "motion_description": "The camera performs a dramatic crane movement upwards and shifts from a close-up side profile to a wide high angle, transitioning the focus from the intimate details of the fluttering silk curtains and subtle glimpses of the bottle, through a parallax effect that gracefully reveals the Eiffel Tower in the background, while the evening light deepens to a rich amber, casting dynamic reflections on the bottle's glass surface and transforming the visual mood from mysterious allure to a clear, romantic connection.",
+      "product_visibility": "partial"
+    },
+    {
+      "scene_number": 3,
+      "scene_type": "Desire",
+      "start_frame_prompt": "In the initial frame, the Dior CANUE perfume bottle, a rectangular transparent glass masterpiece with slightly rounded edges and a matte black cylindrical cap, is subtly positioned at the bottom left corner of the frame, illuminated by the dim, scattered light of Paris' twilight, creating a mysterious and subdued silhouette against the backdrop of softly glowing street lamps and the distant, elegantly lit Eiffel Tower.",
+      "end_frame_prompt": "As the scene concludes, the same Dior CANUE bottle now takes center stage, dramatically relocated to the upper right corner of the frame, bathed in a radiant spotlight that highlights its sleek glass surfaces and the minimalist elegance of its label, with the Eiffel Tower now a blurred, romantic glow in the background, symbolizing the bottle's ascent to iconic status amidst Paris' enchanting night.",
+      "motion_description": "Throughout the scene, the camera executes a dynamic orbital rotation around the bottle, transitioning from a mysterious backlit silhouette to a vividly lit hero shot, while the background subtly shifts from detailed Parisian street scenes to a soft, dreamlike focus on the Eiffel Tower, enhancing the bottle's journey from the shadows into a captivating beam of light that seems to draw all of Paris into its allure.",
+      "product_visibility": "full"
+    }
+  ],
+  "iterations": [
+    {
+      "scene_number": 1,
+      "iteration": 1,
+      "start_frame_prompt": "As twilight descends over Paris, the scene opens with a mysterious low angle worm's eye view from ground level, focusing on abstract shadows and warm golden hues that dance across the elegant silk curtains stirred by a soft breeze, hinting at the hidden presence of the Dior CANUE bottle, which remains obscured from view, creating a sense of anticipation and curiosity.",
+      "end_frame_prompt": "Transitioning to a dramatically different high angle bird's eye view from above, the camera captures the Parisian skyline at dusk, where the distant silhouette of the Eiffel Tower emerges against the fading amber sky, and the bottle, now partially revealed, sits elegantly on a classic Parisian balcony railing, bathed in the soft glow of city lights, inviting closer inspection.",
+      "motion_description": "The camera ascends swiftly, transitioning from the intimate close-ups of rustling silk curtains to the grandeur of Paris at twilight, with the movement punctuated by the rustling of leaves and a distant echo of laughter, as the focus shifts subtly from the abstract play of shadows to the iconic Parisian backdrop, gradually uncovering the Dior CANUE bottle that reflects the city's enchanting ambiance.",
+      "scores": {
+        "completeness": 95,
+        "creative_distinction": 90,
+        "visual_coherence": 95,
+        "product_consistency": 100,
+        "framework_alignment": 85,
+        "progressive_reveal": 90,
+        "abstract_style": 92,
+        "motion_quality": 70,
+        "overall": 89.6
+      },
+      "critique": "The storyboard prompts effectively set a visually rich and dynamic scene, transitioning from an intimate ground-level view to a broad cityscape, which aligns well with the Discovery phase of the Sensory Journey framework. The use of brand colors and consistent bottle design throughout both frames is commendable, maintaining product consistency. The abstract style is well-integrated, emerging naturally through the use of shadows and lighting. However, the motion description, while containing dynamic elements like swift camera ascension and environmental sounds, leans slightly towards formulaic language with terms like 'gradually' and 'subtly'. This could be enhanced to make the motion feel more immediate and impactful.",
+      "improvements": [
+        "Revise the motion description to include more dynamic and immediate language. Replace 'gradually' and 'subtly' with terms that convey quicker, more dramatic changes, such as 'swiftly transitions' or 'quickly shifts'.",
+        "Introduce more dramatic environmental dynamics or visual transformations in the motion description to enhance the sense of change and movement, such as 'curtains fluttering violently in a sudden breeze' or 'lights flickering as the city comes alive at night'."
+      ],
+      "timestamp": "2025-11-19T21:02:01.300456"
+    },
+    {
+      "scene_number": 2,
+      "iteration": 1,
+      "start_frame_prompt": "As the twilight deepens over Paris, the camera captures a close-up of the Dior CANUE bottle, partially obscured by a flowing silk curtain, its sleek, reflective glass catching the fading golden light; the Eiffel Tower forms a blurred silhouette in the far background, hinting at the romantic Parisian setting.",
+      "end_frame_prompt": "The scene transforms to reveal the Dior CANUE bottle now fully in focus, prominently positioned against a breathtaking view of the Eiffel Tower illuminated by vibrant amber lights; the curtain has swayed aside, allowing the bottle's minimalist label and the luxurious liquid within to gleam under a spotlight of warm, ambient lighting.",
+      "motion_description": "The camera executes a dramatic crane movement from a close-up side view that captures the subtle interplay of light on the bottle's glass surface, transitioning through a smooth arc to a 3/4 front-facing view as the silk curtain gracefully sways to unveil the Eiffel Tower, now sharply focused in the background, enhancing the emotional connection to the iconic Parisian landscape.",
+      "scores": {
+        "completeness": 95,
+        "creative_distinction": 60,
+        "visual_coherence": 90,
+        "product_consistency": 100,
+        "framework_alignment": 85,
+        "progressive_reveal": 80,
+        "abstract_style": 85,
+        "motion_quality": 75,
+        "overall": 83.75
+      },
+      "critique": "The storyboard prompts effectively convey the transformation theme with a dynamic setting shift from twilight to a brightly illuminated night scene in Paris. The camera movement is adequately described, adding a sense of motion and progression. However, the creative distinction between the start and end frames could be enhanced. While the camera angle and lighting change, the overall composition and environmental dynamics could be more dramatically altered to avoid a sense of visual redundancy. The motion description, while avoiding overly formulaic language, could benefit from more vivid and varied descriptions of environmental interactions and transformations.",
+      "improvements": [
+        "Increase the visual distinction by altering the shot size or camera perspective more dramatically between the start and end frames. For instance, starting with an extreme close-up that focuses on the texture and reflections on the bottle, then transitioning to a wider shot that includes more of the surrounding Parisian environment.",
+        "Enhance the motion description by incorporating additional elements such as the changing reflections on the bottle or the movement of other objects within the scene (e.g., other curtains, nearby lights flickering) to create a more dynamic and visually engaging transition."
+      ],
+      "timestamp": "2025-11-19T21:02:18.292428"
+    },
+    {
+      "scene_number": 2,
+      "iteration": 2,
+      "start_frame_prompt": "As twilight descends on Paris, the Dior CANUE bottle is subtly glimpsed through a veil of delicate, flowing silk curtains that flutter in the soft evening breeze, captured in a close-up side profile shot from the left, with the warm golden hues of the city faintly illuminating the scene from behind, the bottle positioned in the foreground on the left side of the frame, creating a mysterious and inviting atmosphere.",
+      "end_frame_prompt": "The scene dramatically transitions to a wide shot from a high angle bird's eye view, with the Dior CANUE bottle now placed off-center in the background, as the camera moves to reveal a breathtaking view of the Eiffel Tower standing majestically against an amber sky, the bottle's sleek reflective glass now fully catching the deeper amber light of the setting sun, highlighting the minimalist label and the luxurious liquid within, symbolizing the timeless elegance and romance of Paris.",
+      "motion_description": "The camera performs a dramatic crane movement upwards and shifts from a close-up side profile to a wide high angle, transitioning the focus from the intimate details of the fluttering silk curtains and subtle glimpses of the bottle, through a parallax effect that gracefully reveals the Eiffel Tower in the background, while the evening light deepens to a rich amber, casting dynamic reflections on the bottle's glass surface and transforming the visual mood from mysterious allure to a clear, romantic connection.",
+      "scores": {
+        "completeness": 95,
+        "creative_distinction": 90,
+        "visual_coherence": 95,
+        "product_consistency": 100,
+        "framework_alignment": 85,
+        "progressive_reveal": 90,
+        "abstract_style": 92,
+        "motion_quality": 95,
+        "overall": 92.75
+      },
+      "critique": "The storyboard prompts effectively capture a dynamic and visually distinct transformation of the scene, adhering closely to the luxury and sophisticated visual style of the brand. The transition from a close-up side profile in a mysterious, intimate setting to a wide, high-angle shot that incorporates an iconic Parisian landmark is both dramatic and visually appealing. The motion description is particularly strong, avoiding formulaic language and instead using dynamic terms like 'dramatic crane movement' and 'parallax effect', which enhances the visual storytelling. The product consistency is maintained perfectly across both frames, with detailed attention to the bottle's design, label, and cap.",
+      "improvements": [
+        "To enhance the Sensory Journey framework alignment, consider emphasizing the sensory elements associated with the transformation scene, such as the tactile sensation of the silk curtains or the scent of the evening in Paris, to deepen the viewer's emotional connection.",
+        "While the abstract style is well-integrated, introducing subtle abstract visual effects or lighting techniques during the transition could further elevate the abstract quality and uniqueness of the advertisement."
+      ],
+      "timestamp": "2025-11-19T21:02:33.982324"
+    },
+    {
+      "scene_number": 3,
+      "iteration": 1,
+      "start_frame_prompt": "In the initial frame, the Dior CANUE perfume bottle, a rectangular transparent glass masterpiece with slightly rounded edges and a matte black cylindrical cap, is subtly positioned at the bottom left corner of the frame, illuminated by the dim, scattered light of Paris' twilight, creating a mysterious and subdued silhouette against the backdrop of softly glowing street lamps and the distant, elegantly lit Eiffel Tower.",
+      "end_frame_prompt": "As the scene concludes, the same Dior CANUE bottle now takes center stage, dramatically relocated to the upper right corner of the frame, bathed in a radiant spotlight that highlights its sleek glass surfaces and the minimalist elegance of its label, with the Eiffel Tower now a blurred, romantic glow in the background, symbolizing the bottle's ascent to iconic status amidst Paris' enchanting night.",
+      "motion_description": "Throughout the scene, the camera executes a dynamic orbital rotation around the bottle, transitioning from a mysterious backlit silhouette to a vividly lit hero shot, while the background subtly shifts from detailed Parisian street scenes to a soft, dreamlike focus on the Eiffel Tower, enhancing the bottle's journey from the shadows into a captivating beam of light that seems to draw all of Paris into its allure.",
+      "scores": {
+        "completeness": 95,
+        "creative_distinction": 80,
+        "visual_coherence": 90,
+        "product_consistency": 100,
+        "framework_alignment": 85,
+        "progressive_reveal": 90,
+        "abstract_style": 85,
+        "motion_quality": 85,
+        "overall": 88.75
+      },
+      "critique": "The storyboard prompts are well-constructed, showcasing a clear progression from a mysterious and subdued beginning to a dramatic and highlighted conclusion, aligning well with the 'Desire' scene type. The motion description is notably dynamic, featuring an orbital rotation that effectively transitions the bottle from a backlit silhouette to a hero shot, which is both creative and visually engaging. The visual coherence is maintained with consistent use of brand colors and the sophisticated style is aptly represented. However, while the camera angle and bottle positioning change significantly, the transformation could be more dramatic in terms of environmental dynamics and lighting transformations to enhance the visual distinction further.",
+      "improvements": [
+        "Introduce more dramatic environmental dynamics such as a transition from a calm to a bustling Parisian backdrop, or include elements like passing vehicles or pedestrians to add life and movement.",
+        "Enhance the lighting transformation by starting in a more distinctly shadowed or obscured setting, progressing to an even more dramatically lit scene, perhaps with contrasting colors or more dramatic shadows to emphasize the bottle's journey and visual impact.",
+        "Consider varying the shot size more dramatically, starting with a wider shot that includes more of the Parisian environment and then transitioning to a close-up that focuses intensely on the bottle's details."
+      ],
+      "timestamp": "2025-11-19T21:02:51.172462"
+    }
+  ],
+  "final_scores": {
+    "completeness": 95.0,
+    "creative_distinction": 86.66666666666667,
+    "visual_coherence": 93.33333333333333,
+    "framework_alignment": 85.0,
+    "progressive_reveal": 90.0,
+    "abstract_style": 89.66666666666667,
+    "motion_quality": 83.33333333333333,
+    "overall": 90.36666666666667
+  },
+  "total_iterations": 4,
+  "timestamp": "2025-11-19T21:02:51.173574"
+}

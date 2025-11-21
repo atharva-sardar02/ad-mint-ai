@@ -2,6 +2,7 @@
  * Dashboard page component with prompt input form for video generation.
  */
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Textarea";
@@ -32,6 +33,7 @@ interface ValidationErrors {
  */
 export const Dashboard: React.FC = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
 
   const [prompt, setPrompt] = useState("");
   const [title, setTitle] = useState("");
@@ -55,6 +57,7 @@ export const Dashboard: React.FC = () => {
     csfd_detection: false,
   });
   const [parallelMode, setParallelMode] = useState<boolean>(false);
+  const [interactiveMode, setInteractiveMode] = useState<boolean>(false);
   const [basicSettings, setBasicSettings] = useState<BasicSettings>({
     useSingleClip: false,
     useLlm: true,
@@ -316,6 +319,18 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    // If interactive mode is enabled, redirect to interactive pipeline
+    if (interactiveMode) {
+      navigate('/interactive', {
+        state: {
+          prompt,
+          targetDuration: basicSettings.targetDuration,
+          title,
+        }
+      });
+      return;
+    }
+
     // Validate coherence settings
     const coherenceErrors = validateCoherenceSettings(coherenceSettings);
     if (Object.keys(coherenceErrors).length > 0) {
@@ -519,6 +534,40 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
 
+          {/* Interactive Pipeline CTA */}
+          {(!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
+            <div className="mb-6 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <span className="text-4xl">🎬</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-purple-900 mb-2">
+                    Try Our New Interactive Pipeline
+                  </h3>
+                  <p className="text-sm text-purple-800 mb-3">
+                    Review and refine your video at every stage with conversational AI feedback.
+                    Perfect your story, images, and storyboard before generating the final video.
+                  </p>
+                  <ul className="text-xs text-purple-700 mb-4 space-y-1">
+                    <li>✓ Chat with AI to refine your story</li>
+                    <li>✓ Provide feedback on reference images</li>
+                    <li>✓ Edit images with AI inpainting</li>
+                    <li>✓ Review and approve each stage</li>
+                  </ul>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => navigate('/interactive')}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    Start Interactive Generation →
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Active Generation Progress Display */}
           {activeGeneration && (
             <div className="mb-6 p-6 bg-white border border-gray-200 rounded-lg">
@@ -591,24 +640,51 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Parallel Generation Toggle */}
+          {/* Generation Mode Toggles */}
           {(!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
-            <div className="mb-6">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={parallelMode}
-                  onChange={(e) => setParallelMode(e.target.checked)}
-                  className="mr-2"
-                  disabled={isLoading}
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Enable Parallel Generation Mode
-                </span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1 ml-6">
-                Generate multiple variations in parallel for comparison
-              </p>
+            <div className="mb-6 space-y-3">
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={interactiveMode}
+                    onChange={(e) => {
+                      setInteractiveMode(e.target.checked);
+                      if (e.target.checked) {
+                        setParallelMode(false); // Disable parallel mode when interactive is enabled
+                      }
+                    }}
+                    className="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    disabled={isLoading}
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    🎬 Interactive Mode (Recommended)
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  Review and refine at each stage with AI chat feedback. Perfect your story, images, and storyboard before final video.
+                </p>
+              </div>
+
+              {!interactiveMode && (
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={parallelMode}
+                      onChange={(e) => setParallelMode(e.target.checked)}
+                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      disabled={isLoading}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Parallel Generation Mode
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                    Generate multiple variations in parallel for comparison
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

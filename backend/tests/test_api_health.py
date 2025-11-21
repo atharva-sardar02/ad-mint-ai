@@ -24,3 +24,4 @@ def test_health_endpoint_content_type():
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
+

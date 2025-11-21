@@ -10,3 +10,4 @@ def test_model_imports():
     assert User.__tablename__ == "users"
     assert Generation.__tablename__ == "generations"
 
+

@@ -1,0 +1,285 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>interactive-pipeline</epicId>
+    <storyId>interactive-pipeline-4</storyId>
+    <title>Advanced Image Editing</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/story-interactive-pipeline-4.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>content creator using the web application</asA>
+    <iWant>to select specific regions in images and replace them with new content using AI inpainting</iWant>
+    <soThat>I can fix specific issues (wrong character, incorrect product, bad background) without regenerating the entire image, saving time and maintaining visual consistency</soThat>
+    <tasks>
+      Backend: Inpainting Service (AC: #5)
+      - Create app/services/pipeline/inpainting_service.py module
+      - Implement InpaintingService class with inpaint() method
+      - Integrate Replicate SDXL-inpaint model
+      - Process mask (numpy/PIL conversion)
+      - Return edited image path
+
+      Backend: API Routes (AC: #5, #7)
+      - Update interactive_generation.py with POST /api/v1/interactive/{session_id}/inpaint endpoint
+      - Accept image_id, mask_data, prompt, negative_prompt
+      - Update session state with edited image
+
+      Backend: Image Version Management (AC: #7, #8)
+      - Add image version tracking to session state
+      - Store edit history and support rollback
+
+      Frontend: ImageEditor Component (AC: #1, #2, #3, #4)
+      - Create src/components/generation/ImageEditor.tsx
+      - Implement modal layout with react-konva canvas
+      - Add brush tool (adjustable size 10-100px)
+      - Add eraser tool and clear mask button
+      - Add prompt/negative-prompt inputs
+
+      Frontend: Canvas Drawing Logic (AC: #2, #3)
+      - Implement Konva Stage/Layer setup
+      - Track mouse events for drawing
+      - Convert mask to binary data (base64)
+
+      Frontend: Inpainting Execution (AC: #5, #6)
+      - Call inpaint API with mask data
+      - Display before/after comparison with slider
+      - Add "Use Edited" and "Keep Original" buttons
+
+      Frontend: Integration with ImageReview (AC: #7, #8)
+      - Update ImageReview.tsx with "Edit" button per image
+      - Update gallery with edited images
+      - Track edit history in pipelineStore
+      - Show "Edited" badge on modified images
+
+      Testing: Backend & Frontend (AC: #1-8)
+      - test_inpainting_service.py (mask processing, API integration)
+      - test_inpainting.py (API endpoint tests)
+      - ImageEditor.test.tsx (brush, eraser, prompt validation)
+      - Integration tests (full edit flow)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC #1: Image Editor Access
+    - User clicks "Edit" button on image in ImageReview
+    - Image editor modal opens with image at editable size (max 2048x2048)
+    - Shows editing tools (brush, eraser, clear)
+
+    AC #2: Mask Creation with Brush Tool
+    - User can draw mask by clicking/dragging
+    - Masked region highlighted with semi-transparent overlay
+    - Brush size adjustable (10-100px slider)
+
+    AC #3: Mask Editing
+    - Eraser tool removes parts of mask
+    - "Clear Mask" button removes entire mask
+
+    AC #4: Replacement Prompt Input
+    - Text prompt describes replacement content
+    - Negative prompt optional
+    - Prompt validation (not empty, reasonable length)
+
+    AC #5: Inpainting Execution
+    - Backend sends image + mask + prompt to SDXL-inpaint
+    - Shows loading indicator with estimated time
+
+    AC #6: Edited Image Display
+    - Result displayed side-by-side with original
+    - Before/after comparison slider
+    - "Use Edited" or "Keep Original" buttons
+
+    AC #7: Integration with Pipeline
+    - "Use Edited" replaces image in ImageReview gallery
+    - Edited image used in subsequent pipeline stages
+    - Original preserved for rollback
+
+    AC #8: Multiple Edits
+    - Further edits possible on edited version
+    - Edit history tracked (original → edit1 → edit2)
+    - User can revert to any previous version
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification</title>
+        <section>Story 4: Advanced Image Editing</section>
+        <snippet>Implements AI-powered inpainting for selective image editing. Users draw masks and provide prompts to replace specific regions using SDXL-inpaint model.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/story-interactive-pipeline-3.md</path>
+        <title>Story 3: Interactive Image/Storyboard Feedback</title>
+        <section>ImageReview Component</section>
+        <snippet>Provides gallery UI with images displayed in grid. Story 4 extends this with "Edit" button per image to open ImageEditor modal.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>backend/app/services/pipeline/image_generation.py</path>
+        <kind>service</kind>
+        <symbol>generate_image</symbol>
+        <lines>complete file</lines>
+        <reason>Replicate API integration pattern - use similar approach for SDXL-inpaint model calls</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/interactive_pipeline.py</path>
+        <kind>service</kind>
+        <symbol>InteractivePipelineOrchestrator</symbol>
+        <lines>complete file</lines>
+        <reason>Session state management pattern - extend for image version tracking and edit history</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/interactive_generation.py</path>
+        <kind>api-route</kind>
+        <symbol>existing endpoints</symbol>
+        <lines>complete file</lines>
+        <reason>Add new POST /interactive/{session_id}/inpaint endpoint following existing patterns</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/generation/ImageReview.tsx</path>
+        <kind>component</kind>
+        <symbol>ImageReview</symbol>
+        <lines>complete file</lines>
+        <reason>Gallery UI to extend with "Edit" button per image and edited badge display</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/stores/pipelineStore.ts</path>
+        <kind>store</kind>
+        <symbol>usePipelineStore</symbol>
+        <lines>complete file</lines>
+        <reason>Session state management - add image version tracking and edit history</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/services/interactive-api.ts</path>
+        <kind>service</kind>
+        <symbol>interactive API client</symbol>
+        <lines>complete file</lines>
+        <reason>Extend with inpaintImage() method for inpainting API calls</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <backend>
+        <package name="pillow" version=">=10.0.0" reason="Image manipulation (PIL)" />
+        <package name="numpy" version=">=1.24.0,<2.0" reason="Mask array processing" />
+        <package name="replicate" version=">=0.25.0" reason="SDXL-inpaint API integration" />
+      </backend>
+      <frontend>
+        <package name="react" version="^19.2.0" reason="UI framework" />
+        <package name="react-konva" version="^18.2.0" reason="Canvas library for mask drawing - NEW" />
+        <package name="konva" version="^9.2.0" reason="Konva.js core - NEW" />
+        <package name="react-compare-image" version="^3.4.0" reason="Before/after slider (optional) - NEW" />
+        <package name="zustand" version="^5.0.8" reason="State management" />
+        <package name="axios" version="^1.13.2" reason="HTTP client for API calls" />
+      </frontend>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>MUST extend existing ImageReview component from Story 3 - do not recreate gallery UI</constraint>
+    <constraint>MUST reuse existing InteractivePipelineOrchestrator session management pattern</constraint>
+    <constraint>MUST follow Replicate API integration pattern from image_generation.py</constraint>
+    <constraint>MUST preserve original images - edited versions are additions, not replacements in storage</constraint>
+    <constraint>Canvas mask must be binary (0/1) format for SDXL-inpaint model compatibility</constraint>
+    <constraint>Image dimensions max 2048x2048 to stay within model limits and reasonable processing time</constraint>
+    <constraint>Frontend state management uses Zustand - extend pipelineStore for edit history</constraint>
+    <constraint>Error handling must gracefully handle inpainting failures (model timeout, API errors)</constraint>
+    <constraint>Test coverage: Backend 80% minimum, Frontend 70% minimum (same as Story 3)</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>POST /api/v1/interactive/{session_id}/inpaint</name>
+      <kind>REST endpoint</kind>
+      <signature>
+        Request: {
+          image_id: number,
+          mask_data: string (base64),
+          prompt: string,
+          negative_prompt?: string
+        }
+        Response: {
+          edited_image_url: string,
+          version: number,
+          edit_history: string[]
+        }
+      </signature>
+      <path>backend/app/api/routes/interactive_generation.py</path>
+    </interface>
+    <interface>
+      <name>InpaintingService.inpaint()</name>
+      <kind>service method</kind>
+      <signature>
+        async def inpaint(
+          image_path: str,
+          mask_base64: str,
+          prompt: str,
+          negative_prompt: str = "blurry, low quality"
+        ) -> str
+      </signature>
+      <path>backend/app/services/pipeline/inpainting_service.py</path>
+    </interface>
+    <interface>
+      <name>ImageEditor component props</name>
+      <kind>React component interface</kind>
+      <signature>
+        interface ImageEditorProps {
+          imageUrl: string;
+          imageId: number;
+          sessionId: string;
+          onSave: (editedImageUrl: string) => void;
+          onCancel: () => void;
+        }
+      </signature>
+      <path>frontend/src/components/generation/ImageEditor.tsx</path>
+    </interface>
+    <interface>
+      <name>inpaintImage API client</name>
+      <kind>API client method</kind>
+      <signature>
+        async inpaintImage(
+          sessionId: string,
+          imageId: number,
+          maskData: string,
+          prompt: string,
+          negativePrompt?: string
+        ): Promise&lt;InpaintResponse&gt;
+      </signature>
+      <path>frontend/src/services/interactive-api.ts</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend: PyTest with async support (pytest-asyncio). Mock external API calls (Replicate) using unittest.mock. Test coverage minimum 80%.
+      Frontend: Vitest + React Testing Library. Mock canvas/Konva interactions. Test coverage minimum 70%.
+      Integration: Full flow tests covering edit workflow end-to-end.
+    </standards>
+
+    <locations>
+      backend/tests/services/test_inpainting_service.py
+      backend/tests/api/test_inpainting.py
+      frontend/src/components/generation/__tests__/ImageEditor.test.tsx
+      frontend/src/components/generation/__tests__/ImageReview.test.tsx (extend existing)
+    </locations>
+
+    <ideas>
+      AC #1: Test ImageEditor modal opens on edit button click with correct image loaded
+      AC #2: Test brush drawing creates mask overlay with correct color and size
+      AC #3: Test eraser removes mask areas, clear button removes entire mask
+      AC #4: Test prompt validation (empty check, length limits)
+      AC #5: Test inpainting API call with mock - verify mask data encoding, prompt parameters
+      AC #6: Test before/after display renders both images with comparison slider
+      AC #7: Test "Use Edited" updates gallery and pipeline session state
+      AC #8: Test multiple edits create version history, rollback functionality works
+      Backend: Test mask decoding from base64, PIL Image conversion
+      Backend: Test Replicate API integration with mocked responses
+      Backend: Test image version management (add, retrieve, rollback)
+      Integration: Test complete flow - draw mask → enter prompt → generate → use edited → appears in gallery
+    </ideas>
+  </tests>
+</story-context>

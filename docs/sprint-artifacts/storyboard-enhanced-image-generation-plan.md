@@ -473,3 +473,4 @@ USE_ENHANCED_STORYBOARD_FRAMES = True  # Default: True
 - **Prompt Enhancement**: `backend/app/services/pipeline/prompt_enhancement.py`
 - **Quality Scoring**: `backend/app/services/pipeline/image_quality_scoring.py`
 
+

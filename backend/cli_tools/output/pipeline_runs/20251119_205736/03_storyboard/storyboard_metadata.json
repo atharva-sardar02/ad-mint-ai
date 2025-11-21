@@ -1,0 +1,135 @@
+{
+  "prompt": "Create an ad of a bottle of luxury Dior perfume positioned against a backdrop of  Paris.",
+  "reference_image_path": "output/pipeline_runs/20251119_205736/02_reference_images/image_001.png",
+  "storyboard_enhancement_used": true,
+  "unified_narrative_path": "output/pipeline_runs/20251119_205736/03_storyboard/storyboard_enhancement_trace/unified_narrative.md",
+  "narrative_summary": "The advertisement unfolds as a cinematic homage to Paris at twilight, capturing the city's enchanting ambiance. It begins with a series of sensory close-ups: a soft breeze gently lifting the silk curtains, the warm golden hues of the city illuminating the scene, and the distant sound of laughter mingling with the subtle scent of jasmine. This scene sets the stage for Discovery, filled with anticipation and mystery. As the narrative progresses to Transformation, the focus shifts to the majestic silhouette of the Eiffel Tower against an amber sky, symbolizing timeless elegance and romance. The emotional tone deepens, preparing for the grand reveal. In the final scene of Desire, the Dior CANUE bottle emerges, its sleek glass and minimalist label reflecting the sophisticated Parisian backdrop. The camera intimately captures every detail of the bottle, inviting the viewer into the opulent world of Dior, culminating in a promise of an unforgettable experience that mirrors the allure of Paris itself.",
+  "num_clips": 3,
+  "aspect_ratio": "16:9",
+  "framework": "Sensory Journey",
+  "story_type": "sensory_experience",
+  "total_duration": 15,
+  "clips": [
+    {
+      "clip_number": 1,
+      "description": "Discovery",
+      "duration": 4,
+      "start_frame_prompt": "As twilight descends over Paris, the scene opens with a mysterious low angle worm's eye view from ground level, focusing on abstract shadows and warm golden hues that dance across the elegant silk curtains stirred by a soft breeze, hinting at the hidden presence of the Dior CANUE bottle, which remains obscured from view, creating a sense of anticipation and curiosity.",
+      "end_frame_prompt": "Transitioning to a dramatically different high angle bird's eye view from above, the camera captures the Parisian skyline at dusk, where the distant silhouette of the Eiffel Tower emerges against the fading amber sky, and the bottle, now partially revealed, sits elegantly on a classic Parisian balcony railing, bathed in the soft glow of city lights, inviting closer inspection.",
+      "motion_description": "The camera ascends swiftly, transitioning from the intimate close-ups of rustling silk curtains to the grandeur of Paris at twilight, with the movement punctuated by the rustling of leaves and a distant echo of laughter, as the focus shifts subtly from the abstract play of shadows to the iconic Parisian backdrop, gradually uncovering the Dior CANUE bottle that reflects the city's enchanting ambiance.",
+      "camera_movement": "Push in from wide to medium",
+      "shot_size": "Wide shot",
+      "perspective": "Eye level, establishing",
+      "lens_type": "24-35mm wide angle",
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_001_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_001_end.png"
+    },
+    {
+      "clip_number": 2,
+      "description": "Transformation",
+      "duration": 5,
+      "start_frame_prompt": "As twilight descends on Paris, the Dior CANUE bottle is subtly glimpsed through a veil of delicate, flowing silk curtains that flutter in the soft evening breeze, captured in a close-up side profile shot from the left, with the warm golden hues of the city faintly illuminating the scene from behind, the bottle positioned in the foreground on the left side of the frame, creating a mysterious and inviting atmosphere.",
+      "end_frame_prompt": "The scene dramatically transitions to a wide shot from a high angle bird's eye view, with the Dior CANUE bottle now placed off-center in the background, as the camera moves to reveal a breathtaking view of the Eiffel Tower standing majestically against an amber sky, the bottle's sleek reflective glass now fully catching the deeper amber light of the setting sun, highlighting the minimalist label and the luxurious liquid within, symbolizing the timeless elegance and romance of Paris.",
+      "motion_description": "The camera performs a dramatic crane movement upwards and shifts from a close-up side profile to a wide high angle, transitioning the focus from the intimate details of the fluttering silk curtains and subtle glimpses of the bottle, through a parallax effect that gracefully reveals the Eiffel Tower in the background, while the evening light deepens to a rich amber, casting dynamic reflections on the bottle's glass surface and transforming the visual mood from mysterious allure to a clear, romantic connection.",
+      "camera_movement": "Smooth pan or dolly movement",
+      "shot_size": "Medium shot",
+      "perspective": "Eye level, dynamic",
+      "lens_type": "35-50mm standard",
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_002_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_002_end.png"
+    },
+    {
+      "clip_number": 3,
+      "description": "Desire",
+      "duration": 6,
+      "start_frame_prompt": "In the initial frame, the Dior CANUE perfume bottle, a rectangular transparent glass masterpiece with slightly rounded edges and a matte black cylindrical cap, is subtly positioned at the bottom left corner of the frame, illuminated by the dim, scattered light of Paris' twilight, creating a mysterious and subdued silhouette against the backdrop of softly glowing street lamps and the distant, elegantly lit Eiffel Tower.",
+      "end_frame_prompt": "As the scene concludes, the same Dior CANUE bottle now takes center stage, dramatically relocated to the upper right corner of the frame, bathed in a radiant spotlight that highlights its sleek glass surfaces and the minimalist elegance of its label, with the Eiffel Tower now a blurred, romantic glow in the background, symbolizing the bottle's ascent to iconic status amidst Paris' enchanting night.",
+      "motion_description": "Throughout the scene, the camera executes a dynamic orbital rotation around the bottle, transitioning from a mysterious backlit silhouette to a vividly lit hero shot, while the background subtly shifts from detailed Parisian street scenes to a soft, dreamlike focus on the Eiffel Tower, enhancing the bottle's journey from the shadows into a captivating beam of light that seems to draw all of Paris into its allure.",
+      "camera_movement": "Pull back slightly, static finish",
+      "shot_size": "Medium to close-up",
+      "perspective": "Eye level, slightly elevated",
+      "lens_type": "50-85mm standard to telephoto",
+      "start_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_003_start.png",
+      "end_frame_path": "output/pipeline_runs/20251119_205736/03_storyboard/clip_003_end.png"
+    }
+  ],
+  "shot_list": [
+    {
+      "clip_number": 1,
+      "camera_movement": "Push in from wide to medium",
+      "shot_size": "Wide shot",
+      "perspective": "Eye level, establishing",
+      "lens_type": "24-35mm wide angle"
+    },
+    {
+      "clip_number": 2,
+      "camera_movement": "Smooth pan or dolly movement",
+      "shot_size": "Medium shot",
+      "perspective": "Eye level, dynamic",
+      "lens_type": "35-50mm standard"
+    },
+    {
+      "clip_number": 3,
+      "camera_movement": "Pull back slightly, static finish",
+      "shot_size": "Medium to close-up",
+      "perspective": "Eye level, slightly elevated",
+      "lens_type": "50-85mm standard to telephoto"
+    }
+  ],
+  "scene_dependencies": [
+    {
+      "clip_number": 1,
+      "dependencies": []
+    },
+    {
+      "clip_number": 2,
+      "dependencies": [
+        {
+          "depends_on": 1,
+          "type": "narrative_flow",
+          "description": "Continues narrative from clip 1"
+        }
+      ]
+    },
+    {
+      "clip_number": 3,
+      "dependencies": [
+        {
+          "depends_on": 2,
+          "type": "narrative_flow",
+          "description": "Continues narrative from clip 2"
+        }
+      ]
+    }
+  ],
+  "narrative_flow": "Linear narrative flow across 3 clips",
+  "consistency_groupings": [
+    {
+      "group_id": 1,
+      "clip_numbers": [
+        1
+      ],
+      "consistency_type": "visual_style",
+      "description": "Clips with similar visual style and camera settings"
+    },
+    {
+      "group_id": 2,
+      "clip_numbers": [
+        2
+      ],
+      "consistency_type": "visual_style",
+      "description": "Clips with similar visual style and camera settings"
+    },
+    {
+      "group_id": 3,
+      "clip_numbers": [
+        3
+      ],
+      "consistency_type": "visual_style",
+      "description": "Clips with similar visual style and camera settings"
+    }
+  ],
+  "failed_clips": null,
+  "partial_success": false,
+  "created_at": "2025-11-19T21:04:15.313736"
+}

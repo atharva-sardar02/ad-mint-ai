@@ -1,0 +1,452 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>interactive-pipeline</epicId>
+    <storyId>1.2</storyId>
+    <title>Interactive Story Generation</title>
+    <status>Draft</status>
+    <generatedAt>2025-11-19</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/story-interactive-pipeline-2.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>content creator using the web application</asA>
+    <iWant>to review the AI-generated story and refine it through conversational feedback before proceeding to image generation</iWant>
+    <soThat>I can ensure the narrative matches my creative vision and avoid wasting API credits on images/videos based on a story I don't like</soThat>
+    <tasks>
+**Backend: Interactive Pipeline Orchestrator (AC: #1, #5)**
+- Create `app/services/pipeline/interactive_pipeline.py` module
+- Implement `InteractivePipelineOrchestrator` class
+- Add `start_pipeline(user_id, prompt, target_duration)` method
+- Add `run_stage_with_pause(stage_name, generation_fn, session_id)` method
+- Implement session state save/load using Redis or PostgreSQL
+- Add stage transition logic (story → reference_image → storyboard → video)
+
+**Backend: WebSocket Communication (AC: #2, #3, #6)**
+- Create `app/api/routes/websocket.py` module
+- Implement WebSocket endpoint `/ws/pipeline/{session_id}`
+- Add connection manager for multiple WebSocket connections
+- Implement message routing (user message → conversation handler → response)
+- Add heartbeat/ping-pong for connection health monitoring
+- Implement auto-disconnect on timeout (5 min idle)
+
+**Backend: Conversation Handler (AC: #3, #4)**
+- Create `app/services/pipeline/conversation_handler.py` module
+- Implement `ConversationHandler` class
+- Add `process_story_feedback(story, feedback, history)` method
+- Integrate with OpenAI GPT-4 for intent extraction
+- Add `refine_story(original_story, modifications)` method
+- Use existing `story_generator.py` for regeneration with updated parameters
+
+**Backend: API Routes (AC: #1, #4, #5)**
+- Create `app/api/routes/interactive_generation.py` module
+- Implement `POST /api/v1/interactive/start` - Start pipeline
+- Implement `GET /api/v1/interactive/{session_id}/status` - Get session status
+- Implement `POST /api/v1/interactive/{session_id}/approve` - Approve current stage
+- Implement `POST /api/v1/interactive/{session_id}/regenerate` - Regenerate with feedback
+
+**Backend: Schemas (AC: #1, #3, #4)**
+- Create `app/schemas/interactive_schemas.py` module
+- Define `PipelineStartRequest` schema (prompt, target_duration, mode)
+- Define `PipelineSessionResponse` schema (session_id, status, current_stage)
+- Define `ChatMessage` schema (type, content, timestamp)
+- Define `RegenerateRequest` schema (feedback, stage)
+
+**Frontend: Pipeline Store (AC: #1, #5, #7)**
+- Create `src/stores/pipelineStore.ts` (Zustand store)
+- Add state: `sessionId`, `currentStage`, `stageData`, `conversationHistory`
+- Add actions: `startPipeline()`, `updateStage()`, `sendFeedback()`, `approveStage()`
+- Implement session restoration from localStorage/sessionStorage
+
+**Frontend: WebSocket Service (AC: #2, #3, #6)**
+- Create `src/services/websocket-service.ts` module
+- Implement WebSocket connection management
+- Add message handling (send/receive)
+- Implement auto-reconnect with exponential backoff
+- Add connection status tracking (connected, disconnected, reconnecting)
+
+**Frontend: WebSocket Hook (AC: #3, #6)**
+- Create `src/hooks/useWebSocket.ts` hook
+- Return `{ connected, sendMessage, messages, connectionStatus }`
+- Handle WebSocket lifecycle (connect, disconnect, cleanup)
+- Integrate with websocket-service
+
+**Frontend: Chat Interface Component (AC: #2, #3)**
+- Create `src/components/generation/ChatInterface.tsx` component
+- Display message list (user messages on right, LLM on left)
+- Implement message input with send button
+- Add loading indicator for LLM response
+- Auto-scroll to latest message
+- Show timestamp for each message
+
+**Frontend: Story Review Component (AC: #2, #4, #5)**
+- Create `src/components/generation/StoryReview.tsx` component
+- Display generated story (narrative + script if applicable)
+- Integrate ChatInterface for feedback
+- Add "Approve" button (green, prominent)
+- Add "Regenerate" button (secondary)
+- Show loading state during regeneration
+- Display conversation history
+
+**Frontend: Interactive Pipeline Component (AC: #1, #5, #7)**
+- Create `src/components/generation/InteractivePipeline.tsx` component
+- Add stage progress indicator (Story → Images → Storyboard → Video)
+- Render StoryReview when currentStage === 'story'
+- Handle stage transitions (update UI when stage changes)
+- Implement session restoration on mount
+- Show loading states between stages
+
+**Frontend: API Client (AC: #1, #4, #5)**
+- Create `src/services/interactive-api.ts` module
+- Implement `startPipeline(prompt, duration)` API call
+- Implement `getSessionStatus(sessionId)` API call
+- Implement `approveStage(sessionId, stage)` API call
+- Implement `regenerate(sessionId, stage, feedback)` API call
+
+**Testing: Backend (AC: #1-7)**
+- Create `tests/services/test_interactive_pipeline.py`
+- Test session creation and initialization
+- Test stage transitions and state management
+- Test session save/load from Redis
+- Create `tests/services/test_conversation_handler.py`
+- Test feedback processing and story refinement
+- Mock OpenAI API calls
+- Create `tests/api/test_websocket.py`
+- Test WebSocket connection and message handling
+- Test reconnection behavior
+
+**Testing: Frontend (AC: #2-7)**
+- Create `src/components/generation/__tests__/StoryReview.test.tsx`
+- Test story display and approve/regenerate buttons
+- Test chat message sending
+- Create `src/components/generation/__tests__/ChatInterface.test.tsx`
+- Test message rendering and input
+- Create `src/components/generation/__tests__/InteractivePipeline.test.tsx`
+- Test stage rendering and transitions
+- Mock WebSocket and API calls
+
+**Integration Testing (AC: #1-7)**
+- Test full flow: start → story generated → feedback → regenerate → approve
+- Test WebSocket reconnection during active session
+- Test session restoration after page refresh
+- Test error handling (API failures, WebSocket disconnect)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+**AC #1: Interactive Pipeline Initiated**
+- GIVEN a user on the video generation page
+- WHEN they select "Interactive Mode" and submit a prompt
+- THEN the backend starts an interactive pipeline session
+- AND creates a session ID with initial state
+- AND the frontend displays a loading state "Generating your story..."
+
+**AC #2: Story Displayed for Review**
+- GIVEN the story has been generated (Stage 1 complete)
+- WHEN the pipeline pauses at the story review stage
+- THEN the frontend displays the full story text
+- AND shows a chat interface for feedback
+- AND shows "Approve" and "Regenerate" buttons
+- AND WebSocket connection is established
+
+**AC #3: Conversational Feedback Processed**
+- GIVEN the user is reviewing the story
+- WHEN they type a message like "make it more humorous and focus on product benefits"
+- THEN the message is sent via WebSocket to the backend
+- AND the LLM processes the feedback
+- AND returns a conversational response explaining the planned changes
+- AND the response appears in the chat interface
+
+**AC #4: Story Regeneration**
+- GIVEN the user has provided feedback
+- WHEN they click "Regenerate" or type "regenerate the story"
+- THEN the backend regenerates the story incorporating the feedback
+- AND shows a loading indicator "Regenerating story..."
+- AND the new story replaces the old one in the UI
+- AND the conversation history is preserved
+
+**AC #5: Story Approval and Stage Transition**
+- GIVEN the user is satisfied with the story
+- WHEN they click "Approve"
+- THEN the session state is updated to "approved_story"
+- AND the pipeline proceeds to Stage 2 (reference image generation)
+- AND the frontend shows "Story approved! Generating reference images..."
+- AND the story review UI transitions to the next stage UI
+
+**AC #6: WebSocket Reconnection**
+- GIVEN an active WebSocket connection
+- WHEN the connection drops (network issue, server restart)
+- THEN the frontend automatically attempts to reconnect
+- AND shows "Reconnecting..." indicator
+- WHEN reconnected
+- THEN chat functionality resumes
+- AND session state is restored
+
+**AC #7: Session State Persistence**
+- GIVEN a user has an active interactive pipeline session
+- WHEN they refresh the browser or close/reopen the tab
+- THEN the frontend restores the session using the session ID
+- AND displays the current stage (story review)
+- AND shows the current story and conversation history
+- AND the user can continue where they left off
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification - Interactive Story Generation</title>
+        <section>Story 2: Interactive Story Generation</section>
+        <snippet>Backend: Build interactive pipeline orchestrator with pause points, implement WebSocket endpoints for real-time chat, create conversation handler for feedback processing. Frontend: Build story review UI component, integrate reusable chat interface. Testing: End-to-end story generation → feedback → regeneration → approval.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification - Interactive Pipeline Orchestration</title>
+        <section>Technical Approach - Backend: Interactive Pipeline Orchestration</section>
+        <snippet>Extend existing multi_stage_orchestrator.py with pause/resume functionality. InteractivePipelineOrchestrator runs stages, saves output to session state, notifies frontend via WebSocket, waits for user approval before proceeding. Pattern: run_stage_with_pause(stage_name, generation_fn, session_id).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification - Conversational Refinement</title>
+        <section>Technical Approach - Backend: Conversational Refinement</section>
+        <snippet>ConversationHandler processes user feedback using LLM. Adapts existing prompt_enhancement patterns for chat. process_story_feedback(original_story, user_feedback, conversation_history) uses GPT-4 to understand feedback and refine story.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification - WebSocket Integration</title>
+        <section>Technical Approach - Backend: WebSocket Integration</section>
+        <snippet>Use FastAPI WebSocket support at /ws/pipeline/{session_id}. Handle connection management, receive user messages, process through conversation handler, send responses. Implement heartbeat for connection health.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epic-interactive-pipeline.md</path>
+        <title>Epic: Interactive Video Generation Pipeline</title>
+        <section>Story 2: Interactive Story Generation</section>
+        <snippet>As a content creator, review and refine AI-generated story through conversation to ensure narrative matches vision before spending credits on image generation. Key: WebSocket chat, story regeneration based on feedback, approval to proceed.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>Backend Framework and Patterns</section>
+        <snippet>FastAPI with Uvicorn ASGI server. Service pattern: all pipeline services are classes in app/services/pipeline/. Async/await for all I/O operations. JWT-based auth with dependency injection.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/pipeline/multi_stage_orchestrator.py</path>
+        <kind>service</kind>
+        <symbol>generate_multi_stage_storyboard</symbol>
+        <lines>22-150</lines>
+        <reason>Existing pipeline orchestrator that executes 4-stage workflow sequentially. Pattern to extend for interactive pipeline with pause points. Shows how stages are executed and results are collected.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/story_generator.py</path>
+        <kind>service</kind>
+        <symbol>generate_story</symbol>
+        <lines>1-200</lines>
+        <reason>Story generation service using OpenAI. Will be reused for initial story generation and regeneration with feedback. Contains prompt templates and story structure patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/generations.py</path>
+        <kind>API route</kind>
+        <symbol>router, process_generation</symbol>
+        <lines>1-100</lines>
+        <reason>Existing API route patterns for video generation. Shows FastAPI router setup, dependency injection for auth (get_current_user), and async background task patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/deps.py</path>
+        <kind>dependency</kind>
+        <symbol>get_current_user</symbol>
+        <lines>N/A</lines>
+        <reason>Authentication dependency for protecting API routes. Will be used to protect new interactive pipeline endpoints.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/config.py</path>
+        <kind>configuration</kind>
+        <symbol>settings</symbol>
+        <lines>N/A</lines>
+        <reason>Application settings and configuration. Will need to add Redis URL, WebSocket timeout, and other interactive pipeline settings.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/stores/</path>
+        <kind>state management</kind>
+        <symbol>Zustand stores</symbol>
+        <lines>N/A</lines>
+        <reason>Existing Zustand store pattern for auth and user state. Will create similar pipelineStore for interactive pipeline state management.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="fastapi" version="0.104.0+">FastAPI web framework with WebSocket support</package>
+        <package name="openai" version="1.0.0+">OpenAI API client for GPT-4 conversational feedback</package>
+        <package name="redis" version="4.6.0+" optional="true">Redis for session state caching (optional, can use PostgreSQL)</package>
+        <package name="websockets" version="11.0.0+" optional="true">WebSocket library (FastAPI has built-in support)</package>
+        <package name="pydantic" version="2.0.0+">Request/response schema validation</package>
+        <package name="sqlalchemy" version="2.0.0+">ORM for PostgreSQL session storage (if not using Redis)</package>
+      </python>
+      <javascript>
+        <package name="zustand" version="5.0.8">State management for pipeline store</package>
+        <package name="react" version="19.2.0">UI framework</package>
+        <package name="typescript" version="5.9.3">Type safety</package>
+        <package name="axios" version="1.13.2">HTTP client for API calls</package>
+        <package name="socket.io-client" version="4.7.0" optional="true">WebSocket client (can use native WebSocket)</package>
+      </javascript>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - WebSocket endpoint must use FastAPI's built-in WebSocket support (from fastapi import WebSocket)
+    - Session state must support both Redis and PostgreSQL storage (allow flexibility)
+    - All API routes must use JWT authentication via get_current_user dependency
+    - Frontend must implement auto-reconnect for WebSocket with exponential backoff
+    - Session TTL must be configurable (default: 1 hour) for automatic cleanup
+    - Chat messages must preserve conversation history for context in LLM calls
+    - Story regeneration must reuse existing story_generator.py service (no duplication)
+    - Frontend components must follow existing React + TypeScript + Tailwind patterns
+    - All errors must follow existing error response schema with error.code and error.message
+    - WebSocket heartbeat interval must be configurable (default: 30 seconds)
+    - Pipeline state transitions must be atomic (prevent race conditions)
+    - Session restoration must handle edge cases (expired session, invalid session ID)
+    - Frontend must use Zustand for state management (consistent with existing auth/user stores)
+    - Backend services must use async/await pattern (consistent with existing pipeline services)
+    - Test coverage: Backend 80% minimum, Frontend 70% minimum for new code
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Interactive Pipeline Start</name>
+      <kind>REST endpoint</kind>
+      <signature>POST /api/v1/interactive/start</signature>
+      <path>backend/app/api/routes/interactive_generation.py</path>
+    </interface>
+    <interface>
+      <name>Session Status</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /api/v1/interactive/{session_id}/status</signature>
+      <path>backend/app/api/routes/interactive_generation.py</path>
+    </interface>
+    <interface>
+      <name>Stage Approval</name>
+      <kind>REST endpoint</kind>
+      <signature>POST /api/v1/interactive/{session_id}/approve</signature>
+      <path>backend/app/api/routes/interactive_generation.py</path>
+    </interface>
+    <interface>
+      <name>Story Regeneration</name>
+      <kind>REST endpoint</kind>
+      <signature>POST /api/v1/interactive/{session_id}/regenerate</signature>
+      <path>backend/app/api/routes/interactive_generation.py</path>
+    </interface>
+    <interface>
+      <name>Pipeline WebSocket</name>
+      <kind>WebSocket endpoint</kind>
+      <signature>WS /ws/pipeline/{session_id}</signature>
+      <path>backend/app/api/routes/websocket.py</path>
+    </interface>
+    <interface>
+      <name>Story Generator Service</name>
+      <kind>Python service</kind>
+      <signature>async def generate_story(user_prompt, template_id, target_duration) -> Dict</signature>
+      <path>backend/app/services/pipeline/story_generator.py</path>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+**Backend Testing (pytest 7.4+ with pytest-asyncio):**
+- Test framework: pytest with pytest-asyncio for async function testing
+- Mock external APIs: Use pytest-mock to mock OpenAI and Replicate API calls
+- Async testing: All async functions must use @pytest.mark.asyncio decorator
+- Coverage target: 80% minimum for new services and API routes
+- Test organization: Mirror source structure in tests/ directory
+- Fixtures: Use pytest fixtures for common setup (mock sessions, users, etc.)
+
+**Frontend Testing (vitest 1.6+ with @testing-library/react):**
+- Test framework: vitest with @testing-library/react for component testing
+- Component testing: Test user interactions, not implementation details
+- Mock API calls: Use MSW (Mock Service Worker) or vitest.mock for API mocking
+- WebSocket testing: Mock WebSocket connections and message flow
+- State testing: Test Zustand store logic in isolation
+- Coverage target: 70% minimum for new components and hooks
+- Test location: __tests__ folders next to components
+
+**Integration Testing:**
+- Test full user flow: start pipeline → story generated → feedback → regenerate → approve
+- Test WebSocket resilience: connection drop → auto-reconnect → resume
+- Test session state persistence: page refresh → session restore
+- Test error scenarios: API failures, WebSocket disconnect, invalid session
+    </standards>
+    <locations>
+Backend test files (CREATE):
+- backend/tests/services/test_interactive_pipeline.py - InteractivePipelineOrchestrator tests
+- backend/tests/services/test_conversation_handler.py - ConversationHandler feedback processing tests
+- backend/tests/api/test_interactive_generation.py - API endpoint tests (start, status, approve, regenerate)
+- backend/tests/api/test_websocket.py - WebSocket connection and message handling tests
+
+Frontend test files (CREATE):
+- frontend/src/components/generation/__tests__/InteractivePipeline.test.tsx - Main pipeline component tests
+- frontend/src/components/generation/__tests__/StoryReview.test.tsx - Story review component tests
+- frontend/src/components/generation/__tests__/ChatInterface.test.tsx - Chat interface component tests
+- frontend/src/hooks/__tests__/useWebSocket.test.ts - WebSocket hook tests
+- frontend/src/stores/__tests__/pipelineStore.test.ts - Zustand store tests
+
+Existing test patterns to reference:
+- backend/tests/test_generations.py - API testing patterns
+- backend/tests/test_auth_routes.py - Auth dependency testing patterns
+    </locations>
+    <ideas>
+**Test Ideas Mapped to Acceptance Criteria:**
+
+**AC #1: Interactive Pipeline Initiated**
+- Unit: Test InteractivePipelineOrchestrator.start_pipeline() creates session with correct initial state
+- Unit: Test session ID generation is unique and secure
+- API: Test POST /api/v1/interactive/start returns session_id and initial status
+- API: Test authentication required (401 if no JWT token)
+- Integration: Test frontend startPipeline() triggers loading state
+
+**AC #2: Story Displayed for Review**
+- Unit: Test InteractivePipelineOrchestrator.run_stage_with_pause() saves story to session state
+- Unit: Test WebSocket notification sent when stage completes
+- Component: Test StoryReview renders story text correctly
+- Component: Test StoryReview displays chat interface and approve/regenerate buttons
+- Integration: Test WebSocket connection established after story generation
+
+**AC #3: Conversational Feedback Processed**
+- Unit: Test ConversationHandler.process_story_feedback() extracts intent from user message
+- Unit: Test conversation history is passed to GPT-4 for context
+- Unit: Mock OpenAI API responses for feedback processing
+- WebSocket: Test message routing from client → handler → client
+- Component: Test ChatInterface sends message via WebSocket
+- Component: Test ChatInterface displays LLM response in conversation
+
+**AC #4: Story Regeneration**
+- Unit: Test ConversationHandler.refine_story() calls story_generator.py with updated parameters
+- Unit: Test regenerated story replaces old story in session state
+- API: Test POST /api/v1/interactive/{id}/regenerate triggers regeneration
+- Component: Test StoryReview shows loading indicator during regeneration
+- Component: Test conversation history preserved after regeneration
+- Integration: Test full regeneration flow with mocked story_generator
+
+**AC #5: Story Approval and Stage Transition**
+- Unit: Test session state updated to "approved_story" after approval
+- Unit: Test stage transition logic (story → reference_image)
+- API: Test POST /api/v1/interactive/{id}/approve updates session status
+- Component: Test InteractivePipeline transitions to next stage UI
+- Integration: Test full approval flow triggers next stage
+
+**AC #6: WebSocket Reconnection**
+- WebSocket: Test connection drop triggers reconnect attempt
+- WebSocket: Test exponential backoff for reconnection (1s, 2s, 4s, etc.)
+- WebSocket: Test max reconnection attempts (e.g., 5 attempts)
+- Hook: Test useWebSocket.connectionStatus updates correctly (connected → disconnected → reconnecting → connected)
+- Component: Test UI shows "Reconnecting..." indicator during reconnection
+
+**AC #7: Session State Persistence**
+- Unit: Test session state save/load from Redis or PostgreSQL
+- Unit: Test session TTL enforcement (auto-cleanup after 1 hour)
+- Store: Test pipelineStore.restoreSession() loads session from storage
+- Component: Test InteractivePipeline.useEffect() restores session on mount
+- Integration: Test page refresh → session restore → UI shows current state
+- Edge case: Test expired session shows error message instead of crash
+- Edge case: Test invalid session ID shows "Session not found" error
+    </ideas>
+  </tests>
+</story-context>

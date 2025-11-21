@@ -1,0 +1,287 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>interactive-pipeline</epicId>
+    <storyId>interactive-pipeline-3</storyId>
+    <title>Interactive Image/Storyboard Feedback</title>
+    <status>in-progress</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/story-interactive-pipeline-3.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>content creator using the web application</asA>
+    <iWant>to review and refine reference images and storyboard images through conversational feedback before proceeding to video generation</iWant>
+    <soThat>I can ensure visual quality meets my standards and avoid generating videos based on images I don't like</soThat>
+    <tasks>
+      - Backend: Extend Interactive Pipeline with reference_image and storyboard stages
+      - Backend: Image Feedback Processing with clip parsing and batch support
+      - Backend: API Routes for image regeneration
+      - Frontend: ImageReview Component with gallery, selection, and chat
+      - Frontend: Integration with InteractivePipeline orchestrator
+      - Frontend: API client extensions for image regeneration
+      - Testing: Backend tests for conversation_handler and interactive_pipeline
+      - Testing: Frontend tests for ImageReview component
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <title>Reference Image Review</title>
+      <description>Display all reference images in gallery layout with chat interface, quality scores, and Approve/Regenerate buttons</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC2">
+      <title>Image-Specific Feedback</title>
+      <description>Process conversational feedback like "make background brighter" and translate to image parameters</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC3">
+      <title>Image Regeneration</title>
+      <description>Regenerate reference images with updated parameters and show loading states</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC4">
+      <title>Reference Image Approval</title>
+      <description>Approve reference images and proceed to storyboard generation stage</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC5">
+      <title>Storyboard Review</title>
+      <description>Display storyboard clips in gallery with sequence numbers, chat interface, and action buttons</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC6">
+      <title>Storyboard-Specific Feedback</title>
+      <description>Process feedback for specific clips and regenerate targeted clips</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC7">
+      <title>Batch Feedback Handling</title>
+      <description>Process batch feedback like "all images too dark" or "Clips 1-3 need better lighting"</description>
+      <status>implemented</status>
+    </criterion>
+    <criterion id="AC8">
+      <title>Storyboard Approval and Video Generation</title>
+      <description>Approve storyboard and proceed to video generation stage</description>
+      <status>implemented</status>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec.md</path>
+        <title>Technical Specification</title>
+        <section>Interactive Pipeline Architecture</section>
+        <snippet>Defines the multi-stage pipeline with pause points for review at story, reference_image, storyboard, and video stages. Each stage supports conversational feedback and regeneration.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>System Architecture</title>
+        <section>Backend Services</section>
+        <snippet>FastAPI backend with services/pipeline directory containing pipeline orchestration, conversation handling, and image generation services.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epic-interactive-pipeline.md</path>
+        <title>Epic: Interactive Video Generation Pipeline</title>
+        <section>Epic Overview</section>
+        <snippet>Epic covering interactive pipeline with feedback loops for story, images, storyboard, and advanced editing capabilities.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/pipeline/conversation_handler.py</path>
+        <kind>service</kind>
+        <symbol>process_image_feedback</symbol>
+        <lines>114-198</lines>
+        <reason>Processes conversational feedback about images, extracts modifications, and handles selected image indices</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/conversation_handler.py</path>
+        <kind>service</kind>
+        <symbol>_parse_clip_references</symbol>
+        <lines>466-515</lines>
+        <reason>Parses clip references from natural language feedback (Clip 2, Clips 1-3, all images, second clip, etc.)</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/conversation_handler.py</path>
+        <kind>service</kind>
+        <symbol>_extract_image_modifications</symbol>
+        <lines>397-464</lines>
+        <reason>Extracts visual modifications from feedback (brightness, saturation, style changes, background/character modifications)</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/interactive_pipeline.py</path>
+        <kind>service</kind>
+        <symbol>_generate_reference_image_stage</symbol>
+        <lines>375-461</lines>
+        <reason>Generates 3 reference image variations using image_generation service, supports feedback-driven modifications</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/interactive_pipeline.py</path>
+        <kind>service</kind>
+        <symbol>_generate_storyboard_stage</symbol>
+        <lines>464-590</lines>
+        <reason>Generates storyboard with start/end frames per clip, supports selective clip regeneration with affected_indices</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/generation/ImageReview.tsx</path>
+        <kind>component</kind>
+        <symbol>ImageReview</symbol>
+        <lines>1-358</lines>
+        <reason>Gallery component for image review with selection, chat, quality scores, and lightbox. Supports both reference_image and storyboard stages</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/generation/InteractivePipeline.tsx</path>
+        <kind>component</kind>
+        <symbol>InteractivePipeline</symbol>
+        <lines>318-343</lines>
+        <reason>Orchestrator component now renders ImageReview for reference_image and storyboard stages</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/services/interactive-api.ts</path>
+        <kind>service</kind>
+        <symbol>regenerate</symbol>
+        <lines>151-162</lines>
+        <reason>API function extended to support imageIndices parameter for targeted regeneration</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/image_generation.py</path>
+        <kind>service</kind>
+        <symbol>generate_image</symbol>
+        <lines>30-100</lines>
+        <reason>Existing image generation service using Nano Banana (Google Gemini 2.5 Flash) on Replicate</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/pipeline/storyboard_generator.py</path>
+        <kind>service</kind>
+        <symbol>generate_storyboard</symbol>
+        <lines>1-100</lines>
+        <reason>Existing storyboard generation service using OpenAI Vision API with reference images</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/schemas/interactive.py</path>
+        <kind>schema</kind>
+        <symbol>PipelineSessionState</symbol>
+        <lines>various</lines>
+        <reason>Session state schema with outputs dict for storing stage outputs (story, reference_image, storyboard)</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/generation/ChatInterface.tsx</path>
+        <kind>component</kind>
+        <symbol>ChatInterface</symbol>
+        <lines>various</lines>
+        <reason>Reusable chat component from Story 2, integrated into ImageReview for feedback</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <backend>
+        <package>fastapi</package>
+        <package>pydantic</package>
+        <package>openai</package>
+        <package>replicate</package>
+        <package>httpx</package>
+      </backend>
+      <frontend>
+        <package>react</package>
+        <package>typescript</package>
+        <package>axios</package>
+        <package>zustand</package>
+        <package>tailwindcss</package>
+      </frontend>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      Follow existing pipeline stage patterns from Story 2 (StoryReview component structure)
+    </constraint>
+    <constraint>
+      Reuse ChatInterface component from Story 2 for consistency
+    </constraint>
+    <constraint>
+      Use existing image_generation.py service (Nano Banana/Gemini 2.5 Flash on Replicate)
+    </constraint>
+    <constraint>
+      Use existing storyboard_generator.py service (OpenAI Vision API)
+    </constraint>
+    <constraint>
+      Maintain session state persistence using session_storage from Story 2
+    </constraint>
+    <constraint>
+      Follow FastAPI project structure: backend/app/services/pipeline/ for services
+    </constraint>
+    <constraint>
+      Follow React component structure: frontend/src/components/generation/ for UI
+    </constraint>
+    <constraint>
+      Use Tailwind CSS for all styling (no custom CSS files)
+    </constraint>
+    <constraint>
+      Image URLs must be served via API endpoints (e.g., /api/v1/outputs/interactive/{session_id}/...)
+    </constraint>
+    <constraint>
+      Support both reference_image stage (3 image variations) and storyboard stage (N clips with start/end frames)
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>ConversationHandler.process_image_feedback</name>
+      <kind>method</kind>
+      <signature>async def process_image_feedback(self, image_data: Dict[str, Any], feedback: str, conversation_history: List[ChatMessage], selected_indices: Optional[List[int]] = None) -> Dict[str, Any]</signature>
+      <path>backend/app/services/pipeline/conversation_handler.py</path>
+      <returns>Dict with keys: response (str), modifications (dict), confidence (float), affected_indices (list)</returns>
+    </interface>
+    <interface>
+      <name>InteractivePipelineOrchestrator._generate_reference_image_stage</name>
+      <kind>method</kind>
+      <signature>async def _generate_reference_image_stage(self, session_id: str, modifications: Optional[Dict[str, Any]] = None)</signature>
+      <path>backend/app/services/pipeline/interactive_pipeline.py</path>
+      <description>Generates 3 reference image variations, saves to session.outputs['reference_image']</description>
+    </interface>
+    <interface>
+      <name>InteractivePipelineOrchestrator._generate_storyboard_stage</name>
+      <kind>method</kind>
+      <signature>async def _generate_storyboard_stage(self, session_id: str, modifications: Optional[Dict[str, Any]] = None)</signature>
+      <path>backend/app/services/pipeline/interactive_pipeline.py</path>
+      <description>Generates storyboard clips with start/end frames, supports selective regeneration via modifications['affected_indices']</description>
+    </interface>
+    <interface>
+      <name>ImageReview Component Props</name>
+      <kind>component interface</kind>
+      <signature>stage: "reference_image" | "storyboard", images?: ImageData[], clips?: StoryboardClip[], messages: ChatMessage[], isRegenerating?: boolean, onSendFeedback: (message: string, selectedIndices?: number[]) => void, onApprove: () => void, onRegenerate: (selectedIndices?: number[]) => void, disabled?: boolean</signature>
+      <path>frontend/src/components/generation/ImageReview.tsx</path>
+    </interface>
+    <interface>
+      <name>regenerate API function</name>
+      <kind>function</kind>
+      <signature>async function regenerate(sessionId: string, stage: string, feedback: string, imageIndices?: number[]): Promise&lt;RegenerateResponse&gt;</signature>
+      <path>frontend/src/services/interactive-api.ts</path>
+      <description>Extended to support imageIndices parameter for targeted image regeneration</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend: Use pytest for Python testing. Frontend: Use React Testing Library and Jest for component tests. Follow existing test patterns in tests/ directory.
+    </standards>
+    <locations>
+      backend/tests/
+      frontend/src/__tests__/
+    </locations>
+    <ideas>
+      <test ac="AC1">Test ImageReview component renders gallery with images and quality scores</test>
+      <test ac="AC2">Test _extract_image_modifications extracts brightness, saturation, and style changes</test>
+      <test ac="AC2">Test process_image_feedback returns proper modifications dict</test>
+      <test ac="AC3">Test _generate_reference_image_stage generates 3 images and saves to session</test>
+      <test ac="AC6">Test _parse_clip_references correctly parses "Clip 2", "Clips 1-3", "all images", etc.</test>
+      <test ac="AC6">Test _generate_storyboard_stage with affected_indices only regenerates specified clips</test>
+      <test ac="AC7">Test batch feedback parsing with various formats</test>
+      <test ac="AC5">Test ImageReview component in storyboard mode displays start/end frames</test>
+      <test ac="AC1,AC5">Test image selection UI (click to select/deselect)</test>
+      <test ac="AC3,AC6">Test regenerate API function with imageIndices parameter</test>
+    </ideas>
+  </tests>
+</story-context>

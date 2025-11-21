@@ -1,12 +1,24 @@
 {
   "original_prompt": "Create an ad of a bottle of luxury Dior perfume positioned against a backdrop of  Paris.",
-  "current_stage": "narrative",
+  "current_stage": "final-video",
   "enhanced_prompt": "A luxurious Dior perfume bottle elegantly positioned on a glossy black surface, with the Eiffel Tower softly blurred in the background at twilight, captured in a close-up portrait using a Canon EOS R5 with an 85mm f/1.2 lens, illuminated by soft, diffused lighting that highlights the sleek contours of the bottle, featuring a cinematic color grading with warm, golden hues to evoke an upscale and romantic atmosphere, in a 16:9 aspect ratio.",
   "negative_prompt": "blurry, low quality, distorted, deformed, watermark, text, signature, extra limbs, mutated hands, poorly drawn, bad proportions, cloned face, disfigured, oversaturated, unrealistic reflections, incorrect lighting, floating objects, missing shadows, harsh shadows, incorrect perspective, noise, grain, pixelated, smeared textures, incomplete rendering",
   "reference_image_path": "output/pipeline_runs/20251119_205736/02_reference_images/image_001.png",
   "reference_image_score": 33.29146589907552,
   "completed_stages": [
     "ref-image",
-    "narrative"
-  ]
+    "narrative",
+    "storyboard",
+    "motion-prompts",
+    "clips",
+    "final-video"
+  ],
+  "storyboard_metadata_path": "output/pipeline_runs/20251119_205736/03_storyboard/storyboard_metadata.json",
+  "num_clips": 3,
+  "narrative_path": "output/pipeline_runs/20251119_205736/03_storyboard/storyboard_enhancement_trace/unified_narrative.md",
+  "enhanced_motion_prompts_path": "output/pipeline_runs/20251119_205736/04_motion_prompt_traces/storyboard_enhanced_motion_prompts.json",
+  "video_clips_dir": "output/pipeline_runs/20251119_205736/05_video_clips",
+  "total_clips": 3,
+  "total_videos": 8,
+  "total_cost": 2.8
 }

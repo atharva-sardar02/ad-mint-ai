@@ -108,5 +108,8 @@ development_status:
   epic-9-retrospective: optional
 
   epic-interactive-pipeline: contexted
-  interactive-pipeline-1-cli-tools-organization: review
+  interactive-pipeline-1-cli-tools-organization: done
+  interactive-pipeline-2-interactive-story-generation: done
+  interactive-pipeline-3-interactive-image-storyboard-feedback: review
+  interactive-pipeline-4-advanced-image-editing: done  # Code review resolved - all tests created, task checkboxes updated
   epic-interactive-pipeline-retrospective: optional

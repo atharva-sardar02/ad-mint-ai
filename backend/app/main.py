@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, editor, generations, generations_with_image, users
+from app.api.routes import auth, editor, generations, generations_with_image, users, interactive_generation, websocket
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -108,6 +108,8 @@ app.include_router(generations.router)
 app.include_router(generations_with_image.router)
 app.include_router(users.router)
 app.include_router(editor.router)
+app.include_router(interactive_generation.router, prefix="/api/v1/interactive", tags=["interactive"])
+app.include_router(websocket.router, tags=["websocket"])
 
 # Mount static files for serving videos and thumbnails
 # This allows the frontend to access files at /output/videos/ and /output/thumbnails/
@@ -117,6 +119,21 @@ if output_dir.exists():
     logger.info("Static files mounted at /output")
 else:
     logger.warning("Output directory not found - static file serving disabled")
+
+# Serve interactive pipeline artifacts (stories, reference images, storyboard frames, etc.)
+interactive_output_dir = Path(settings.OUTPUT_BASE_DIR)
+if interactive_output_dir.exists():
+    app.mount(
+        "/api/v1/outputs",
+        StaticFiles(directory=interactive_output_dir),
+        name="interactive-output",
+    )
+    logger.info(f"Interactive outputs mounted at /api/v1/outputs ({interactive_output_dir})")
+else:
+    logger.warning(
+        "Interactive output directory not found (%s) - cannot serve reference images",
+        interactive_output_dir,
+    )
 
 
 @app.on_event("startup")

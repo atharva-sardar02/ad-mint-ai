@@ -143,3 +143,4 @@ class TestGetSeedForGeneration:
         with pytest.raises(Exception):
             get_seed_for_generation(db_session, generation_id)
 
+

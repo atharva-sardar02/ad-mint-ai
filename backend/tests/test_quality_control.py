@@ -201,3 +201,4 @@ def test_store_quality_metric():
         db.commit.assert_called_once()
         db.refresh.assert_called_once()
 
+

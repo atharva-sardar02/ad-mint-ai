@@ -293,3 +293,4 @@ def test_rank_videos_by_quality_mismatched_lengths():
     with pytest.raises(ValueError, match="must have the same length"):
         rank_videos_by_quality(video_paths, scores_list)
 
+
