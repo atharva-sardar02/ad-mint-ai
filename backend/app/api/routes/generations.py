@@ -176,10 +176,25 @@ async def process_generation(
                 logger.info(f"[{generation_id}] Status updated: processing (5%) - Storyboard Planning")
                 
                 logger.info(f"[{generation_id}] Planning detailed storyboard with LLM...")
+                
+                # Determine pipeline type based on preferred_model (use V2 for KLING models)
+                pipeline_type = "default"
+                if preferred_model:
+                    # Check if the model is a KLING model
+                    kling_models = [
+                        "kling", "kling_2_5", "kwaivgi/kling-v2.5-turbo-pro",
+                        "kwaivgi/kling-v2.1", "klingai/kling-video",
+                        "klingai/kling-2.5-turbo"
+                    ]
+                    if any(kling_model.lower() in preferred_model.lower() for kling_model in kling_models):
+                        pipeline_type = "kling"
+                        logger.info(f"[{generation_id}] Detected KLING model '{preferred_model}', using V2 storyboard prompt")
+                
                 logger.info(f"[{generation_id}] Calling plan_storyboard with:")
                 logger.info(f"[{generation_id}]   - user_prompt: {prompt[:100]}...")
                 logger.info(f"[{generation_id}]   - reference_image_path: {image_path}")
                 logger.info(f"[{generation_id}]   - target_duration: {target_duration_seconds}")
+                logger.info(f"[{generation_id}]   - pipeline_type: {pipeline_type}")
                 try:
                     # LLM will decide number of scenes based on target_duration
                     logger.info(f"[{generation_id}] ⏳ Awaiting plan_storyboard()...")
@@ -187,6 +202,7 @@ async def process_generation(
                         user_prompt=prompt,
                         reference_image_path=image_path,
                         target_duration=target_duration_seconds,
+                        pipeline_type=pipeline_type,
                     )
                     logger.info(f"[{generation_id}] ✅ plan_storyboard() completed successfully")
                     logger.info(f"[{generation_id}] Storyboard plan keys: {list(storyboard_plan.keys()) if storyboard_plan else 'None'}")

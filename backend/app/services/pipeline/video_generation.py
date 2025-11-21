@@ -279,7 +279,6 @@ async def generate_video_clip(
     logger.debug(f"Visual prompt: {scene.visual_prompt[:100]}...")
     logger.debug(f"Target duration: {scene.duration}s")
     
-<<<<<<< HEAD
     # Enhance visual_prompt with brand/product style and scent profile (if provided)
     # This happens at video generation time, NOT at storyboard time
     enhanced_prompt = scene.visual_prompt
