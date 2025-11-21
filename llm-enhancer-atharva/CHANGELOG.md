@@ -1,6 +1,70 @@
 # Changelog - LLM Enhancer Workflow
 
-## Latest Updates (2025-11-17)
+## Latest Updates (2025-11-19)
+
+### Google Veo 3.1 Integration
+- **Changed**: Default video generation model updated to `google/veo-3.1`
+- **Features**:
+  - Reference-to-Video (R2V) mode with support for 1-3 reference images
+  - Start/end frame control via `image` and `last_frame` parameters
+  - Resolution control (720p or 1080p, default: 1080p)
+  - Native audio generation (default: enabled)
+  - Negative prompt support
+  - Seed parameter for reproducibility
+- **R2V Mode**:
+  - When `reference_images` array provided (1-3 images), uses R2V mode
+  - Requires 16:9 aspect ratio and 8-second duration
+  - `last_frame` parameter is ignored in R2V mode
+- **Start/End Frame Mode**:
+  - When no `reference_images`, supports `image` (start) and `last_frame` (end)
+  - Creates smooth interpolation between start and end frames
+  - Supports 9:16 or 16:9 aspect ratio
+  - Supports 4, 6, or 8-second duration
+- **Implementation**: Updated in `backend/app/services/pipeline/video_generation.py`
+- **Frontend**: Updated model definitions in `frontend/src/lib/models/videoModels.ts`
+
+### User Reference Image Direct Usage
+- **Changed**: User-provided reference images are now used **directly** as the first scene's reference image
+- **Behavior**:
+  - User's image is copied to first scene reference location (not regenerated)
+  - All subsequent reference images are generated using sequential chaining starting from user's image
+  - Ensures maximum consistency with user's provided image throughout all scenes
+- **Implementation**: Updated in `backend/app/api/routes/generations.py` (lines ~320-450)
+- **Benefits**:
+  - User's exact image appears in storyboard (not a generated version)
+  - All generated images maintain consistency with user's original
+  - Better control over subject/product appearance
+
+### Enhanced Image Generation Always Enabled
+- **Changed**: Enhanced image generation is now **always enabled by default** (Story 9.4)
+- **Removed**: `use_advanced_image_generation` toggle parameter
+- **Default Settings**:
+  - Quality threshold: 30.0
+  - Number of variations: 4 per scene
+  - Enhancement iterations: 4
+- **Benefits**: All generations now use prompt enhancement and quality scoring for consistent high-quality results
+- **Implementation**: Updated in `backend/app/api/routes/generations.py`
+
+### Storyboard Image Display Improvements
+- **Fixed**: Images no longer cropped from top/bottom
+- **Changed**: Images now use `object-contain` instead of `object-cover` to show complete image
+- **Added**: Click-to-view popup modal for full-size image viewing
+- **Features**:
+  - Images display with proper aspect ratio (no cropping)
+  - Click any image to view in full-size modal
+  - Modal supports closing via X button or clicking outside
+  - Hover effects indicate images are clickable
+- **Implementation**: Updated `frontend/src/components/storyboard/StoryboardVisualizer.tsx`
+
+### LLM-Selected Transitions
+- **Added**: Scene transitions are now selected by LLM and passed to video stitching
+- **Features**:
+  - LLM selects appropriate transition type for each scene boundary
+  - Transitions stored in scene plan as `transition_to_next`
+  - Default fallback: "crossfade" if not specified
+- **Implementation**: Updated in `backend/app/api/routes/generations.py` and `backend/app/services/pipeline/stitching.py`
+
+## Previous Updates (2025-11-17)
 
 ### Image Generation Prompts in Storyboard
 - **Added**: Image generation prompts now displayed in storyboard visualizer

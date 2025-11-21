@@ -17,6 +17,7 @@ import { ComparisonDetail } from "./routes/ComparisonDetail";
 import { Queue } from "./routes/Queue";
 import { Editor } from "./routes/Editor";
 import { Storyboard } from "./routes/Storyboard";
+import { MasterMode } from "./routes/MasterMode";
 import "./App.css";
 
 /**
@@ -145,6 +146,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Storyboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/master-mode"
+            element={
+              <ProtectedRoute>
+                <MasterMode />
               </ProtectedRoute>
             }
           />

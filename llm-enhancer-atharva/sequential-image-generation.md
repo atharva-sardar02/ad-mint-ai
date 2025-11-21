@@ -9,6 +9,15 @@ All images (reference, start, and end) are generated **sequentially** to maintai
 ### 1. Reference Image Chain
 Reference images are generated **first** and form the foundation for the entire generation:
 
+**If user provides a reference image:**
+```
+User's Image (provided directly)
+    → Ref Image 2 (ref: User's Image) 
+    → Ref Image 3 (ref: Ref Img 2) 
+    → Ref Image 4 (ref: Ref Img 3)
+```
+
+**If no user image provided:**
 ```
 Ref Image 1 (no reference) 
     → Ref Image 2 (ref: Ref Img 1) 
@@ -17,6 +26,8 @@ Ref Image 1 (no reference)
 ```
 
 **Purpose**: Maintain visual consistency of the main subject, style, and environment across all scenes.
+
+**Key Update**: When a user provides a reference image, it is used **directly** as the first scene's reference image (not regenerated). All subsequent reference images are generated using sequential chaining starting from the user's image, ensuring maximum consistency.
 
 ### 2. Start Image Chain
 Start images are generated **second**, forming their own sequential chain:

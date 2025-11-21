@@ -12,19 +12,20 @@ flowchart TD
     Storyboard --> |Scene Descriptions| Scene3[Scene 3: Desire]
     Storyboard --> |Start/End Prompts| Scene4[Scene 4: Action]
     
-    Scene1 --> Img1[Image Generation 1<br/>Nano Banana<br/>No Reference]
-    Scene2 --> Img2[Image Generation 2<br/>Nano Banana<br/>Ref: Image 1]
-    Scene3 --> Img3[Image Generation 3<br/>Nano Banana<br/>Ref: Image 2]
-    Scene4 --> Img4[Image Generation 4<br/>Nano Banana<br/>Ref: Image 3]
+    Scene1 --> Img1{User Image<br/>Provided?}
+    Img1 -->|Yes| Img1User[Image 1: User's Image<br/>(Used Directly)]
+    Img1 -->|No| Img1Gen[Image Generation 1<br/>Enhanced Mode<br/>No Reference]
+    Img1User --> Img2[Image Generation 2<br/>Enhanced Mode<br/>Ref: User's Image]
+    Img1Gen --> Img2
     
-    Img1 --> |Sequential| Img2
-    Img2 --> |Sequential| Img3
-    Img3 --> |Sequential| Img4
+    Img2 --> |Sequential| Img3[Image Generation 3<br/>Enhanced Mode<br/>Ref: Image 2]
+    Img3 --> |Sequential| Img4[Image Generation 4<br/>Enhanced Mode<br/>Ref: Image 3]
     
-    Img1 --> |Reference Image 1| Vid1[Video Generation 1<br/>Sora-2/Veo-3/PixVerse]
-    Img2 --> |Reference Image 2| Vid2[Video Generation 2<br/>Sora-2/Veo-3/PixVerse]
-    Img3 --> |Reference Image 3| Vid3[Video Generation 3<br/>Sora-2/Veo-3/PixVerse]
-    Img4 --> |Reference Image 4| Vid4[Video Generation 4<br/>Sora-2/Veo-3/PixVerse]
+    Img1User --> |Reference Image 1| Vid1[Video Generation 1<br/>Veo 3.1 (Default)]
+    Img1Gen --> |Reference Image 1| Vid1
+    Img2 --> |Reference Image 2| Vid2[Video Generation 2<br/>Veo 3.1 (Default)]
+    Img3 --> |Reference Image 3| Vid3[Video Generation 3<br/>Veo 3.1 (Default)]
+    Img4 --> |Reference Image 4| Vid4[Video Generation 4<br/>Veo 3.1 (Default)]
     
     Storyboard --> |Detailed Prompts| Vid1
     Storyboard --> |Detailed Prompts| Vid2
@@ -69,7 +70,7 @@ sequenceDiagram
     participant API
     participant StoryboardPlanner as Storyboard Planner<br/>(GPT-4o)
     participant ImageGen as Image Generation<br/>(Nano Banana)
-    participant VideoGen as Video Generation<br/>(Sora-2/Veo-3/PixVerse)
+    participant VideoGen as Video Generation<br/>(Veo 3.1 Default/Sora-2/PixVerse)
     participant Assembly as Video Assembly
     
     User->>API: POST /api/generate<br/>{prompt, use_llm: true}

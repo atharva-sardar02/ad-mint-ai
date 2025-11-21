@@ -14,18 +14,20 @@ The **Advanced Image Generation System** is a powerful feature that uses AI-driv
 
 ---
 
-## 📊 Comparison: Simple vs Advanced
+## 📊 Enhanced Image Generation (Always Enabled)
 
-| Feature | **Simple Mode** (Default) | **Advanced Mode** |
-|---------|---------------------------|-------------------|
-| **Prompt Enhancement** | ❌ No | ✅ Yes (2-agent iterative) |
-| **Quality Scoring** | ❌ No | ✅ Yes (4 ML models) |
-| **Variations per Scene** | 1 | 4 (best selected) |
-| **Time per Scene** | ~15 seconds | ~60-90 seconds |
-| **Cost per Scene** | ~$0.02 | ~$0.10 |
-| **Quality Control** | Manual review only | Automated + quantitative scores |
-| **Visual Consistency** | Good | Excellent |
-| **Best For** | Fast iteration, prototypes | Production-quality videos |
+**Update**: Enhanced image generation is now **always enabled by default** (Story 9.4). There is no toggle - all generations use prompt enhancement and quality scoring.
+
+| Feature | **Status** |
+|---------|-----------|
+| **Prompt Enhancement** | ✅ Always enabled (2-agent iterative) |
+| **Quality Scoring** | ✅ Always enabled (4 ML models) |
+| **Variations per Scene** | 4 (best selected) |
+| **Time per Scene** | ~60-90 seconds |
+| **Cost per Scene** | ~$0.10 |
+| **Quality Control** | Automated + quantitative scores |
+| **Visual Consistency** | Excellent |
+| **User Reference Image** | Used directly as first scene reference |
 
 ---
 
@@ -41,46 +43,38 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 {
   "prompt": "Artisan coffee that starts your morning right",
-  "target_duration": 15,
-  "use_advanced_image_generation": true,
-  "advanced_image_quality_threshold": 30.0,
-  "advanced_image_num_variations": 4,
-  "advanced_image_max_enhancement_iterations": 4
+  "target_duration": 15
 }
 ```
 
-### Parameters
+**Note**: Enhanced image generation is **always enabled** by default. No toggle required.
 
-#### `use_advanced_image_generation` (boolean)
-- **Default**: `false`
-- **Description**: Enable advanced mode with prompt enhancement and quality scoring
-- **Recommendation**: Use for production videos where quality > speed
+### With User Reference Image
 
-#### `advanced_image_quality_threshold` (float, 0-100)
-- **Default**: `30.0`
-- **Description**: Minimum quality score threshold. Images below this will log warnings but still proceed.
-- **Recommendations**:
-  - `20.0` - Very lenient, rarely logs warnings
-  - `30.0` - **Recommended** - Balanced threshold
-  - `50.0` - Strict, may log warnings more frequently
-  - `70.0` - Very strict, use only for highest quality needs
+```bash
+POST http://localhost:8000/api/generate-with-image
 
-#### `advanced_image_num_variations` (integer, 2-8)
-- **Default**: `4`
-- **Description**: Number of image variations to generate per scene. Best variation is selected.
-- **Recommendations**:
-  - `2` - Fastest, still provides choice
-  - `4` - **Recommended** - Good balance of quality and speed
-  - `6` - Better exploration, longer time
-  - `8` - Maximum exploration, significantly longer
+Content-Type: multipart/form-data
+Authorization: Bearer YOUR_JWT_TOKEN
 
-#### `advanced_image_max_enhancement_iterations` (integer, 1-6)
-- **Default**: `4`
-- **Description**: Maximum iterations for 2-agent prompt enhancement loop
-- **Recommendations**:
-  - `2` - Faster, still improved prompts
-  - `4` - **Recommended** - Allows thorough refinement
-  - `6` - Maximum refinement, longer processing
+{
+  "prompt": "Luxury perfume advertisement",
+  "image": [your reference image file],
+  "target_duration": 15
+}
+```
+
+**Behavior**: Your provided image will be used **directly** as the first scene's reference image. All subsequent images will be generated using sequential chaining starting from your image for maximum consistency.
+
+### Default Settings (Always Active)
+
+The system uses these default settings for all generations:
+
+- **Quality Threshold**: `30.0` - Balanced threshold (warnings logged if below, but generation proceeds)
+- **Number of Variations**: `4` - Generates 4 variations per scene, selects best
+- **Enhancement Iterations**: `4` - Allows thorough prompt refinement
+
+These settings are optimized for production-quality results while maintaining reasonable generation times.
 
 ---
 

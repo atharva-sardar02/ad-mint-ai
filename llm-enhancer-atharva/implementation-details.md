@@ -112,13 +112,20 @@ async def generate_video_clip(
     seed: Optional[int] = None,
     preferred_model: Optional[str] = None,
     reference_image_path: Optional[str] = None,  # Generated reference image
+    reference_images: Optional[List[str]] = None,  # Array of 1-3 reference images (Veo 3.1 R2V mode)
+    start_image_path: Optional[str] = None,  # Start frame (Veo 3.1, Kling 2.5 Turbo Pro)
+    end_image_path: Optional[str] = None,  # End frame (Veo 3.1, Kling 2.5 Turbo Pro)
+    resolution: Optional[str] = None,  # "720p" or "1080p" (Veo 3.1)
+    generate_audio: Optional[bool] = None,  # Audio generation (Veo 3.1)
+    negative_prompt: Optional[str] = None,  # Negative prompt (Veo 3.1)
     consistency_markers: Optional[dict] = None,   # Text markers
 ) -> tuple[str, str]:
     """
     Generates video clip using:
     - Detailed prompt from scene.visual_prompt
     - Consistency markers
-    - Generated reference image
+    - Generated reference image(s) or start/end frames
+    - Default model: Google Veo 3.1
     """
 ```
 
@@ -149,13 +156,38 @@ generation.coherence_settings["storyboard_plan"] = storyboard_plan
 ### Step 2: Image Generation
 
 ```python
-# Generate images sequentially
-reference_image_paths = await generate_images_with_sequential_references(
-    prompts=scene_detailed_prompts,  # From storyboard
-    output_dir=str(image_dir),
-    generation_id=generation_id,
-    consistency_markers=consistency_markers,  # Shared markers
-)
+# If user provided a reference image, use it directly as first scene reference
+if user_initial_reference:
+    # Copy user's image to first scene reference location
+    first_scene_ref_path = image_dir / f"{generation_id}_scene_1.png"
+    shutil.copy2(user_initial_reference, first_scene_ref_path)
+    first_reference_image = str(first_scene_ref_path)
+    
+    # Generate remaining reference images (scenes 2+) using sequential chaining
+    # Start the chain with the user's image
+    if len(scene_detailed_prompts) > 1:
+        remaining_prompts = scene_detailed_prompts[1:]
+        remaining_reference_images = await generate_enhanced_reference_images_with_sequential_references(
+            prompts=remaining_prompts,
+            output_dir=str(image_dir),
+            generation_id=generation_id,
+            consistency_markers=consistency_markers,
+            initial_reference_image=first_reference_image,  # Start with user's image
+            ...
+        )
+        reference_image_paths = [first_reference_image] + remaining_reference_images
+    else:
+        reference_image_paths = [first_reference_image]
+else:
+    # No user image: Generate all images sequentially with enhanced mode
+    reference_image_paths = await generate_enhanced_reference_images_with_sequential_references(
+        prompts=scene_detailed_prompts,
+        output_dir=str(image_dir),
+        generation_id=generation_id,
+        consistency_markers=consistency_markers,
+        initial_reference_image=None,
+        ...
+    )
 
 # Store reference image paths in storyboard plan
 for idx, scene in enumerate(storyboard_plan.get("scenes", [])):
@@ -241,9 +273,10 @@ class Scene(BaseModel):
     scene_type: str
     visual_prompt: str  # Detailed prompt from storyboard
     model_prompts: dict[str, str]  # Model-specific (optional)
-    reference_image_path: Optional[str]  # Generated reference image
-    start_image_path: Optional[str]  # Generated start image (for Kling 2.5 Turbo Pro)
-    end_image_path: Optional[str]  # Generated end image (for Kling 2.5 Turbo Pro)
+    reference_image_path: Optional[str]  # Generated reference image (or user's image for scene 1)
+    start_image_path: Optional[str]  # Generated start image (for Veo 3.1, Kling 2.5 Turbo Pro)
+    end_image_path: Optional[str]  # Generated end image (for Veo 3.1, Kling 2.5 Turbo Pro)
+    transition_to_next: Optional[str]  # LLM-selected transition type (e.g., "crossfade")
     text_overlay: Optional[TextOverlay]
     duration: int
     sound_design: Optional[str]
