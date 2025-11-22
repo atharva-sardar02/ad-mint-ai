@@ -52,6 +52,7 @@ class Generation(Base):
     error_message = Column(Text, nullable=True)
     llm_specification = Column(JSON, nullable=True)  # LLM output JSON (AdSpecification)
     scene_plan = Column(JSON, nullable=True)  # Scene breakdown JSON (ScenePlan)
+    llm_conversation_history = Column(JSON, nullable=True)  # Complete LLM conversation history for Master Mode
     temp_clip_paths = Column(JSON, nullable=True)  # Array of temp video clip file paths
     coherence_settings = Column(JSON, nullable=True)  # Coherence technique settings
     seed_value = Column(Integer, nullable=True)  # Seed value for visual consistency across scenes

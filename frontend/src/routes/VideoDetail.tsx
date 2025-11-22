@@ -9,6 +9,7 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toast } from "../components/ui/Toast";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
+import { ConversationHistory } from "../components/master-mode/ConversationHistory";
 
 /**
  * Map coherence setting keys to user-friendly labels.
@@ -818,6 +819,13 @@ export const VideoDetail: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* LLM Conversation History (Master Mode only) */}
+          {generation.framework === "master_mode" && generation.status === "completed" && (
+            <div className="mb-6">
+              <ConversationHistory generationId={generation.id} />
+            </div>
+          )}
         </div>
       </div>
     </div>

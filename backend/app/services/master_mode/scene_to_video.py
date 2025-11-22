@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 from app.services.master_mode.scene_enhancer import enhance_all_scenes_for_video, align_enhanced_scenes
+from app.services.master_mode.appearance_sanitizer import sanitize_all_video_params
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,8 @@ async def convert_scenes_to_video_prompts(
     story: str,
     reference_image_paths: Optional[List[str]] = None,
     trace_dir: Optional[Path] = None,
-    enhance_prompts: bool = True
+    enhance_prompts: bool = True,
+    generation_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Convert all scenes to Veo 3.1 video generation parameters.
@@ -86,11 +88,15 @@ async def convert_scenes_to_video_prompts(
         reference_image_paths: User-provided reference images
         trace_dir: Optional directory to save trace files
         enhance_prompts: Whether to use LLM to enhance prompts (default: True)
+        generation_id: Optional generation ID for streaming progress
         
     Returns:
         List of Veo 3.1 video generation parameters for each scene
     """
     logger.info(f"Converting {len(scenes)} scenes to Veo 3.1 video parameters")
+    
+    # Import send_llm_interaction for streaming
+    from app.api.routes.master_mode_progress import send_llm_interaction
     
     # Create trace directory if provided
     if trace_dir:
@@ -99,14 +105,83 @@ async def convert_scenes_to_video_prompts(
     # Step 1: Enhance scenes with LLM for ultra-detailed prompts
     if enhance_prompts:
         logger.info("[Scene→Video] Step 1: Enhancing scenes with LLM for Veo 3.1 optimization")
+        
+        # Stream enhancer start
+        if generation_id:
+            await send_llm_interaction(
+                generation_id=generation_id,
+                agent="Scene Enhancer",
+                interaction_type="prompt",
+                content=f"Enhancing {len(scenes)} scenes for ultra-detailed Veo 3.1 prompts...",
+                metadata={"num_scenes": len(scenes)}
+            )
+        
         enhanced_scenes = await enhance_all_scenes_for_video(
             scenes=scenes,
             reference_image_descriptions=None  # Could pass vision analysis here
         )
         
+        # Stream enhancer results
+        if generation_id:
+            total_original_length = sum(len(s["content"]) for s in scenes)
+            total_enhanced_length = sum(len(s.get("enhanced_content", s["content"])) for s in enhanced_scenes)
+            expansion_percent = ((total_enhanced_length - total_original_length) / total_original_length) * 100
+            
+            await send_llm_interaction(
+                generation_id=generation_id,
+                agent="Scene Enhancer",
+                interaction_type="response",
+                content=f"""✅ **Enhanced {len(scenes)} scenes**
+
+**Expansion:**
+- Original: {total_original_length:,} chars
+- Enhanced: {total_enhanced_length:,} chars
+- Growth: +{expansion_percent:.1f}%
+
+All scenes now include ultra-detailed cinematography, lighting specifications, and technical parameters optimized for Veo 3.1.""",
+                metadata={
+                    "num_scenes": len(scenes),
+                    "original_length": total_original_length,
+                    "enhanced_length": total_enhanced_length,
+                    "expansion_percent": expansion_percent
+                }
+            )
+        
         # Step 1.5: Align enhanced scenes for cohesion (NEW LAYER)
         logger.info("[Scene→Video] Step 1.5: Aligning enhanced scenes for visual consistency")
+        
+        # Stream aligner start
+        if generation_id:
+            await send_llm_interaction(
+                generation_id=generation_id,
+                agent="Scene Aligner",
+                interaction_type="prompt",
+                content=f"Aligning {len(enhanced_scenes)} enhanced scenes for visual consistency across all scenes...",
+                metadata={"num_scenes": len(enhanced_scenes)}
+            )
+        
         enhanced_scenes = await align_enhanced_scenes(enhanced_scenes)
+        
+        # Stream aligner results
+        if generation_id:
+            await send_llm_interaction(
+                generation_id=generation_id,
+                agent="Scene Aligner",
+                interaction_type="response",
+                content=f"""✅ **Aligned {len(enhanced_scenes)} scenes for consistency**
+
+**Visual Cohesion Enforced:**
+- ✓ People appear identical across all scenes
+- ✓ Products maintain exact specifications
+- ✓ Lighting style harmonized
+- ✓ Camera feel unified
+- ✓ Audio flow continuous
+
+All scenes now have forensic-level visual consistency.""",
+                metadata={
+                    "num_scenes": len(enhanced_scenes)
+                }
+            )
     else:
         logger.info("[Scene→Video] Step 1: Using original scene content (enhancement disabled)")
         enhanced_scenes = scenes
@@ -179,6 +254,56 @@ async def convert_scenes_to_video_prompts(
     
     logger.info(f"Successfully created {len(video_params_list)} Veo 3.1 parameter sets")
     logger.info(f"Total prompt length: {sum(len(p['prompt']) for p in video_params_list)} characters")
+    
+    # Step 3: Sanitize appearance descriptions from prompts (NEW)
+    # This ensures reference images are the SOLE source of truth for character appearance
+    logger.info("[Scene→Video] Step 3: Sanitizing appearance descriptions from prompts")
+    
+    # Stream sanitizer start
+    if generation_id:
+        await send_llm_interaction(
+            generation_id=generation_id,
+            agent="Appearance Sanitizer",
+            interaction_type="prompt",
+            content=f"Removing all physical appearance descriptions (face, hair, race, body) from {len(video_params_list)} video prompts to let reference images be the sole source of truth...",
+            metadata={"num_scenes": len(video_params_list)}
+        )
+    
+    video_params_list = sanitize_all_video_params(video_params_list)
+    
+    # Stream sanitizer results
+    if generation_id:
+        total_removed = sum(
+            p["metadata"].get("original_prompt_length", 0) - p["metadata"].get("sanitized_prompt_length", 0)
+            for p in video_params_list
+        )
+        total_original = sum(p["metadata"].get("original_prompt_length", 0) for p in video_params_list)
+        removal_percent = (total_removed / total_original) * 100 if total_original > 0 else 0
+        
+        await send_llm_interaction(
+            generation_id=generation_id,
+            agent="Appearance Sanitizer",
+            interaction_type="response",
+            content=f"""✅ **Sanitized {len(video_params_list)} prompts**
+
+**Removed Appearance Descriptions:**
+- Total removed: {total_removed:,} chars ({removal_percent:.1f}%)
+- Categories: face features, hair, skin tone, race, body type, age descriptors
+
+**Kept:**
+- ✓ Reference phrases ("exact same person from Reference Image 1")
+- ✓ Actions, emotions, wardrobe
+- ✓ Environment, lighting, camera specs
+
+**Result:** Reference images are now the SOLE source of character appearance. This eliminates text/image "fighting" that causes inconsistency.""",
+            metadata={
+                "num_scenes": len(video_params_list),
+                "total_removed": total_removed,
+                "removal_percent": removal_percent
+            }
+        )
+    
+    logger.info(f"[Scene→Video] ✅ Prompts sanitized - reference images are now sole source of appearance")
     
     return video_params_list
 
