@@ -32,16 +32,16 @@ workflow_status:
   product-brief: "docs/product-brief-ad-mint-ai-2025-11-22.md"
 
   # Phase 1 - Planning
-  prd: required
+  prd: "docs/prd.md"
   validate-prd: optional
   create-design: conditional
 
   # Phase 2 - Solutioning
-  create-architecture: recommended
-  create-epics-and-stories: required
+  create-architecture: docs/architecture.md
+  create-epics-and-stories: docs/epics.md
   test-design: recommended
   validate-architecture: optional
-  implementation-readiness: required
+  implementation-readiness: docs/implementation-readiness-report-2025-11-22.md
 
   # Phase 3 - Implementation
   sprint-planning: required
