@@ -1,0 +1,211 @@
+{
+  "workflow_version": "1.2.0",
+  "timestamps": {
+    "started": "2025-11-22T12:44:00Z",
+    "last_updated": "2025-11-22T13:15:00Z",
+    "completed": "2025-11-22T13:15:00Z"
+  },
+  "mode": "initial_scan",
+  "scan_level": "exhaustive",
+  "project_root": "/Users/kalin.ivanov/rep/ad-mint-ai",
+  "output_folder": "/Users/kalin.ivanov/rep/ad-mint-ai/docs",
+  "completed_steps": [
+    {
+      "step": "step_1",
+      "status": "completed",
+      "timestamp": "2025-11-22T12:44:00Z",
+      "summary": "Classified as multi-part with 3 parts: backend (Python FastAPI), frontend (React+TypeScript), deployment (infra)"
+    },
+    {
+      "step": "step_2",
+      "status": "completed",
+      "timestamp": "2025-11-22T12:48:00Z",
+      "summary": "Found 200+ existing docs (100+ archived, 80+ active in master-mode, llm-enhancer-atharva, memory-bank). User context: 4 pipelines need consolidation."
+    },
+    {
+      "step": "step_3",
+      "status": "completed",
+      "timestamp": "2025-11-22T12:55:00Z",
+      "summary": "Tech stack analyzed: FastAPI 0.104+, React 19+, SQLAlchemy 2.0+, OpenAI, Replicate, AWS services"
+    },
+    {
+      "step": "step_4",
+      "status": "completed",
+      "timestamp": "2025-11-22T13:05:00Z",
+      "summary": "API contracts documented for all 4 pipelines, data models extracted, quality metrics analyzed"
+    },
+    {
+      "step": "step_5",
+      "status": "completed",
+      "timestamp": "2025-11-22T13:10:00Z",
+      "summary": "Source tree analyzed with annotated structure, critical files identified for consolidation"
+    },
+    {
+      "step": "step_6",
+      "status": "completed",
+      "timestamp": "2025-11-22T13:12:00Z",
+      "summary": "Development guide created with setup, testing, and troubleshooting instructions"
+    },
+    {
+      "step": "step_7",
+      "status": "completed",
+      "timestamp": "2025-11-22T13:15:00Z",
+      "summary": "Master index generated as primary AI retrieval source"
+    }
+  ],
+  "current_step": "completed",
+  "findings": {
+    "project_classification": {
+      "repository_type": "multi-part",
+      "parts_count": 3,
+      "primary_tech": "Python FastAPI + React",
+      "primary_language": "Python/TypeScript",
+      "architecture_type": "Service-Oriented Multi-Pipeline Architecture"
+    },
+    "existing_docs": {
+      "count": 200,
+      "archived_count": 100,
+      "active_folders": [
+        "master-mode",
+        "llm-enhancer-atharva",
+        "memory-bank",
+        "frontend",
+        "backend",
+        "deployment"
+      ]
+    },
+    "user_context": {
+      "critical_info": "4 working pipelines requiring consolidation",
+      "pipelines": {
+        "master_mode": {
+          "status": "best_consistency",
+          "strengths": [
+            "3 ref images",
+            "character/product consistency",
+            "simple",
+            "effective",
+            "5+ LLM agents",
+            "vision-enhanced AI"
+          ],
+          "weaknesses": [
+            "hardcoded",
+            "no interactivity",
+            "cannot generate images"
+          ],
+          "location": "backend/app/services/master_mode/, backend/app/api/routes/master_mode.py"
+        },
+        "interactive_mode": {
+          "status": "has_iteration",
+          "strengths": [
+            "user feedback",
+            "iterative improvement",
+            "story/narrative stage feedback",
+            "conversational interface",
+            "image inpainting"
+          ],
+          "weaknesses": [
+            "no consistency",
+            "buggy UI",
+            "websocket errors"
+          ],
+          "location": "backend/app/services/pipeline/interactive_pipeline.py, frontend/src/components/generation/InteractivePipeline.tsx"
+        },
+        "original_pipeline": {
+          "status": "deprecated",
+          "strengths": [
+            "quality score display",
+            "comparison groups",
+            "VBench integration (planned)"
+          ],
+          "weaknesses": [
+            "poor overall quality",
+            "3400+ line route file"
+          ],
+          "action": "scrap except quality scores",
+          "location": "backend/app/api/routes/generations.py"
+        },
+        "cli_tools": {
+          "location": "backend/cli_tools/",
+          "status": "standalone",
+          "strengths": [
+            "command-line execution",
+            "scriptable",
+            "flexible orchestration"
+          ],
+          "action": "integrate into unified pipeline"
+        }
+      },
+      "consolidation_goal": {
+        "target": "unified pipeline with UI + CLI",
+        "features_required": [
+          "master mode 3-ref-image consistency",
+          "interactive user feedback",
+          "quality score displays",
+          "image generation capability",
+          "interactivity at story/narrative stages",
+          "flexible not hardcoded",
+          "WebSocket stability fixes",
+          "CLI integration"
+        ]
+      }
+    },
+    "technology_stack": {
+      "backend": {
+        "framework": "FastAPI 0.104+",
+        "language": "Python 3.11+",
+        "database": "SQLAlchemy 2.0+ (SQLite dev, PostgreSQL prod)",
+        "ai_services": "OpenAI GPT-4, Replicate (Flux, Kling)",
+        "video_processing": "MoviePy 1.0.3+, OpenCV 4.8+",
+        "storage": "Boto3 (AWS S3), local filesystem"
+      },
+      "frontend": {
+        "framework": "React 19.2+",
+        "language": "TypeScript 5.9.3",
+        "build_tool": "Vite 5.4.11+",
+        "state": "Zustand 5.0.8+",
+        "styling": "Tailwind CSS 4.1.17+",
+        "canvas": "Konva 9.3.22+ (for video editor)"
+      },
+      "deployment": {
+        "platform": "AWS (EC2, RDS, S3)",
+        "web_server": "Nginx",
+        "process_manager": "Systemd"
+      }
+    },
+    "batches_completed": []
+  },
+  "project_types": [
+    {
+      "part_id": "backend",
+      "project_type_id": "backend",
+      "display_name": "Backend API",
+      "root_path": "/Users/kalin.ivanov/rep/ad-mint-ai/backend",
+      "requires_api_scan": true,
+      "requires_data_models": true
+    },
+    {
+      "part_id": "frontend",
+      "project_type_id": "web",
+      "display_name": "Frontend Web App",
+      "root_path": "/Users/kalin.ivanov/rep/ad-mint-ai/frontend",
+      "requires_ui_components": true,
+      "requires_state_management": true
+    },
+    {
+      "part_id": "deployment",
+      "project_type_id": "infra",
+      "display_name": "Deployment Infrastructure",
+      "root_path": "/Users/kalin.ivanov/rep/ad-mint-ai/deployment"
+    }
+  ],
+  "outputs_generated": [
+    "project-scan-report.json",
+    "technology-stack.md",
+    "api-contracts.md",
+    "data-models.md",
+    "source-tree-analysis.md",
+    "development-guide.md",
+    "index.md"
+  ],
+  "resume_instructions": "Documentation complete. All 7 documents generated."
+}
