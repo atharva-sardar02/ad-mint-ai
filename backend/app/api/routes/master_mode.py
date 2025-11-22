@@ -22,7 +22,14 @@ from app.services.master_mode.streaming_wrapper import (
     generate_scenes_with_streaming
 )
 from app.services.master_mode.schemas import StoryGenerationResult, ScenesGenerationResult
-from app.api.routes.master_mode_progress import create_progress_queue, send_progress_update, close_progress_queue, send_llm_interaction
+from app.api.routes.master_mode_progress import (
+    create_progress_queue,
+    send_progress_update,
+    close_progress_queue,
+    send_llm_interaction,
+    get_conversation_history,
+    clear_conversation_history
+)
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +227,8 @@ async def generate_story(
                     for scene in scenes_result.scenes
                 ],
                 story=story_result.final_story,
-                reference_image_paths=saved_image_paths if saved_image_paths else None
+                reference_image_paths=saved_image_paths if saved_image_paths else None,
+                generation_id=generation_id  # NEW: Pass for streaming
             )
             
             response["video_generation_params"] = video_params_list
@@ -313,6 +321,15 @@ async def generate_story(
                     db_generation.current_step = "Complete"
                     db_generation.completed_at = datetime.utcnow()
                     db_generation.generation_time_seconds = int((datetime.utcnow() - start_time).total_seconds())
+                    
+                    # Save LLM conversation history for later viewing
+                    conversation_history = get_conversation_history(generation_id)
+                    if conversation_history:
+                        db_generation.llm_conversation_history = conversation_history
+                        logger.info(f"[Master Mode] Saved {len(conversation_history)} conversation entries to database")
+                        # Clean up in-memory storage
+                        clear_conversation_history(generation_id)
+                    
                     db.commit()
                     logger.info(f"[Master Mode] Updated database record with video information")
                 else:
