@@ -440,3 +440,4 @@ For a typical 30-second video (5 scenes × 6 seconds):
 
 *This document reflects the Master Mode implementation as of November 21, 2025*
 
+
