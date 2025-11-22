@@ -12,8 +12,11 @@ flowchart TD
     
     StoryboardData --> ImageGen["STEP 2: Image Generation<br/>Nano Banana - SEQUENTIAL"]
     
-    ImageGen --> Image1["Image 1: Scene 1<br/>Prompt + Markers<br/>No Reference"]
-    Image1 --> Image1File["scene_1_ref.png"]
+    ImageGen --> Image1{User Image<br/>Provided?}
+    Image1 -->|Yes| Image1User["Image 1: Scene 1<br/>User's Image<br/>(Used Directly)"]
+    Image1 -->|No| Image1Gen["Image 1: Scene 1<br/>Prompt + Markers<br/>No Reference"]
+    Image1User --> Image1File["scene_1_ref.png<br/>(User's Image)"]
+    Image1Gen --> Image1File
     
     Image1File -->|Reference Chain| Image2["Image 2: Scene 2<br/>Prompt + Markers<br/>Ref: scene_1_ref.png"]
     Image2 --> Image2File["scene_2_ref.png"]
@@ -24,7 +27,7 @@ flowchart TD
     Image3File -->|Reference Chain| Image4["Image 4: Scene 4<br/>Prompt + Markers<br/>Ref: scene_3_ref.png"]
     Image4 --> Image4File["scene_4_ref.png"]
     
-    Image4File --> VideoGen["STEP 3: Video Generation<br/>Sora-2/Veo-3/PixVerse - PARALLEL"]
+    Image4File --> VideoGen["STEP 3: Video Generation<br/>Veo 3.1 (Default)/Sora-2/PixVerse - PARALLEL"]
     
     VideoGen -->|Parallel| Video1["Video 1: Scene 1<br/>Prompt + Markers<br/>Ref: scene_1_ref.png"]
     VideoGen -->|Parallel| Video2["Video 2: Scene 2<br/>Prompt + Markers<br/>Ref: scene_2_ref.png"]

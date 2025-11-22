@@ -1,0 +1,240 @@
+# Video Stitcher Rewrite - Master Mode
+
+**Date**: November 21, 2024  
+**Status**: ✅ Complete
+
+## What Changed
+
+Rewrote the video stitching logic for Master Mode with a **clean, purpose-built implementation** instead of reusing the old pipeline stitcher.
+
+## Files Created
+
+### 1. `backend/app/services/master_mode/video_stitcher.py` (NEW)
+
+**Purpose**: Custom video stitcher specifically for Master Mode
+
+**Key Features**:
+- **Context Manager**: Automatic resource cleanup with `with` statement
+- **3 Transition Types**: `cut`, `crossfade`, `fade` (no complex effects)
+- **Clean Code**: ~300 lines vs 500+ in old stitcher
+- **Better Logging**: Progress indicators with detailed steps
+- **High Quality**: 5000k bitrate, 24fps standard
+- **Type Hints**: Full type annotations throughout
+- **Error Handling**: Graceful fallbacks and clear error messages
+
+**Main Class**: `VideoStitcher`
+
+```python
+class VideoStitcher:
+    """Handles video stitching operations for Master Mode."""
+    
+    TRANSITION_DURATIONS = {
+        "cut": 0.0,
+        "crossfade": 0.5,
+        "fade": 0.8,
+    }
+```
+
+**Usage**:
+```python
+with VideoStitcher() as stitcher:
+    final_path = stitcher.stitch_videos(
+        video_paths=["scene_01.mp4", "scene_02.mp4"],
+        output_path="final.mp4",
+        transitions=["crossfade"]
+    )
+```
+
+**Convenience Function**:
+```python
+stitch_master_mode_videos(
+    video_paths: List[str],
+    output_path: str,
+    transitions: Optional[List[str]] = None
+) -> str
+```
+
+## Files Modified
+
+### 2. `backend/app/services/master_mode/video_generation.py`
+
+**Changed Import**:
+```python
+# OLD:
+from app.services.pipeline.stitching import stitch_video_clips
+
+# NEW:
+from app.services.master_mode.video_stitcher import stitch_master_mode_videos
+```
+
+**Changed Function Call**:
+```python
+# OLD:
+final_video_path = stitch_video_clips(
+    video_clips=valid_video_paths,
+    output_path=str(final_output_path),
+    transitions=transitions
+)
+
+# NEW:
+final_video_path = stitch_master_mode_videos(
+    video_paths=valid_video_paths,
+    output_path=str(final_output_path),
+    transitions=transitions
+)
+```
+
+### 3. `backend/app/services/master_mode/__init__.py`
+
+**Added Exports**:
+```python
+from app.services.master_mode.video_stitcher import (
+    VideoStitcher,
+    stitch_master_mode_videos
+)
+
+__all__ = [
+    # ... existing exports ...
+    "VideoStitcher",
+    "stitch_master_mode_videos",
+]
+```
+
+### 4. `master-mode/video-generation-stitching.md`
+
+Updated documentation to reflect:
+- New Master Mode stitcher
+- Why we didn't reuse old stitcher
+- Transition types and durations
+- Better logging examples
+- Architecture changes
+
+## Why Rewrite Instead of Reuse?
+
+### Old Pipeline Stitcher Problems:
+- ❌ 500+ lines of complex code
+- ❌ 6+ transition types (wipe, flash, zoom_blur, whip_pan, glitch)
+- ❌ Complex composites with 3-tuple returns
+- ❌ Tightly coupled to old pipeline logic
+- ❌ Hard to maintain and debug
+
+### New Master Mode Stitcher Benefits:
+- ✅ ~300 lines of clean, focused code
+- ✅ Only 3 transition types (cut, crossfade, fade)
+- ✅ Simple 2-tuple returns
+- ✅ Purpose-built for Master Mode
+- ✅ Easy to maintain and extend
+- ✅ Better logging and error handling
+- ✅ Context manager for automatic cleanup
+
+## Transition Types
+
+Master Mode supports 3 clean transition types:
+
+| Type | Duration | Use Case | Cohesion Score |
+|------|----------|----------|----------------|
+| `cut` | 0.0s | Fast-paced, dramatic changes | < 70 |
+| `crossfade` | 0.5s | Smooth transitions, continuity | ≥ 85 |
+| `fade` | 0.8s | Time passage, location changes | 70-84 |
+
+These are **automatically selected** based on Scene Cohesor's transition scores.
+
+## Stitching Process
+
+### Steps:
+
+1. **Load Clips** (normalize to 24fps)
+2. **Intro Fade** (0.3s fade-in on first clip)
+3. **Apply Transitions** (between each clip pair)
+4. **Outro Fade** (0.3s fade-out on last clip)
+5. **Concatenate** (join all clips)
+6. **Write Output** (5000k bitrate, high quality)
+
+### Example Output:
+
+```
+[Stitcher] Starting stitch: 4 clips with transitions: ['crossfade', 'cut', 'crossfade']
+[Stitcher] Step 1/4: Loading video clips
+[Stitcher] Loading clip 1/4: scene_01.mp4
+[Stitcher] Loading clip 2/4: scene_02.mp4
+[Stitcher] Loading clip 3/4: scene_03.mp4
+[Stitcher] Loading clip 4/4: scene_04.mp4
+[Stitcher] Step 2/4: Applying intro fade (0.3s)
+[Stitcher] Step 3/4: Applying 3 transitions
+[Stitcher] Step 4/4: Applying outro fade (0.3s)
+[Stitcher] Concatenating clips
+[Stitcher] Writing final video to: final_video.mp4
+[Stitcher] ✅ Stitching complete! Duration: 12.3s, Size: 45.2MB
+```
+
+## Testing
+
+### Backend Auto-Reload
+
+The backend should auto-reload with the new stitcher. No manual restart needed.
+
+### Test Video Generation
+
+```bash
+POST /api/master-mode/generate-story
+Content-Type: multipart/form-data
+
+prompt: "Luxury perfume ad"
+reference_images: [file1, file2, file3]
+generate_scenes: true
+generate_videos: true
+```
+
+### Expected Behavior
+
+1. ✅ Story generated by Director/Critic
+2. ✅ Scenes generated by Writer/Critic/Cohesor
+3. ✅ Video params extracted
+4. ✅ Videos generated in parallel (Veo 3.1)
+5. ✅ Videos stitched with **new Master Mode stitcher**
+6. ✅ Final video saved with timestamp
+7. ✅ Clean logging with progress indicators
+
+## Files Structure
+
+```
+backend/app/services/master_mode/
+├── __init__.py (updated exports)
+├── video_generation.py (updated imports)
+├── video_stitcher.py (NEW - 300 lines)
+├── story_generator.py
+├── scene_generator.py
+├── scene_to_video.py
+└── schemas.py
+
+temp/master_mode/{user_id}/{generation_id}/
+├── reference_1_woman.jpg
+├── reference_2_perfume.jpg
+├── scene_videos/
+│   ├── scene_01.mp4
+│   ├── scene_02.mp4
+│   └── scene_03.mp4
+└── final_video_20241121_170530.mp4 (stitched with new stitcher)
+```
+
+## Next Steps
+
+1. ✅ New stitcher created
+2. ✅ Integration complete
+3. ✅ Documentation updated
+4. 🎬 **Ready to test** - Submit a Master Mode generation
+5. 🔄 Monitor logs for stitcher performance
+6. 🔄 Fine-tune transition durations if needed
+
+## Summary
+
+- **Clean, maintainable code** purpose-built for Master Mode
+- **3 simple transitions** instead of 6+ complex ones
+- **Better logging** with emojis and progress steps
+- **Context manager** for automatic resource cleanup
+- **No changes** to existing pipeline (old code untouched)
+- **Ready to use** - backend should auto-reload
+
+🎉 **Implementation Complete!**
+
+

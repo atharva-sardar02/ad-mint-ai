@@ -18,6 +18,7 @@ import { Queue } from "./routes/Queue";
 import { Editor } from "./routes/Editor";
 import { Storyboard } from "./routes/Storyboard";
 import { InteractivePipeline } from "./components/generation/InteractivePipeline";
+import { MasterMode } from "./routes/MasterMode";
 import "./App.css";
 
 /**
@@ -177,6 +178,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <InteractivePipelineWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/master-mode"
+            element={
+              <ProtectedRoute>
+                <MasterMode />
               </ProtectedRoute>
             }
           />

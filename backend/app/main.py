@@ -18,6 +18,8 @@ from app.api.routes import (
     generations,
     generations_with_image,
     interactive_generation,
+    master_mode,
+    master_mode_progress,
     products,
     users,
     websocket,
@@ -120,6 +122,8 @@ app.include_router(users.router)
 app.include_router(editor.router)
 app.include_router(brand_styles.router)
 app.include_router(products.router)
+app.include_router(master_mode.router)
+app.include_router(master_mode_progress.router)
 app.include_router(
     interactive_generation.router,
     prefix="/api/v1/interactive",
@@ -164,6 +168,15 @@ else:
     logger.warning(
         f"Assets directory not found at {assets_dir.absolute()} - user asset serving disabled"
     )
+
+# Mount temp directory for serving master mode videos
+temp_dir = BACKEND_DIR / "temp"
+if not temp_dir.exists():
+    logger.warning("Temp directory not found - creating it now")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+app.mount("/temp", StaticFiles(directory=str(temp_dir)), name="temp")
+logger.info(f"Master mode temp files mounted at /temp ({temp_dir})")
 
 
 @app.on_event("startup")

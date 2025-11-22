@@ -133,18 +133,32 @@ logs/
 *.generated.*
 generated/
 
-# Media files (if not tracked)
-# Uncomment if you don't want to track media files
-# *.mp4
-# *.avi
-# *.mov
-# *.mp3
-# *.wav
-# *.jpg
-# *.jpeg
-# *.png
-# *.gif
-# *.svg
+# Media files - Generated videos and images
+# Videos
+*.mp4
+*.avi
+*.mov
+*.webm
+*.mkv
+*.flv
+*.wmv
+
+# Audio
+*.mp3
+*.wav
+*.aac
+*.flac
+*.ogg
+
+# Images (generated/uploaded)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+# Note: SVG files for UI assets should be tracked, so we exclude them here
 
 # Documentation builds
 docs/_build/
@@ -192,3 +206,8 @@ ClipForge/
 backend/output/prompt_traces/
 backend/output/
 backend/cli_tools/output/interactive/
+backend/temp/
+
+# Master Mode generated content
+temp/
+output/

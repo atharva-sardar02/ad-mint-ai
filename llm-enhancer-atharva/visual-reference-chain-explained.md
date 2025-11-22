@@ -25,6 +25,23 @@ Reference Images (for each scene):
 ### Detailed Flow
 
 **For Reference Images:**
+
+**If user provides a reference image:**
+```
+Step 1: Use User's Reference Image (Scene 1)
+  - Input: User-provided image (copied directly)
+  - Visual Reference: NONE (user's original image)
+  - Output: scene_1_reference.png (user's image)
+  - Subject: User's image (woman, product, etc.)
+
+Step 2: Generate Scene 2 Reference Image
+  - Input: Text prompt (with character/product description)
+  - Visual Reference: scene_1_reference.png ⬅️ USER'S IMAGE
+  - Output: scene_2_reference.png
+  - Subject: Consistent with user's image (model sees both text + user's image)
+```
+
+**If no user image provided:**
 ```
 Step 1: Generate Scene 1 Reference Image
   - Input: Text prompt (with character description)

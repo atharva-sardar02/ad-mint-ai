@@ -9,6 +9,7 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toast } from "../components/ui/Toast";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
+import { ConversationHistory } from "../components/master-mode/ConversationHistory";
 
 /**
  * Map coherence setting keys to user-friendly labels.
@@ -396,15 +397,25 @@ export const VideoDetail: React.FC = () => {
           <div className="w-full bg-gray-200 relative" style={{ minHeight: '400px' }}>
             {generation.status === "completed" && generation.video_url ? (
               // Show video player for completed videos - aspect-aware
-              <video
-                src={generation.video_url}
-                controls
-                className="w-full h-auto max-h-[80vh] object-contain bg-black mx-auto block"
-                preload="metadata"
-                style={{ aspectRatio: 'auto' }}
-              >
-                Your browser does not support the video tag.
-              </video>
+              <>
+                {console.log("Video URL for playback:", generation.video_url)}
+                <video
+                  src={generation.video_url}
+                  controls
+                  className="w-full h-auto max-h-[80vh] object-contain bg-black mx-auto block"
+                  preload="metadata"
+                  style={{ aspectRatio: 'auto' }}
+                  onError={(e) => {
+                    console.error("Video failed to load:", generation.video_url);
+                    console.error("Error details:", e);
+                  }}
+                  onLoadedMetadata={() => {
+                    console.log("Video loaded successfully:", generation.video_url);
+                  }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </>
             ) : generation.thumbnail_url ? (
               // Show thumbnail for videos that aren't ready yet
               <img
@@ -468,7 +479,8 @@ export const VideoDetail: React.FC = () => {
                     View Storyboard
                   </Button>
                 )}
-                {generation.status === "completed" && (
+                {/* Edit button - only for non-master-mode videos */}
+                {generation.status === "completed" && generation.framework !== "master_mode" && (
                   <Button
                     onClick={() => navigate(`/editor/${generation.id}`)}
                     variant="primary"
@@ -807,6 +819,13 @@ export const VideoDetail: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* LLM Conversation History (Master Mode only) */}
+          {generation.framework === "master_mode" && generation.status === "completed" && (
+            <div className="mb-6">
+              <ConversationHistory generationId={generation.id} />
+            </div>
+          )}
         </div>
       </div>
     </div>

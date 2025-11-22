@@ -2472,13 +2472,24 @@ async def get_comparison_group(
             return relative_path
         # Normalize path: convert backslashes to forward slashes (handle Windows paths)
         normalized_path = relative_path.replace("\\", "/")
+        
+        # Ensure path starts with /
+        if not normalized_path.startswith("/"):
+            normalized_path = "/" + normalized_path
+        
         # Convert relative path to full URL
-        base_url = settings.STATIC_BASE_URL.rstrip("/")
-        # Remove "output/" prefix if present (since base_url already includes /output)
-        path = normalized_path.lstrip("/")
-        if path.startswith("output/"):
-            path = path[7:]  # Remove "output/" prefix
-        return f"{base_url}/{path}"
+        base_url = settings.STATIC_BASE_URL
+        if base_url:
+            # Remove /output suffix if present to get API base
+            if base_url.endswith("/output"):
+                api_base = base_url[:-7]  # Remove "/output"
+            else:
+                api_base = base_url.rstrip("/")
+            
+            # Return API base + path (path already starts with /)
+            return f"{api_base}{normalized_path}"
+        else:
+            return normalized_path
     
     # Build variations list
     variations = []
@@ -2655,12 +2666,27 @@ async def get_generations(
             # Convert relative path to full URL (local storage or S3 with skip_s3=True)
             # Normalize path: convert backslashes to forward slashes
             normalized_path = relative_path.replace("\\", "/")
-            base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
-            # Remove "output/" prefix if present (since base_url already includes /output)
-            path = normalized_path.lstrip("/")
-            if path.startswith("output/"):
-                path = path[7:]  # Remove "output/" prefix
-            return f"{base_url}/{path}" if base_url else relative_path
+            
+            # Ensure path starts with /
+            if not normalized_path.startswith("/"):
+                normalized_path = "/" + normalized_path
+            
+            # For local storage, construct full URL
+            # Extract base URL (without /output suffix) from STATIC_BASE_URL
+            base_url = settings.STATIC_BASE_URL
+            if base_url:
+                # Remove /output suffix if present to get API base
+                if base_url.endswith("/output"):
+                    api_base = base_url[:-7]  # Remove "/output"
+                else:
+                    api_base = base_url.rstrip("/")
+                
+                # Return API base + path
+                # Path already starts with / (either /output/... or /temp/...)
+                return f"{api_base}{normalized_path}"
+            else:
+                # Fallback: return path as-is (frontend will need to handle)
+                return normalized_path
     
     # Pre-fetch variation labels for all generations in groups (optimize N+1 queries)
     # Get unique group IDs from the current page of generations
@@ -2725,6 +2751,7 @@ async def get_generations(
                 num_clips=gen.num_clips,
                 use_llm=gen.use_llm,
                 generation_time_seconds=gen.generation_time_seconds,
+                framework=gen.framework,
             )
         )
 
@@ -2819,12 +2846,24 @@ async def get_generation(
         else:
             # Normalize path: convert backslashes to forward slashes
             normalized_path = relative_path.replace("\\", "/")
-            base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
-            # Remove "output/" prefix if present (since base_url already includes /output)
-            path = normalized_path.lstrip("/")
-            if path.startswith("output/"):
-                path = path[7:]  # Remove "output/" prefix
-            return f"{base_url}/{path}" if base_url else relative_path
+            
+            # Ensure path starts with /
+            if not normalized_path.startswith("/"):
+                normalized_path = "/" + normalized_path
+            
+            # Convert relative path to full URL
+            base_url = settings.STATIC_BASE_URL
+            if base_url:
+                # Remove /output suffix if present to get API base
+                if base_url.endswith("/output"):
+                    api_base = base_url[:-7]  # Remove "/output"
+                else:
+                    api_base = base_url.rstrip("/")
+                
+                # Return API base + path (path already starts with /)
+                return f"{api_base}{normalized_path}"
+            else:
+                return normalized_path
     
     # Calculate variation label if part of a parallel generation group
     variation_label = None
@@ -2846,13 +2885,16 @@ async def get_generation(
     # Only generate S3 presigned URLs for completed videos
     skip_s3_urls = generation.status not in ["completed"]
     
+    # Log the video URL for debugging
+    logger.info(f"Generation {generation.id}: video_url={generation.video_url}, video_path={generation.video_path}, framework={generation.framework}")
+    
     return GenerationListItem(
         id=generation.id,
         title=generation.title,
         prompt=generation.prompt,
         status=generation.status,
         video_url=get_full_url(generation.video_url, skip_s3=skip_s3_urls),
-        thumbnail_url=get_full_url(generation.thumbnail_url, skip_s3=skip_s3_urls),
+        thumbnail_url=get_full_url(generation.thumbnail_url, skip_s3=skip_s3_urls),  # Fixed: was using video_url instead of thumbnail_url
         duration=generation.duration,
         cost=generation.cost,
         created_at=generation.created_at,
@@ -2865,6 +2907,7 @@ async def get_generation(
         num_clips=generation.num_clips,
         use_llm=generation.use_llm,
         generation_time_seconds=generation.generation_time_seconds,
+        framework=generation.framework,
     )
 
 
