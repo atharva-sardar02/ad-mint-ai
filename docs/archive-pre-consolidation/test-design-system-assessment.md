@@ -570,4 +570,3 @@ vi.mock("../lib/userService", () => ({
 **Version**: 4.0 (BMad v6)
 **Assessment Type**: System-Level Brownfield Review
 
-
