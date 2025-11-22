@@ -206,3 +206,43 @@ export interface StatusResponse {
   message: string;
 }
 
+/**
+ * Uploaded image response from the API.
+ */
+export interface UploadedImageResponse {
+  id: string;
+  filename: string;
+  url: string;  // URL to access the image (e.g., /api/assets/users/{user_id}/brand_styles/{filename})
+  uploaded_at: string;  // ISO datetime string
+}
+
+/**
+ * Brand style upload response from the API.
+ */
+export interface BrandStyleUploadResponse {
+  message: string;
+  count: number;
+}
+
+/**
+ * Brand style list response from the API.
+ */
+export interface BrandStyleListResponse {
+  images: UploadedImageResponse[];
+}
+
+/**
+ * Product image upload response from the API.
+ */
+export interface ProductImageUploadResponse {
+  message: string;
+  count: number;
+}
+
+/**
+ * Product image list response from the API.
+ */
+export interface ProductImageListResponse {
+  images: UploadedImageResponse[];
+}
+

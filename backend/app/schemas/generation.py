@@ -98,6 +98,22 @@ class GenerateRequest(BaseModel):
         max_length=50,
         description="Optional brand name to display at the end of the video. If not provided, the system will attempt to extract it from the prompt."
     )
+    product_image_id: Optional[str] = Field(
+        default=None,
+        description="Optional product image ID from user's uploaded product folder. If provided, product style JSON will be extracted and incorporated into scene generation (Story 10.3)."
+    )
+    top_note: Optional[str] = Field(
+        default=None,
+        description="Optional top note for fragrance advertising. If provided along with heart_note and/or base_note, will generate a scent profile and incorporate cinematic atmospheric cues into KLING pipeline prompts."
+    )
+    heart_note: Optional[str] = Field(
+        default=None,
+        description="Optional heart note for fragrance advertising. If provided along with top_note and/or base_note, will generate a scent profile and incorporate cinematic atmospheric cues into KLING pipeline prompts."
+    )
+    base_note: Optional[str] = Field(
+        default=None,
+        description="Optional base note for fragrance advertising. If provided along with top_note and/or heart_note, will generate a scent profile and incorporate cinematic atmospheric cues into KLING pipeline prompts."
+    )
 
 
 class StatusResponse(BaseModel):
@@ -255,6 +271,7 @@ class Scene(BaseModel):
     visual_prompt: str = Field(..., description="Base visual prompt from storyboard")
     # Model-specific prompts (optimized for each video generation model)
     model_prompts: dict[str, str] = Field(default_factory=dict, description="Model-specific optimized prompts: {'openai/sora-2': '...', 'google/veo-3': '...', etc.}")
+    final_cinematic_prompt: Optional[str] = Field(None, description="Final enhanced prompt sent to KLING (enhanced with brand/product style and scent profile at video generation time)")
     reference_image_path: Optional[str] = Field(None, description="Path to reference image for this scene (from storyboard)")
     start_image_path: Optional[str] = Field(None, description="Path to start image (first frame) for Kling 2.5 Turbo")
     end_image_path: Optional[str] = Field(None, description="Path to end image (last frame) for Kling 2.5 Turbo")

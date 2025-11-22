@@ -1,0 +1,253 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>10</epicId>
+    <storyId>10.2</storyId>
+    <title>Vision LLM Brand & Product Style Extraction</title>
+    <status>drafted</status>
+    <generatedAt>2025-01-17</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/10-2-vision-llm-brand-product-style-extraction.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>system</asA>
+    <iWant>to use Gemini 2.5 Flash Vision (via Replicate) to analyze brand style and product images</iWant>
+    <soThat>I can extract structured style information as JSON for use in scene generation</soThat>
+    <tasks>
+      <task id="1" title="Create Vision LLM Service" ac="1,2,3">
+        <subtask>Create backend/app/services/pipeline/brand_style_extractor.py service</subtask>
+        <subtask>Integrate Replicate API for Gemini 2.5 Flash Vision model</subtask>
+        <subtask>Implement extract_brand_style(images: List[Path]) -&gt; BrandStyleJSON</subtask>
+        <subtask>Implement extract_product_style(image: Path) -&gt; ProductStyleJSON</subtask>
+        <subtask>Design Vision LLM prompt to extract style information systematically</subtask>
+        <subtask>Implement batch processing for brand style images</subtask>
+        <subtask>Add retry logic with exponential backoff for Replicate API calls</subtask>
+        <subtask>Handle rate limiting and API errors gracefully</subtask>
+        <subtask>Log all Vision LLM API calls with cost tracking</subtask>
+      </task>
+      <task id="2" title="Create Pydantic Schemas for Style JSON" ac="1,2">
+        <subtask>Create or update backend/app/services/pipeline/llm_schemas.py with BrandStyleJSON and ProductStyleJSON schemas</subtask>
+        <subtask>Add field validators for color hex codes, enum values for style categories</subtask>
+        <subtask>Ensure schemas are compatible with existing pipeline schemas</subtask>
+      </task>
+      <task id="3" title="Update Database Models" ac="1,2,4">
+        <subtask>Update BrandStyleFolder model to add extracted_style_json JSON column</subtask>
+        <subtask>Update BrandStyleFolder model to add extraction_status enum field (pending, completed, failed)</subtask>
+        <subtask>Update BrandStyleFolder model to add extracted_at timestamp field</subtask>
+        <subtask>Update ProductImageFolder or create new model to store product style JSON per image</subtask>
+        <subtask>Add database migration script for new columns</subtask>
+        <subtask>Ensure JSON columns use appropriate database types (JSONB for PostgreSQL, TEXT for SQLite)</subtask>
+      </task>
+      <task id="4" title="Create API Endpoint for Brand Style Extraction" ac="1,3,4">
+        <subtask>Create POST /api/brand-styles/extract endpoint in backend/app/api/routes/brand_styles.py</subtask>
+        <subtask>Use authentication dependency get_current_user to identify user</subtask>
+        <subtask>Load user's brand style folder and images from database</subtask>
+        <subtask>Call brand style extractor service to analyze images</subtask>
+        <subtask>Store extracted JSON in BrandStyleFolder.extracted_style_json</subtask>
+        <subtask>Update extraction_status and extracted_at fields</subtask>
+        <subtask>Return success response with extracted JSON or error message</subtask>
+        <subtask>Handle cases where no brand style folder exists</subtask>
+        <subtask>Implement caching check: skip extraction if JSON already exists and folder hasn't changed</subtask>
+      </task>
+      <task id="5" title="Integrate Product Style Extraction into Generation Pipeline" ac="2,3">
+        <subtask>Modify generation pipeline to accept optional product_image_id parameter</subtask>
+        <subtask>When product image is selected, load image file path from database</subtask>
+        <subtask>Call product style extractor service to analyze product image</subtask>
+        <subtask>Store extracted product style JSON temporarily (in generation context or database)</subtask>
+        <subtask>Pass product style JSON to Stage 3 Scene Assembler (Story 10.3)</subtask>
+        <subtask>Handle extraction failures gracefully (continue without product style)</subtask>
+      </task>
+      <task id="6" title="Update Cost Tracking" ac="3">
+        <subtask>Add Vision LLM API call cost tracking to cost tracking service</subtask>
+        <subtask>Log Vision LLM costs per extraction operation</subtask>
+        <subtask>Include Vision LLM costs in generation total cost calculation</subtask>
+        <subtask>Track cost per user for Vision LLM operations</subtask>
+      </task>
+      <task id="7" title="Testing" ac="1,2,3,4">
+        <subtask>Create unit tests for brand style extractor service (test JSON extraction, error handling)</subtask>
+        <subtask>Create unit tests for product style extractor service</subtask>
+        <subtask>Create integration tests for brand style extraction endpoint (test authentication, extraction, caching)</subtask>
+        <subtask>Create integration tests for product style extraction in generation pipeline</subtask>
+        <subtask>Test error handling (API failures, invalid images, rate limiting)</subtask>
+        <subtask>Test caching behavior (skip extraction if JSON exists and folder unchanged)</subtask>
+        <subtask>Test batch processing of multiple brand style images</subtask>
+        <subtask>Test cost tracking for Vision LLM operations</subtask>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1" title="Brand Style Image Analysis">
+      Given a user has uploaded brand style images (Story 10.1), when the system processes the brand style folder, then the system analyzes all brand style images using Gemini 2.5 Flash Vision model via Replicate API, extracts brand style information into structured JSON format (color_palette, visual_style, typography, lighting_cues, texture_surfaces, atmosphere_density, brand_markers), stores the extracted JSON in the database linked to the user, and processes images in batch.
+    </criterion>
+    <criterion id="2" title="Product Image Analysis">
+      Given a user has uploaded product images and selects a specific product image for a generation, when the system processes the selected product image, then the system analyzes the selected product image using Gemini 2.5 Flash Vision model via Replicate API, extracts product-specific style information into structured JSON format (product_characteristics, visual_style, color_profile, product_usage_context), and stores the extracted JSON temporarily for the current generation.
+    </criterion>
+    <criterion id="3" title="Error Handling and Reliability">
+      Given the system processes images via Vision LLM, when API errors occur, then the system handles API errors gracefully (retry logic, fallback behavior), logs all Vision LLM API calls and costs, provides error messages if Vision LLM analysis fails, and continues generation without brand/product style if extraction fails (graceful degradation).
+    </criterion>
+    <criterion id="4" title="Caching and Performance">
+      Given brand style images have been analyzed, when the user initiates a new generation, then the system caches extracted brand style JSON (only re-extract if brand style folder changes), loads cached brand style JSON from database efficiently, and avoids redundant API calls for unchanged brand style folders.
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 10: Brand &amp; Product Image Consistency">
+        Epic 10 provides the complete story breakdown for brand and product image consistency features. Story 10.2 details the Vision LLM extraction requirements with acceptance criteria and technical notes.
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 10.2: Vision LLM Brand &amp; Product Style Extraction">
+        Complete story definition with acceptance criteria, prerequisites, and technical implementation notes for Vision LLM integration.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-047: Vision LLM Brand Style Extraction">
+        Functional requirement FR-047 specifies that the system shall use Gemini 2.5 Flash Vision (via Replicate) to analyze brand style images and extract style information into structured JSON format.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-048: Vision LLM Product Image Analysis">
+        Functional requirement FR-048 specifies that the system shall use Gemini 2.5 Flash Vision (via Replicate) to analyze product images and extract product-specific style and visual characteristics into structured JSON format.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="API Specifications">
+        API specification section defines error handling format: { "error": { "code": "...", "message": "..." } } and authentication patterns using JWT tokens.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="NFR-013: Error Handling">
+        Non-functional requirement NFR-013 specifies that all API errors must follow the structured JSON error format with code and message fields.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Project Structure">
+        Architecture document defines the project structure with backend services in backend/app/services/pipeline/, database models in backend/app/db/models/, and API routes in backend/app/api/routes/.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="External Services">
+        Architecture document specifies that Replicate API is used for video generation models, and the same pattern should be followed for Vision LLM integration.
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Decision Summary">
+        Architecture decisions specify FastAPI with SQLAlchemy ORM for database models, JWT-based authentication, and Pydantic for request/response schemas.
+      </doc>
+      <doc path="docs/sprint-artifacts/10-1-brand-product-image-folder-upload-storage.md" title="Story 10.1" section="Dev Notes">
+        Story 10.1 learnings include database models (BrandStyleFolder, ProductImageFolder, UploadedImage), storage utilities, API endpoints, and file paths for brand style and product images.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="generate_video_clip_with_model" lines="117-150" reason="Reference implementation for Replicate API integration pattern with retry logic, error handling, and cost tracking">
+        Video generation service demonstrates Replicate API integration pattern: replicate.Client(api_token=settings.REPLICATE_API_TOKEN), retry logic with exponential backoff, error handling for ReplicateError exceptions, and cost tracking patterns.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="REPLICATE_MODELS" lines="21-34" reason="Model configuration pattern for Replicate API models">
+        Dictionary mapping model names to Replicate model identifiers. Follow same pattern for Gemini 2.5 Flash Vision model configuration.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/video_generation.py" kind="service" symbol="MODEL_COSTS" lines="38-51" reason="Cost tracking pattern for Replicate API models">
+        Dictionary mapping model names to cost per second. Add Vision LLM model costs following same pattern.
+      </artifact>
+      <artifact path="backend/app/db/models/brand_style.py" kind="model" symbol="BrandStyleFolder" lines="13-26" reason="Existing database model that needs to be extended with extraction fields">
+        BrandStyleFolder model exists with user_id, uploaded_at, image_count fields. Needs to be extended with extracted_style_json (JSON), extraction_status (enum), and extracted_at (timestamp) fields.
+      </artifact>
+      <artifact path="backend/app/db/models/product_image.py" kind="model" symbol="ProductImageFolder" lines="1-26" reason="Existing database model for product images">
+        ProductImageFolder model exists for storing product image folder metadata. May need extension or new model for storing product style JSON per image.
+      </artifact>
+      <artifact path="backend/app/db/models/uploaded_image.py" kind="model" symbol="UploadedImage" lines="1-30" reason="Model for individual uploaded images">
+        UploadedImage model stores individual image metadata. May be used to store product style JSON per image or reference product images for extraction.
+      </artifact>
+      <artifact path="backend/app/api/routes/brand_styles.py" kind="controller" symbol="upload_brand_styles" lines="38-185" reason="Existing API endpoint pattern for brand styles">
+        Brand styles API route file exists with upload endpoint. Add new extract endpoint following same authentication and error handling patterns.
+      </artifact>
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_current_user" reason="Authentication dependency pattern">
+        get_current_user dependency provides authenticated user for protected endpoints. Use this dependency for brand style extraction endpoint.
+      </artifact>
+      <artifact path="backend/app/services/pipeline/llm_schemas.py" kind="schema" symbol="ScentProfile" lines="38-83" reason="Existing Pydantic schema pattern for pipeline data">
+        llm_schemas.py contains Pydantic schemas for pipeline data. Add BrandStyleJSON and ProductStyleJSON schemas following same pattern with field validators.
+      </artifact>
+      <artifact path="backend/app/utils/storage.py" kind="utility" symbol="save_uploaded_images" reason="Storage utility for file operations">
+        Storage utilities exist for saving uploaded images. Use these utilities to get file paths for brand style and product images before extraction.
+      </artifact>
+      <artifact path="backend/requirements.txt" kind="dependency" symbol="replicate" reason="Replicate Python SDK dependency">
+        replicate>=0.25.0 is already in requirements.txt. Use this SDK for Gemini 2.5 Flash Vision model integration.
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="python">
+        <package name="replicate" version=">=0.25.0" reason="Replicate Python SDK for Gemini 2.5 Flash Vision API integration"/>
+        <package name="fastapi" version=">=0.104.0" reason="FastAPI framework for API endpoints"/>
+        <package name="sqlalchemy" version=">=2.0.0" reason="SQLAlchemy ORM for database models"/>
+        <package name="pydantic" version=">=2.0.0" reason="Pydantic for schema validation"/>
+        <package name="pillow" version=">=10.0.0" reason="Pillow for image processing if needed"/>
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Backend Framework: FastAPI with SQLAlchemy ORM for database models</constraint>
+    <constraint>Authentication: JWT-based authentication using dependency injection pattern from backend/app/api/deps.py</constraint>
+    <constraint>External API Integration: Replicate API for Gemini 2.5 Flash Vision model, following existing Replicate integration patterns from Epic 3</constraint>
+    <constraint>Service Layer: Create dedicated service in backend/app/services/pipeline/ following existing pipeline service patterns</constraint>
+    <constraint>Error Handling: Follow PRD error structure with simple JSON format: { "error": { "code": "...", "message": "..." } }</constraint>
+    <constraint>Cost Tracking: Integrate with existing cost tracking service from Epic 3</constraint>
+    <constraint>Database: Use JSONB for PostgreSQL, TEXT for SQLite for JSON columns</constraint>
+    <constraint>File Storage: Brand style images stored at backend/assets/users/{user_id}/brand_styles/, product images at backend/assets/users/{user_id}/products/</constraint>
+    <constraint>Retry Logic: Implement exponential backoff for Replicate API calls (MAX_RETRIES=3, INITIAL_RETRY_DELAY=1s, MAX_RETRY_DELAY=30s)</constraint>
+    <constraint>Caching: Only re-extract brand style JSON if folder has changed (check extracted_at vs uploaded_at)</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/brand-styles/extract" kind="REST endpoint" signature="POST /api/brand-styles/extract -&gt; BrandStyleExtractResponse" path="backend/app/api/routes/brand_styles.py">
+      New API endpoint for triggering brand style extraction. Requires authentication via get_current_user dependency. Returns extracted brand style JSON or error message.
+    </interface>
+    <interface name="extract_brand_style" kind="function signature" signature="extract_brand_style(images: List[Path]) -&gt; BrandStyleJSON" path="backend/app/services/pipeline/brand_style_extractor.py">
+      Service function to extract brand style JSON from list of image paths using Gemini 2.5 Flash Vision via Replicate API.
+    </interface>
+    <interface name="extract_product_style" kind="function signature" signature="extract_product_style(image: Path) -&gt; ProductStyleJSON" path="backend/app/services/pipeline/brand_style_extractor.py">
+      Service function to extract product style JSON from single image path using Gemini 2.5 Flash Vision via Replicate API.
+    </interface>
+    <interface name="BrandStyleJSON" kind="Pydantic schema" signature="class BrandStyleJSON(BaseModel): color_palette, visual_style, typography, lighting_cues, texture_surfaces, atmosphere_density, brand_markers" path="backend/app/services/pipeline/llm_schemas.py">
+      Pydantic schema for brand style JSON structure matching acceptance criteria format.
+    </interface>
+    <interface name="ProductStyleJSON" kind="Pydantic schema" signature="class ProductStyleJSON(BaseModel): product_characteristics, visual_style, color_profile, product_usage_context" path="backend/app/services/pipeline/llm_schemas.py">
+      Pydantic schema for product style JSON structure matching acceptance criteria format.
+    </interface>
+    <interface name="BrandStyleFolder.extracted_style_json" kind="database column" signature="extracted_style_json: Column(JSON)" path="backend/app/db/models/brand_style.py">
+      New database column to store extracted brand style JSON. Use JSONB for PostgreSQL, TEXT for SQLite.
+    </interface>
+    <interface name="BrandStyleFolder.extraction_status" kind="database column" signature="extraction_status: Column(Enum('pending', 'completed', 'failed'))" path="backend/app/db/models/brand_style.py">
+      New database column to track extraction status (pending, completed, failed).
+    </interface>
+    <interface name="BrandStyleFolder.extracted_at" kind="database column" signature="extracted_at: Column(DateTime)" path="backend/app/db/models/brand_style.py">
+      New database column to track when extraction was performed for caching logic.
+    </interface>
+    <interface name="replicate.Client" kind="API client" signature="replicate.Client(api_token=settings.REPLICATE_API_TOKEN)" path="backend/app/services/pipeline/brand_style_extractor.py">
+      Replicate API client initialization following existing pattern from video_generation.py.
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend tests use pytest with pytest-asyncio for async tests. Tests are located in backend/tests/ directory. Unit tests mock external API calls (Replicate API). Integration tests use test database. Follow existing test patterns from test_video_generation.py and test_image_generation.py which mock Replicate API calls.
+    </standards>
+    <locations>
+      <location>backend/tests/ - Backend unit and integration tests</location>
+      <location>backend/tests/test_video_generation.py - Reference for Replicate API mocking patterns</location>
+      <location>backend/tests/test_image_generation.py - Reference for Replicate API mocking patterns</location>
+    </locations>
+    <ideas>
+      <test ac="1" title="Test brand style extraction with multiple images">
+        Unit test: Mock Replicate API to return structured JSON matching BrandStyleJSON schema. Test batch processing of multiple brand style images. Verify all required fields are extracted (color_palette, visual_style, typography, lighting_cues, texture_surfaces, atmosphere_density, brand_markers).
+      </test>
+      <test ac="2" title="Test product style extraction with single image">
+        Unit test: Mock Replicate API to return structured JSON matching ProductStyleJSON schema. Test extraction from single product image. Verify all required fields are extracted (product_characteristics, visual_style, color_profile, product_usage_context).
+      </test>
+      <test ac="3" title="Test error handling and retry logic">
+        Unit test: Mock Replicate API to raise ReplicateError exceptions. Test retry logic with exponential backoff. Test graceful degradation when extraction fails (returns None or empty JSON, doesn't crash).
+      </test>
+      <test ac="3" title="Test cost tracking for Vision LLM calls">
+        Unit test: Verify Vision LLM API costs are logged and tracked. Test cost calculation per extraction operation. Verify costs are included in generation total cost.
+      </test>
+      <test ac="4" title="Test caching behavior">
+        Integration test: Create brand style folder, extract style JSON, verify JSON is stored in database. Upload new folder, verify extraction is triggered again. Upload same folder (no changes), verify extraction is skipped (cached JSON is used).
+      </test>
+      <test ac="1,4" title="Test brand style extraction API endpoint">
+        Integration test: Authenticate user, upload brand style images, call POST /api/brand-styles/extract endpoint. Verify extracted JSON is returned and stored in database. Verify extraction_status and extracted_at fields are updated.
+      </test>
+      <test ac="2,5" title="Test product style extraction in generation pipeline">
+        Integration test: Create generation with product_image_id, verify product style extraction is triggered, verify product style JSON is passed to Stage 3 Scene Assembler. Test graceful degradation when extraction fails.
+      </test>
+      <test ac="3" title="Test rate limiting and API errors">
+        Unit test: Mock Replicate API to return rate limit errors. Verify retry logic handles rate limits correctly. Test maximum retry attempts and exponential backoff delays.
+      </test>
+    </ideas>
+  </tests>
+</story-context>
+

@@ -238,3 +238,91 @@ def track_complete_generation_cost(
         f"total=${total_cost:.4f}"
     )
 
+
+def track_vision_llm_cost(
+    db: Session,
+    user_id: str,
+    cost: float,
+    operation_type: str = "brand_style_extraction",
+    image_count: int = 1,
+    update_user_total: bool = True
+) -> None:
+    """
+    Track Vision LLM API cost for style extraction operations.
+    
+    Args:
+        db: Database session
+        user_id: User ID
+        operation_type: Type of operation ("brand_style_extraction" or "product_style_extraction")
+        cost: Cost in USD for this operation
+        image_count: Number of images analyzed
+        update_user_total: Whether to update user's total_cost field (default: True)
+    """
+    logger.info(
+        f"Tracking Vision LLM cost: user={user_id}, "
+        f"operation={operation_type}, cost=${cost:.4f}, images={image_count}"
+    )
+    
+    # Log cost per operation
+    logger.info(
+        f"Vision LLM cost tracked for user {user_id}, operation {operation_type}: "
+        f"${cost:.4f} ({image_count} images)"
+    )
+    
+    # Update user's total_cost if requested
+    if update_user_total:
+        update_user_total_cost(db=db, user_id=user_id, additional_cost=cost)
+    
+    # Note: Vision LLM costs are tracked per user and can be included in generation costs
+    # if extraction happens during generation. For standalone extraction operations,
+    # costs are logged and optionally added to user's total_cost.
+
+
+def accumulate_generation_cost_with_vision_llm(
+    db: Session,
+    generation_id: str,
+    video_cost: float,
+    llm_cost: Optional[float] = None,
+    vision_llm_cost: Optional[float] = None
+) -> float:
+    """
+    Accumulate total cost for a generation including Vision LLM costs.
+    
+    Args:
+        db: Database session
+        generation_id: Generation ID
+        video_cost: Total video generation cost
+        llm_cost: Optional LLM cost (default: 0.01 for GPT-4 Turbo)
+        vision_llm_cost: Optional Vision LLM cost for style extraction
+    
+    Returns:
+        float: Total accumulated cost
+    """
+    if llm_cost is None:
+        llm_cost = 0.01  # Default LLM cost per generation (GPT-4 Turbo)
+    
+    if vision_llm_cost is None:
+        vision_llm_cost = 0.0  # No Vision LLM cost by default
+    
+    total_cost = video_cost + llm_cost + vision_llm_cost
+    
+    logger.info(
+        f"Accumulating costs for generation {generation_id}: "
+        f"video=${video_cost:.4f}, llm=${llm_cost:.4f}, "
+        f"vision_llm=${vision_llm_cost:.4f}, total=${total_cost:.4f}"
+    )
+    
+    # Get generation record
+    generation = db.query(Generation).filter(Generation.id == generation_id).first()
+    if not generation:
+        logger.error(f"Generation {generation_id} not found for cost accumulation")
+        return total_cost
+    
+    # Update generation cost
+    generation.cost = total_cost
+    db.commit()
+    
+    logger.info(f"Generation {generation_id} cost updated: ${total_cost:.4f}")
+    
+    return total_cost
+

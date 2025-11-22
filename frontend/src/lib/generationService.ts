@@ -101,14 +101,37 @@ export interface StatusResponse {
 /**
  * Start a new video generation from a prompt and a reference image.
  * Uses multipart/form-data and the /api/generate-with-image endpoint.
+ * 
+ * Note: If productImageId is provided, it takes precedence over the File image.
+ * The productImageId will be sent in the request body, and the File will be ignored.
  */
 export const startGenerationWithImage = async (
   prompt: string,
-  image: File,
+  image: File | null,
   model?: string,
   targetDuration?: number,
-  brandName?: string
+  brandName?: string,
+  productImageId?: string | null
 ): Promise<GenerateResponse> => {
+  // If product_image_id is provided, use the regular generation endpoint instead
+  if (productImageId) {
+    return startGeneration(
+      prompt,
+      model,
+      targetDuration,
+      true, // useLlm
+      undefined, // coherenceSettings - can be added if needed
+      undefined, // title - can be added if needed
+      brandName,
+      productImageId
+    );
+  }
+
+  // Otherwise, use the file upload endpoint
+  if (!image) {
+    throw new Error("Either image file or productImageId must be provided");
+  }
+
   const formData = new FormData();
   formData.append("prompt", prompt.trim());
   formData.append("image", image);
@@ -183,7 +206,11 @@ export const startGeneration = async (
   useLlm: boolean = true,
   coherenceSettings?: CoherenceSettings,
   title?: string,
-  brandName?: string
+  brandName?: string,
+  productImageId?: string | null,
+  topNote?: string,
+  heartNote?: string,
+  baseNote?: string
 ): Promise<GenerateResponse> => {
   const response = await apiClient.post<GenerateResponse>(
     API_ENDPOINTS.GENERATIONS.CREATE,
@@ -194,7 +221,11 @@ export const startGeneration = async (
       use_llm: useLlm,
       coherence_settings: coherenceSettings, 
       title,
-      brand_name: brandName
+      brand_name: brandName,
+      product_image_id: productImageId || undefined,
+      top_note: topNote,
+      heart_note: heartNote,
+      base_note: baseNote
     }
   );
   return response.data;
@@ -206,11 +237,17 @@ export const startGeneration = async (
 export const startSingleClipGeneration = async (
   prompt: string,
   model: string,
-  numClips: number = 1
+  numClips: number = 1,
+  productImageId?: string | null
 ): Promise<GenerateResponse> => {
   const response = await apiClient.post<GenerateResponse>(
     API_ENDPOINTS.GENERATIONS.CREATE_SINGLE_CLIP,
-    { prompt, model, num_clips: numClips }
+    { 
+      prompt, 
+      model, 
+      num_clips: numClips,
+      product_image_id: productImageId || undefined
+    }
   );
   return response.data;
 };

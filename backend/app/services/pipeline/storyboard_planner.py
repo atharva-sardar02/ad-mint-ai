@@ -12,8 +12,144 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-def get_storyboard_system_prompt(target_duration: int = 15) -> str:
-    """Generate system prompt based on target duration."""
+def get_storyboard_system_prompt_v2(target_duration: int = 15) -> str:
+    """Generate V2 system prompt for KLING pipeline based on target duration."""
+    return f"""You are a professional creative director and storyboard artist. Your ONLY job is to create a clear, cinematic storyboard for a video with a total target duration of {target_duration} seconds.
+
+This storyboard will later feed into multiple downstream systems:
+
+- Stage 2 will generate reference images, start frames, and end frames
+
+- Stage 3 will handle brand style, product geometry, and scent integration
+
+- Stage 4 will generate the final KLING video
+
+🚨 CRITICAL: Stage 1 MUST NOT perform any of the jobs of later stages.
+You MUST follow these prohibitions:
+
+❌ DO NOT describe the subject/product in extreme detail  
+
+❌ DO NOT describe exact bottle geometry, cap shape, materials, or labels  
+
+❌ DO NOT describe a character in forensic detail  
+
+❌ DO NOT attempt to enforce subject identity consistency  
+
+❌ DO NOT write start-frame or end-frame prompts  
+
+❌ DO NOT write reference-image prompts  
+
+❌ DO NOT include brand rules, color rules, scent notes, image style, lighting style  
+
+❌ DO NOT mention camera lens mm, depth of field values, or technical lighting  
+
+❌ DO NOT include transitions (handled later)  
+
+❌ DO NOT include storyboard formatting beyond the requested JSON structure
+
+Your job is SIMPLE:  
+
+→ Produce a creative, visually clear set of scenes that outline mood, environment, and narrative flow.
+
+### Scene Count Rules
+
+- Each scene MUST be between **3 and 7 seconds**.
+
+- The total duration SHOULD be close to **{target_duration} seconds**.
+
+- You decide how many scenes are needed (typically 3–7 scenes).
+
+### What Stage 1 SHOULD Output
+
+For each scene, describe:
+
+- What is happening (the action or moment)  
+
+- Where it is happening (the environment)  
+
+- The general cinematic feel  
+
+- The emotional tone  
+
+- The pacing or energy  
+
+Keep descriptions:
+
+- Natural  
+
+- Cinematic  
+
+- Medium length (40–80 words per scene)  
+
+- WITHOUT over-specifying visuals or subject details
+
+### What Stage 1 SHOULD NOT Output
+
+- No physical bottle descriptions  
+
+- No product geometry  
+
+- No brand identity analysis  
+
+- No detailed lighting specs  
+
+- No color palettes  
+
+- No forensic character details  
+
+- No repeated subject descriptions  
+
+- No technical constraints  
+
+### Output Format
+
+Return JSON in the following structure:
+
+{{
+  "consistency_markers": {{
+    "style": "High-level visual style for the whole video",
+    "color_palette": "High-level palette description (no hex codes)",
+    "lighting": "High-level lighting tone (e.g., soft, dramatic, natural)",
+    "composition": "High-level description of how scenes tend to be framed",
+    "mood": "Overall emotional tone"
+  }},
+  "scenes": [
+    {{
+      "scene_number": 1,
+      "detailed_prompt": "40–80 word natural, cinematic description of the scene. No detailed subject geometry or brand rules.",
+      "scene_description": {{
+        "environment": "Where this takes place",
+        "character_action": "General action (if any)",
+        "camera_angle": "General camera perspective",
+        "composition": "Overall framing",
+        "visual_elements": "Key elements that define the moment"
+      }},
+      "duration_seconds": <3-to-7>
+    }}
+    // additional scenes
+  ]
+}}
+
+Focus on storytelling flow, pacing, vibe, and cinematic clarity.
+
+Absolutely avoid doing the work of later stages."""
+
+
+def get_storyboard_system_prompt(target_duration: int = 15, pipeline_type: str = "default") -> str:
+    """Generate system prompt based on target duration and pipeline type.
+    
+    Args:
+        target_duration: Target total duration in seconds
+        pipeline_type: Pipeline type - "kling" uses V2 prompt, otherwise uses V1 (default)
+    
+    Returns:
+        System prompt string for the storyboard planner
+    """
+    # Use V2 prompt for KLING pipeline
+    if pipeline_type.lower() in ("kling", "kling_2_5", "kwaivgi/kling-v2.5-turbo-pro", "kwaivgi/kling-v2.1", "klingai/kling-video"):
+        return get_storyboard_system_prompt_v2(target_duration)
+    
+    # V1 prompt for other pipelines (default/legacy behavior)
     # Calculate optimal scene structure based on target duration
     # Maximum duration per scene is 7 seconds
     # Minimum duration per scene is 3 seconds
@@ -620,6 +756,7 @@ async def plan_storyboard(
     reference_image_path: Optional[str] = None,
     target_duration: int = 15,
     max_retries: int = 3,
+    pipeline_type: Optional[str] = None,
 ) -> dict:
     """
     Create a detailed storyboard plan using LLM (LEGACY - Single-stage approach).
@@ -629,6 +766,7 @@ async def plan_storyboard(
         reference_image_path: Optional reference image path (if user provided one)
         target_duration: Target total duration in seconds (default: 15). LLM will decide number of scenes and duration per scene (max 7s per scene)
         max_retries: Maximum retry attempts
+        pipeline_type: Pipeline type - "kling" uses V2 prompt, otherwise uses V1 (default)
     
     Returns:
         dict: Storyboard plan with detailed prompts for each scene
@@ -641,14 +779,33 @@ async def plan_storyboard(
     
     async_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     
-    # Get system prompt based on target duration
-    system_prompt = get_storyboard_system_prompt(target_duration)
+    # Get system prompt based on target duration and pipeline type
+    pipeline = pipeline_type or "default"
+    system_prompt = get_storyboard_system_prompt(target_duration, pipeline_type=pipeline)
+    
+    # Log which prompt version is being used
+    if pipeline.lower() in ("kling", "kling_2_5", "kwaivgi/kling-v2.5-turbo-pro", "kwaivgi/kling-v2.1", "klingai/kling-video"):
+        logger.info(f"[Storyboard Planner] Using V2 prompt for KLING pipeline: {pipeline}")
+    else:
+        logger.info(f"[Storyboard Planner] Using V1 prompt for pipeline: {pipeline}")
     
     # Build user message in natural language - make it clear this is for creative/educational purposes
     if reference_image_path:
         user_content = f"I'm working on a creative video production project and need help creating a video storyboard with a target duration of {target_duration} seconds. This is for legitimate creative and educational purposes. Here's the concept I want to visualize: {user_prompt}\n\nI've also provided a reference image that shows the style and subject matter I want. Please analyze it and use it to inform your storyboard. Decide how many scenes to create and the duration of each scene (each scene can be 3-7 seconds, maximum 7 seconds per scene). The total duration should be close to {target_duration} seconds. Create detailed, natural language prompts for each scene that will bring this creative vision to life."
     else:
         user_content = f"I'm working on a creative video production project and need help creating a video storyboard with a target duration of {target_duration} seconds. This is for legitimate creative and educational purposes. Here's the concept I want to visualize: {user_prompt}\n\nPlease decide how many scenes to create and the duration of each scene (each scene can be 3-7 seconds, maximum 7 seconds per scene). The total duration should be close to {target_duration} seconds. Create a detailed storyboard with rich, cinematic descriptions for each scene. Write the prompts naturally, like you're describing shots to a film crew."
+    
+    # Log the exact prompts being sent to LLM
+    logger.info("=" * 80)
+    logger.info("📝 EXACT PROMPTS SENT TO LLM FOR STORYBOARD CREATION:")
+    logger.info("=" * 80)
+    logger.info(f"SYSTEM PROMPT (first 500 chars):\n{system_prompt[:500]}...")
+    logger.info(f"\nSYSTEM PROMPT LENGTH: {len(system_prompt)} characters")
+    logger.info(f"\nUSER MESSAGE:\n{user_content}")
+    logger.info(f"\nUSER MESSAGE LENGTH: {len(user_content)} characters")
+    if reference_image_path:
+        logger.info(f"\nREFERENCE IMAGE: {reference_image_path}")
+    logger.info("=" * 80)
     
     # Prepare messages - will be modified on retries if needed
     messages = []
@@ -853,6 +1010,21 @@ async def plan_storyboard(
                 
                 logger.info(f"✅ Storyboard plan generated with {len(scenes)} detailed scenes")
                 logger.debug(f"Consistency markers: {storyboard_plan.get('consistency_markers', {})}")
+                
+                # Log the complete storyboard plan JSON structure
+                logger.info("=" * 80)
+                logger.info("📋 COMPLETE STAGE 1 STORYBOARD PLAN JSON:")
+                logger.info("=" * 80)
+                import json
+                # Create a loggable version (exclude very long raw_response if present)
+                loggable_plan = storyboard_plan.copy()
+                if "llm_output" in loggable_plan and "raw_response" in loggable_plan["llm_output"]:
+                    # Truncate raw_response for readability (keep first 500 chars)
+                    raw_resp = loggable_plan["llm_output"]["raw_response"]
+                    if isinstance(raw_resp, str) and len(raw_resp) > 500:
+                        loggable_plan["llm_output"]["raw_response"] = raw_resp[:500] + f"... [truncated, total length: {len(raw_resp)} chars]"
+                logger.info(json.dumps(loggable_plan, indent=2, ensure_ascii=False))
+                logger.info("=" * 80)
                 
                 # Store LLM input and output for complete flow tracking
                 storyboard_plan["llm_input"] = {

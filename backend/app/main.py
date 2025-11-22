@@ -11,8 +11,18 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, editor, generations, generations_with_image, users, interactive_generation, websocket
-from app.core.config import settings
+from app.api.routes import (
+    auth,
+    brand_styles,
+    editor,
+    generations,
+    generations_with_image,
+    interactive_generation,
+    products,
+    users,
+    websocket,
+)
+from app.core.config import BACKEND_DIR, settings
 from app.core.logging import setup_logging
 
 # Setup structured logging
@@ -108,7 +118,13 @@ app.include_router(generations.router)
 app.include_router(generations_with_image.router)
 app.include_router(users.router)
 app.include_router(editor.router)
-app.include_router(interactive_generation.router, prefix="/api/v1/interactive", tags=["interactive"])
+app.include_router(brand_styles.router)
+app.include_router(products.router)
+app.include_router(
+    interactive_generation.router,
+    prefix="/api/v1/interactive",
+    tags=["interactive"],
+)
 app.include_router(websocket.router, tags=["websocket"])
 
 # Mount static files for serving videos and thumbnails
@@ -128,11 +144,25 @@ if interactive_output_dir.exists():
         StaticFiles(directory=interactive_output_dir),
         name="interactive-output",
     )
-    logger.info(f"Interactive outputs mounted at /api/v1/outputs ({interactive_output_dir})")
+    logger.info(
+        f"Interactive outputs mounted at /api/v1/outputs ({interactive_output_dir})"
+    )
 else:
     logger.warning(
         "Interactive output directory not found (%s) - cannot serve reference images",
         interactive_output_dir,
+    )
+
+# Mount static files for serving user-uploaded assets (brand styles and product images)
+# This allows the frontend to access files at /api/assets/users/{user_id}/brand_styles/ and /api/assets/users/{user_id}/products/
+# Use BACKEND_DIR to ensure consistent path regardless of where the app is run from
+assets_dir = BACKEND_DIR / "assets"
+if assets_dir.exists():
+    app.mount("/api/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    logger.info(f"User assets mounted at /api/assets from {assets_dir.absolute()}")
+else:
+    logger.warning(
+        f"Assets directory not found at {assets_dir.absolute()} - user asset serving disabled"
     )
 
 

@@ -79,12 +79,15 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
+      console.log("Attempting login for username:", formData.username);
       await login(formData.username, formData.password);
+      console.log("Login successful, redirecting...");
 
       // Redirect to saved URL or default to dashboard
       const from = (location.state as { from?: string })?.from || "/dashboard";
       navigate(from, { replace: true });
     } catch (error) {
+      console.error("Login failed:", error);
       setApiError(
         error instanceof Error ? error.message : "Invalid username or password"
       );
