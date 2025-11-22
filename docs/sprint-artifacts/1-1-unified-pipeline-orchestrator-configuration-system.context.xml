@@ -1,0 +1,379 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>epic-1</epicId>
+    <storyId>1.1</storyId>
+    <title>Unified Pipeline Orchestrator & Configuration System</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-22</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-1-unified-pipeline-orchestrator-configuration-system.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>backend developer</asA>
+    <iWant>a single pipeline orchestrator that coordinates all stages (story, references, scenes, videos) using externalized YAML configurations</iWant>
+    <soThat>we eliminate hardcoded Master Mode prompts and have one execution path for both UI and CLI</soThat>
+    <tasks>
+- [ ] Create unified pipeline orchestrator module (AC: #1, #5, #6, #7)
+  - [ ] Implement `backend/app/services/unified_pipeline/orchestrator.py` with main `generate()` method
+  - [ ] Add stage execution sequencing (story → references → scenes → videos)
+  - [ ] Implement interactive mode with WebSocket approval waiting
+  - [ ] Implement automated mode for CLI execution
+  - [ ] Add Generation database record creation and status tracking
+  - [ ] Write unit tests for orchestrator stage transitions
+
+- [ ] Externalize LLM prompts to YAML configs (AC: #2, #8)
+  - [ ] Create `backend/app/config/prompts/` directory structure
+  - [ ] Extract hardcoded Master Mode prompts to YAML files (story_director, story_critic, scene_writer, scene_critic, scene_cohesor)
+  - [ ] Implement variable substitution in prompts ({framework}, {product}, {audience}, etc.)
+  - [ ] Write unit tests for prompt loading and variable replacement
+
+- [ ] Create pipeline configuration system (AC: #3, #4)
+  - [ ] Implement `backend/app/services/unified_pipeline/config_loader.py`
+  - [ ] Create `backend/app/config/pipelines/default.yaml` with all stage settings
+  - [ ] Create Pydantic schema `backend/app/schemas/unified_pipeline.py` (PipelineConfig, GenerationRequest, GenerationResponse)
+  - [ ] Add config validation before pipeline execution
+  - [ ] Write unit tests for config loading and Pydantic validation
+
+- [ ] Implement unified API endpoint (AC: #6)
+  - [ ] Create `backend/app/api/routes/unified_pipeline.py` with POST /api/v2/generate
+  - [ ] Add request validation using GenerationRequest Pydantic schema
+  - [ ] Return 202 Accepted with generation_id, session_id, websocket_url
+  - [ ] Add error handling (400 Bad Request, 401 Unauthorized, 429 Rate Limit, 500 Internal Error)
+  - [ ] Write API integration tests
+
+- [ ] Extend database schema for unified pipeline (AC: #7)
+  - [ ] Add JSONB fields to Generation model (reference_images, scenes, video_clips, config)
+  - [ ] Add current_stage field to track pipeline progress
+  - [ ] Create Alembic migration for schema changes
+  - [ ] Test migration on development database
+  - [ ] Write database model tests for JSONB serialization
+
+- [ ] Integration testing (AC: All)
+  - [ ] Test end-to-end pipeline execution (prompt → final video) in automated mode
+  - [ ] Test interactive mode with WebSocket feedback loops
+  - [ ] Verify config-driven architecture (change YAML, verify behavior changes)
+  - [ ] Test error recovery and graceful degradation
+  - [ ] Performance testing: verify < 10 min total generation time
+</tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Single Orchestrator Module** - A single `backend/app/services/unified_pipeline/orchestrator.py` module coordinates all pipeline stages (story → references → scenes → videos)
+
+2. **Externalized Prompts** - All LLM prompts are externalized to `backend/app/config/prompts/*.yaml` files:
+   - `story_director.yaml` - Story generation prompt template
+   - `story_critic.yaml` - Story evaluation prompt
+   - `scene_writer.yaml` - Scene description generation
+   - `scene_critic.yaml` - Scene evaluation prompt
+   - `scene_cohesor.yaml` - Cross-scene consistency validation
+
+3. **Pipeline Stage Configuration** - Pipeline configurations exist in `backend/app/config/pipelines/default.yaml` with:
+   - Stage enable/disable flags (story: true, reference_images: true, scenes: true, videos: true)
+   - Max iterations per stage (story: 3, scenes: 2)
+   - Timeout settings (story: 120s, scenes: 180s, videos: 600s)
+   - Quality thresholds (vbench_enabled: true, threshold_good: 80, threshold_acceptable: 60)
+   - Parallel generation settings (parallel: true, max_concurrent: 5)
+
+4. **Pydantic Config Validation** - Orchestrator loads configuration via `config_loader.py` with Pydantic validation (PipelineConfig schema validates all settings before execution)
+
+5. **Dual Execution Modes** - Orchestrator supports:
+   - **Interactive mode:** Waits for user approval via WebSocket at story and scene stages
+   - **Automated mode:** Runs entire pipeline without user input (CLI headless execution)
+
+6. **Unified API Endpoint** - `POST /api/v2/generate` endpoint accepts GenerationRequest schema with all required fields:
+   - prompt (required)
+   - framework (optional: AIDA, PAS, FAB, custom)
+   - brand_assets (optional: product_images[], logo, character_images[])
+   - config overrides (optional: quality_threshold, parallel_variants, enable_vbench)
+   - interactive flag (true for UI, false for CLI automated)
+   - session_id (optional for resuming)
+
+7. **Database Tracking** - Orchestrator creates Generation database record tracking:
+   - Status progression (pending → story → references → scenes → videos → completed/failed)
+   - Current stage indicator
+   - All outputs (story_text, reference_images JSONB, scenes JSONB, video_clips JSONB, final_video_url)
+   - Config snapshot used (JSONB)
+   - Error message if failed
+
+8. **No Hardcoded Workflows** - Zero hardcoded prompts or pipeline logic in Python code - all configurable via YAML
+</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <!-- Technical Specifications -->
+      <doc path="docs/sprint-artifacts/tech-spec-epic-epic-1.md" title="Epic 1 Technical Specification" section="Services and Modules">
+        Component Alignment Table defines orchestrator responsibilities: Main pipeline coordinator, stage execution sequencing, interactive/automated mode routing, session state management at backend/app/services/unified_pipeline/orchestrator.py
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-epic-1.md" title="Epic 1 Technical Specification" section="Workflows and Sequencing">
+        Main Pipeline Execution Flow details interactive and automated mode branches with WebSocket communication for user feedback (lines 433-490)
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-epic-1.md" title="Epic 1 Technical Specification" section="Data Models and Contracts">
+        Database Schema with JSONB extensions for unified pipeline: reference_images, scenes, video_clips, config fields (lines 132-169)
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-epic-1.md" title="Epic 1 Technical Specification" section="APIs and Interfaces">
+        Unified Pipeline Endpoint specification for POST /api/v2/generate with GenerationRequest schema (lines 249-292)
+      </doc>
+
+      <!-- Architecture Decisions -->
+      <doc path="docs/architecture.md" title="System Architecture" section="ADR-005: Configuration-Driven vs Hardcoded Prompts">
+        All LLM prompts externalized to YAML templates with variable substitution, pipeline stage configs (enable/disable, timeouts, quality thresholds), Pydantic validation for config schemas (lines 1673-1706)
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="ADR-001: FastAPI BackgroundTasks vs Celery">
+        Use FastAPI BackgroundTasks for MVP (adequate for VBench/stitching), no Celery dependency, tasks don't survive server restarts (acceptable), can migrate post-MVP if persistence critical (lines 1562-1583)
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Configuration Patterns">
+        YAML-based configuration loading with Pydantic validation, prompt templates with variable substitution (lines 1007-1073)
+      </doc>
+      <doc path="docs/architecture.md" title="System Architecture" section="Project Structure">
+        Backend structure and file organization for unified pipeline services (lines 56-147)
+      </doc>
+
+      <!-- Epic Requirements -->
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 1.1">
+        Story acceptance criteria defining single orchestrator module, externalized prompts, pipeline stage configuration, dual execution modes (lines 85-134)
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="FR Coverage Matrix">
+        FR51-FR56 Configuration requirements, FR82-FR97 CLI execution mapping to orchestrator components (lines 464-484)
+      </doc>
+    </docs>
+
+    <code>
+      <!-- Existing Database Models -->
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="Generation" lines="31-78">
+        Existing Generation ORM model with fields: id, user_id, prompt, status, current_step, framework, llm_specification (JSON), scene_plan (JSON), llm_conversation_history (JSON). NEEDS EXTENSION: Add reference_images, scenes, video_clips, config JSONB fields per AC#7
+      </artifact>
+      <artifact path="backend/app/db/models/generation.py" kind="model" symbol="GenerationGroup" lines="13-28">
+        Existing GenerationGroup model for A/B testing variants - supports parallel_variants config option
+      </artifact>
+
+      <!-- Existing WebSocket Implementation -->
+      <artifact path="backend/app/api/routes/websocket.py" kind="route" symbol="ConnectionManager" lines="56-99">
+        Existing WebSocket connection manager with heartbeat, multi-connection support per session. REUSABLE for interactive mode approval waiting (AC#5)
+      </artifact>
+      <artifact path="backend/app/api/routes/websocket.py" kind="constant" symbol="ACK_MESSAGES" lines="34-49">
+        Existing acknowledgment message patterns for conversation parsing ("yes", "ok", "looks good", etc.) - reusable for interactive mode
+      </artifact>
+
+      <!-- Existing Pipeline Implementations (TO BE DEPRECATED) -->
+      <artifact path="backend/app/services/pipeline/pipeline_orchestrator.py" kind="service" symbol="PipelineOrchestrator">
+        Legacy pipeline orchestrator - contains patterns for stage execution that can inform unified orchestrator design, will be deprecated after Story 1.1
+      </artifact>
+      <artifact path="backend/app/services/pipeline/interactive_pipeline.py" kind="service" symbol="InteractivePipeline">
+        Legacy interactive pipeline with WebSocket integration patterns - provides reference for interactive mode implementation (AC#5), will be deprecated
+      </artifact>
+      <artifact path="backend/cli_tools/pipeline.py" kind="cli" symbol="CLI Pipeline">
+        Existing CLI pipeline entry point - will need to call new unified orchestrator instead of legacy pipelines (AC#6 dual execution)
+      </artifact>
+    </code>
+
+    <dependencies>
+      <backend>
+        <framework name="FastAPI" version=">=0.104.0">Async API framework with native WebSocket support for interactive mode</framework>
+        <framework name="SQLAlchemy" version=">=2.0.0">ORM for database models with JSONB field support</framework>
+        <framework name="Pydantic" version=">=2.0.0">Request/response schemas and config validation (PipelineConfig, GenerationRequest)</framework>
+        <library name="python-dotenv" version=">=1.0.0">Environment variable loading for API keys</library>
+        <ai name="OpenAI" version=">=1.0.0">GPT-4 API client for story/scene agent calls</ai>
+        <ai name="Replicate" version=">=0.25.0">Replicate API for image/video generation</ai>
+        <media name="moviepy" version=">=1.0.3">Video stitching (background task)</media>
+        <storage name="boto3" version=">=1.34.0">AWS S3 SDK for media uploads</storage>
+        <database name="psycopg2-binary" version=">=2.9.0">PostgreSQL driver (sync)</database>
+        <database name="asyncpg" version=">=0.29.0">PostgreSQL driver (async)</database>
+        <cache name="redis" version=">=5.0.0">Session storage for WebSocket state</cache>
+        <testing name="pytest" version=">=7.4.0">Testing framework</testing>
+        <testing name="pytest-asyncio" version=">=0.21.0">Async test support</testing>
+        <http name="httpx" version=">=0.24.0">Async HTTP client for external APIs</http>
+      </backend>
+
+      <frontend>
+        <framework name="React" version="^19.2.0">UI framework with concurrent rendering</framework>
+        <library name="react-router-dom" version="^7.9.6">Client-side routing</library>
+        <library name="zustand" version="^5.0.8">Lightweight state management for pipeline session state</library>
+        <library name="axios" version="^1.13.2">HTTP client for API calls</library>
+        <build name="Vite" version="^5.4.11">Build tool and dev server</build>
+        <build name="TypeScript" version="~5.9.3">Type checking</build>
+        <styling name="Tailwind CSS" version="^4.1.17">Utility-first CSS framework</styling>
+        <testing name="vitest" version="^1.6.0">Test runner with Vite integration</testing>
+        <testing name="@testing-library/react" version="^16.1.0">React component testing</testing>
+      </frontend>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <!-- Architecture Constraints -->
+    <constraint type="architecture">No Celery Dependency: Use FastAPI BackgroundTasks for MVP, adequate for VBench/stitching workload (ADR-001)</constraint>
+    <constraint type="architecture">Brownfield Compatibility: Cannot change existing database models, add JSONB fields only, maintain backward compatibility</constraint>
+    <constraint type="architecture">FastAPI Native WebSocket: Continue existing WebSocket implementation, no Socket.io migration needed (ADR-002)</constraint>
+
+    <!-- Database Constraints -->
+    <constraint type="database">PostgreSQL Production / SQLite Development: Preserve existing setup, no schema migration beyond adding JSONB fields</constraint>
+    <constraint type="database">JSONB Fields Required: reference_images, scenes, video_clips, config must be JSONB for flexible storage (AC#7)</constraint>
+
+    <!-- Code Organization Constraints -->
+    <constraint type="naming">Backend files: snake_case (unified_pipeline.py, story_director.py)</constraint>
+    <constraint type="naming">Classes: PascalCase (StoryDirector, GenerationRequest)</constraint>
+    <constraint type="naming">Functions/methods: snake_case (generate_story, validate_config)</constraint>
+    <constraint type="naming">Constants: UPPER_SNAKE_CASE (MAX_ITERATIONS, DEFAULT_QUALITY_THRESHOLD)</constraint>
+
+    <!-- Technical Debt Constraints -->
+    <constraint type="migration">Must deprecate 4 legacy pipelines AFTER Story 1.1 complete: Master Mode, Interactive, Original, CLI</constraint>
+    <constraint type="migration">Existing WebSocket sessions must continue working during migration (zero downtime)</constraint>
+  </constraints>
+
+  <interfaces>
+    <!-- API Interfaces -->
+    <interface name="POST /api/v2/generate" kind="REST endpoint">
+      <signature>GenerationRequest → GenerationResponse (202 Accepted)</signature>
+      <path>backend/app/api/routes/unified_pipeline.py</path>
+      <description>Unified pipeline endpoint accepting prompt, framework, brand_assets, config overrides, interactive flag, session_id. Returns generation_id, session_id, websocket_url, status</description>
+    </interface>
+
+    <interface name="WS /ws/{session_id}" kind="WebSocket">
+      <signature>Bidirectional: user_feedback ↔ stage_updates</signature>
+      <path>backend/app/api/routes/websocket.py</path>
+      <description>Real-time communication for interactive mode. Client sends feedback messages, server sends story_generated, reference_images_ready, scenes_generated, video_progress, video_complete, vbench_score events</description>
+    </interface>
+
+    <!-- Service Interfaces -->
+    <interface name="PipelineOrchestrator.generate()" kind="function signature">
+      <signature>async def generate(request: GenerationRequest) → GenerationResponse</signature>
+      <path>backend/app/services/unified_pipeline/orchestrator.py</path>
+      <description>Main pipeline execution entry point. Coordinates all stages (story → references → scenes → videos), supports interactive/automated modes, creates Generation database record</description>
+    </interface>
+
+    <interface name="ConfigLoader.load_pipeline_config()" kind="function signature">
+      <signature>def load_pipeline_config(name: str = "default") → PipelineConfig</signature>
+      <path>backend/app/services/unified_pipeline/config_loader.py</path>
+      <description>Loads pipeline YAML configuration with Pydantic validation. Supports named configs (default, custom) and runtime overrides</description>
+    </interface>
+
+    <!-- Data Contracts -->
+    <interface name="GenerationRequest" kind="Pydantic schema">
+      <signature>prompt: str, framework: Optional[str], brand_assets: Optional[dict], config: Optional[dict], interactive: bool, session_id: Optional[str]</signature>
+      <path>backend/app/schemas/unified_pipeline.py</path>
+      <description>Request schema for unified pipeline endpoint with all required fields and optional overrides</description>
+    </interface>
+
+    <interface name="PipelineConfig" kind="Pydantic schema">
+      <signature>pipeline_name, story_max_iterations, scene_max_iterations, video_parallel, video_max_concurrent, vbench_enabled, quality_thresholds</signature>
+      <path>backend/app/schemas/unified_pipeline.py</path>
+      <description>Pipeline configuration schema validated before execution. Defines stage settings, timeouts, quality thresholds</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+Testing follows pyramid strategy: extensive unit tests (>70% coverage target) → integration tests for critical flows → manual UAT.
+
+**Unit Testing (pytest):**
+- Service layer tests mock external dependencies (OpenAI, Replicate, S3)
+- Database tests use in-memory SQLite fixtures
+- Pydantic schema validation tests verify all required/optional fields
+- WebSocket tests mock connection manager
+- All async functions tested with pytest-asyncio
+
+**Integration Testing:**
+- End-to-end pipeline execution (prompt → final video) in automated mode
+- Interactive mode with WebSocket feedback loops
+- Config-driven architecture validation (change YAML, verify behavior changes)
+- Error recovery and graceful degradation
+- Database transaction integrity (Generation record updates)
+
+**Test Fixtures:**
+- Database session fixture with rollback after each test
+- Authenticated client fixture with JWT token
+- Mock OpenAI/Replicate responses for deterministic testing
+- Sample brand assets and test prompts
+
+**Existing Testing Patterns (from brownfield codebase):**
+- tests/ directory mirrors app/ structure (test_api/, test_services/, test_integration/)
+- Pytest fixtures in conftest.py for shared setup
+- Mock external API calls with httpx.AsyncClient mocking
+- Database tests use SQLite in-memory for speed
+    </standards>
+
+    <locations>
+      <location>backend/tests/test_services/test_orchestrator.py</location>
+      <description>Unit tests for orchestrator stage transitions, interactive/automated mode routing</description>
+
+      <location>backend/tests/test_services/test_config_loader.py</location>
+      <description>Unit tests for YAML config loading, Pydantic validation, prompt template variable substitution</description>
+
+      <location>backend/tests/test_api/test_unified_pipeline.py</location>
+      <description>API endpoint tests with various request payloads, error handling (400, 401, 429, 500)</description>
+
+      <location>backend/tests/test_schemas/test_unified_pipeline.py</location>
+      <description>Pydantic schema validation tests for GenerationRequest, PipelineConfig, GenerationResponse</description>
+
+      <location>backend/tests/test_db/test_generation_model.py</location>
+      <description>Database model tests for JSONB serialization of reference_images, scenes, video_clips, config</description>
+
+      <location>backend/tests/test_integration/test_pipeline_execution.py</location>
+      <description>End-to-end integration test: prompt → Generation record with all outputs populated</description>
+
+      <location>backend/tests/test_integration/test_interactive_mode.py</location>
+      <description>Integration test for interactive mode with WebSocket feedback loops (story approval, scene editing)</description>
+    </locations>
+
+    <ideas>
+      <!-- Unit Test Ideas -->
+      <idea ac="#1" description="Test orchestrator creates Generation record with status='pending' on startup">
+        Verify orchestrator.generate() creates database record before any stage execution
+      </idea>
+
+      <idea ac="#2" description="Test prompt loading from YAML with variable substitution">
+        Load story_director.yaml, substitute {framework}='AIDA', verify prompt contains 'AIDA'
+      </idea>
+
+      <idea ac="#3" description="Test pipeline config validation rejects invalid settings">
+        PipelineConfig with story_max_iterations=-1 should raise ValidationError
+      </idea>
+
+      <idea ac="#4" description="Test config loader loads default.yaml when no name provided">
+        config_loader.load_pipeline_config() should return default config from backend/app/config/pipelines/default.yaml
+      </idea>
+
+      <idea ac="#5" description="Test orchestrator waits for WebSocket approval in interactive mode">
+        Mock WebSocket manager, verify orchestrator blocks at story stage until user sends approval message
+      </idea>
+
+      <idea ac="#5" description="Test orchestrator skips approval in automated mode">
+        interactive=False should execute all stages without WebSocket wait
+      </idea>
+
+      <idea ac="#6" description="Test unified endpoint returns 202 Accepted with generation_id">
+        POST /api/v2/generate with valid request should return 202 status, generation_id, websocket_url
+      </idea>
+
+      <idea ac="#6" description="Test unified endpoint validates required fields">
+        POST /api/v2/generate without prompt should return 400 Bad Request
+      </idea>
+
+      <idea ac="#7" description="Test Generation model serializes JSONB fields correctly">
+        Create Generation with reference_images=[{"url": "s3://..."}], verify database roundtrip preserves structure
+      </idea>
+
+      <idea ac="#8" description="Test zero hardcoded prompts in Python code">
+        Grep backend/app/services/ for hardcoded LLM prompts, assert all prompts loaded from YAML configs
+      </idea>
+
+      <!-- Integration Test Ideas -->
+      <idea ac="All" description="Test end-to-end automated pipeline execution">
+        Submit GenerationRequest (interactive=False) → verify Generation record transitions: pending → story → references → scenes → videos → completed
+      </idea>
+
+      <idea ac="All" description="Test config changes affect behavior">
+        Modify default.yaml to disable scenes stage → verify pipeline skips scenes, goes directly story → references → videos
+      </idea>
+
+      <idea ac="All" description="Test error recovery with invalid API key">
+        Mock OpenAI API 401 error → verify Generation status='failed', error_message populated
+      </idea>
+
+      <!-- Performance Test Ideas -->
+      <idea ac="All" description="Test total generation time < 10 minutes">
+        End-to-end pipeline with 5 scenes → measure time from prompt submission to completed_at timestamp, assert < 600 seconds (P95)
+      </idea>
+    </ideas>
+  </tests>
+</story-context>
