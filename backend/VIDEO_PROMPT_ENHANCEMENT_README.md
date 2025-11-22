@@ -265,3 +265,4 @@ Verify that frame images exist at the paths specified in the storyboard JSON.
 - **Story 9.2**: Video generation workflow
 
 
+

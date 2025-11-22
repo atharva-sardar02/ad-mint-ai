@@ -27,3 +27,4 @@ export const ComparisonDetail: React.FC = () => {
 };
 
 
+

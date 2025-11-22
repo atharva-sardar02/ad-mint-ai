@@ -264,3 +264,4 @@ async def test_convergence_early_stop_performance(mock_openai_client_fast):
     print(f"\nConvergence early stop (2 iterations): {elapsed_time:.2f}s")
 
 
+

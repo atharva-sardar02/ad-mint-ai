@@ -219,3 +219,4 @@ def get_default_negative_prompt(model_name: str) -> str:
     return ", ".join(defaults)
 
 
+

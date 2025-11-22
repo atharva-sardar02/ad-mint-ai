@@ -200,3 +200,4 @@ def test_cli_trace_files_created(sample_prompt_file, mock_enhancement_result):
             assert len(trace_dirs) > 0
 
 
+

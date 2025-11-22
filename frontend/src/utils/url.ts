@@ -23,3 +23,4 @@ export function getAssetUrl(path: string): string {
   return `${normalizedBase}${normalizedPath}`;
 }
 
+

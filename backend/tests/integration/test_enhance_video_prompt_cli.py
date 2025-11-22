@@ -462,3 +462,4 @@ def test_cli_console_output_format(sample_prompt_file, tmp_path):
         assert "Trace files saved" in output or "trace" in output.lower()
 
 
+

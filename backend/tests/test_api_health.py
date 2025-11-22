@@ -25,3 +25,4 @@ def test_health_endpoint_content_type():
     assert response.headers["content-type"] == "application/json"
 
 
+
