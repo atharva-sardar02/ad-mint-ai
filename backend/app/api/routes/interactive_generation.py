@@ -9,8 +9,11 @@ Provides REST endpoints for managing interactive pipeline sessions:
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Optional
+from pathlib import Path
+from typing import List, Optional
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.api.deps import get_current_user
 from app.db.models.user import User
@@ -24,12 +27,18 @@ from app.schemas.interactive import (
     RegenerateResponse,
     InpaintRequest,
     InpaintResponse,
+    ManualReferenceUploadResponse,
 )
 from app.services.pipeline.interactive_pipeline import get_orchestrator
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+MAX_MANUAL_REFERENCE_IMAGES = 3
+MAX_MANUAL_REFERENCE_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_REFERENCE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
 
 
 @router.post("/start", response_model=PipelineSessionResponse, status_code=status.HTTP_201_CREATED)
@@ -307,6 +316,102 @@ async def regenerate_stage(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to regenerate stage: {str(e)}"
         )
+
+
+@router.post(
+    "/{session_id}/reference-images/upload",
+    response_model=ManualReferenceUploadResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def upload_manual_reference_images(
+    session_id: str,
+    images: List[UploadFile] = File(..., description="One to three reference images"),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload manual reference images to skip automatic generation.
+
+    Users can provide up to three JPG/PNG files during the story review stage.
+    When the story stage is approved, the pipeline will immediately move to
+    storyboard generation using the uploaded assets.
+    """
+    if not images:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one image must be uploaded",
+        )
+    if len(images) > MAX_MANUAL_REFERENCE_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"You can upload up to {MAX_MANUAL_REFERENCE_IMAGES} images",
+        )
+
+    orchestrator = get_orchestrator()
+    session = await orchestrator.get_session(session_id)
+
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session not found: {session_id}",
+        )
+    if session.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this session",
+        )
+    if session.status != "story":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Manual reference images can only be uploaded during the story stage before approval",
+        )
+
+    output_dir = Path(settings.OUTPUT_BASE_DIR) / "interactive" / session_id / "reference_images"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_images: List[dict] = []
+    for idx, image in enumerate(images, start=1):
+        content_type = image.content_type.lower() if image.content_type else ""
+        if content_type not in ALLOWED_REFERENCE_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type for '{image.filename}'. Use PNG or JPG images.",
+            )
+
+        contents = await image.read()
+        if len(contents) > MAX_MANUAL_REFERENCE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image '{image.filename}' is too large. Max size is 10MB.",
+            )
+
+        ext = ".png" if content_type == "image/png" else ".jpg"
+        file_name = f"manual_ref_{idx}_{uuid4().hex[:8]}{ext}"
+        file_path = output_dir / file_name
+        file_path.write_bytes(contents)
+
+        saved_images.append(
+            {
+                "index": idx,
+                "path": str(file_path),
+                "url": f"/api/v1/outputs/interactive/{session_id}/reference_images/{file_name}",
+                "prompt": session.prompt,
+                "quality_score": None,
+                "source": "manual",
+            }
+        )
+
+    await orchestrator.register_manual_reference_images(session_id, saved_images)
+
+    message = (
+        f"Uploaded {len(saved_images)} reference image{'s' if len(saved_images) > 1 else ''}. "
+        "Story approval will now skip automated reference generation."
+    )
+
+    return ManualReferenceUploadResponse(
+        session_id=session_id,
+        images=saved_images,
+        message=message,
+    )
 
 
 @router.get("/{session_id}", response_model=PipelineSessionResponse)

@@ -134,7 +134,7 @@ class ConnectionManager:
         message_json = json.dumps(message, default=str)
         dead_connections = set()
 
-        for websocket in self.active_connections[session_id]:
+        for websocket in list(self.active_connections[session_id]):
             try:
                 await websocket.send_text(message_json)
             except Exception as e:

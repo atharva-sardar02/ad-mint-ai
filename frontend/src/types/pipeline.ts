@@ -57,6 +57,7 @@ export interface StoryOutput {
     model_used?: string;
     target_duration?: number;
   };
+  duration_seconds?: number;
 }
 
 /**
@@ -69,8 +70,11 @@ export interface ReferenceImageOutput {
     url: string;
     prompt: string;
     quality_score?: number | null;
+    quality_metrics?: Record<string, number | null>;
+    source?: string;
   }>;
   metadata?: Record<string, any>;
+  duration_seconds?: number;
 }
 
 /**
@@ -91,19 +95,31 @@ export interface StoryboardOutput {
     description: string;
     prompt: string;
     voiceover?: string;
+    quality_score?: number | null;
+    quality_metrics?: Record<string, number | null>;
   }>;
   total_duration?: number;
   metadata?: Record<string, any>;
+  duration_seconds?: number;
 }
 
 /**
  * Video output structure
  */
 export interface VideoOutput {
-  video_url: string;
-  thumbnail_url?: string;
-  duration: number;
-  format: string;
+  clips: Array<{
+    clip_number: number;
+    path: string;
+    url: string;
+    model?: string;
+  }>;
+  model: string;
+  status: string;
+  duration_seconds?: number;
+  final_video?: {
+    path: string;
+    url?: string | null;
+  };
 }
 
 /**

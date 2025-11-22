@@ -35,7 +35,7 @@ class InteractiveAPI {
 
     this.client = axios.create({
       baseURL: this.baseURL,
-      timeout: 300000, // 5 minutes - same as apiClient.ts for long operations
+      timeout: 0, // disable timeout for long-running operations
       headers: {
         "Content-Type": "application/json",
       },

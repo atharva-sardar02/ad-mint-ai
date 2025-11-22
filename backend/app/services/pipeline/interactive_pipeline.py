@@ -12,6 +12,7 @@ Key features:
 - User approval required before proceeding
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -29,6 +30,7 @@ from app.services.pipeline.story_generator import generate_story
 from app.services.pipeline.template_selector import select_template_with_override
 from app.services.pipeline.session_storage import get_session_storage
 from app.services.pipeline.video_generation import generate_video_clip
+from app.services.pipeline.stitching import stitch_video_clips
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +185,9 @@ class InteractivePipelineOrchestrator:
             timestamp=datetime.utcnow()
         )
         session.conversation_history.append(approval_msg)
+        manual_images = None
+        if stage == "story":
+            manual_images = session.stage_data.pop("manual_reference_images", None)
 
         # Determine next stage
         stage_transitions = {
@@ -203,6 +208,18 @@ class InteractivePipelineOrchestrator:
                 "approved_stage": stage,
                 "next_stage": "complete",
                 "message": "Pipeline complete! Your video is ready."
+            }
+
+        if manual_images:
+            logger.info("Manual reference images supplied; skipping automatic reference generation.")
+            await self._complete_manual_reference_stage(session, manual_images)
+            await self._generate_storyboard_stage(session_id)
+
+            return {
+                "session_id": session_id,
+                "approved_stage": stage,
+                "next_stage": "storyboard",
+                "message": "Stage 'story' approved! Using your reference images to generate a storyboard..."
             }
 
         # Persist reference image selections if applicable
@@ -333,9 +350,69 @@ class InteractivePipelineOrchestrator:
 
         return chat_msg
 
+    async def register_manual_reference_images(
+        self,
+        session_id: str,
+        images: List[Dict[str, Any]],
+    ) -> PipelineSessionState:
+        """
+        Persist user-provided reference images for later reuse.
+
+        Args:
+            session_id: Session identifier
+            images: List of reference image metadata dictionaries
+        """
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session not found: {session_id}")
+
+        # Normalize indexes to keep downstream UI predictable
+        for idx, img in enumerate(images, start=1):
+            img.setdefault("index", idx)
+            img.setdefault("source", "manual")
+
+        session.stage_data["manual_reference_images"] = images
+        session.stage_data["reference_image_selected_indices"] = [img["index"] for img in images]
+        session.updated_at = datetime.utcnow()
+
+        await self._save_session(session)
+        logger.info(
+            "🖼️ Manual reference images registered for session %s (count=%s)",
+            session_id,
+            len(images),
+        )
+        return session
+
     # ========================================================================
     # Stage Generation Methods
     # ========================================================================
+
+    async def _complete_manual_reference_stage(
+        self,
+        session: PipelineSessionState,
+        manual_images: List[Dict[str, Any]],
+    ):
+        """Finalize reference image stage when user uploads their own assets."""
+        session.stage_data.pop("manual_reference_images", None)
+        session.stage_data["reference_image_manual"] = True
+        session.stage_data["reference_image_selected_indices"] = [
+            img.get("index") for img in manual_images if img.get("index") is not None
+        ]
+
+        session.outputs["reference_image"] = {
+            "images": manual_images,
+            "prompt_used": manual_images[0].get("prompt") if manual_images else session.prompt,
+            "modifications_applied": {},
+            "manual_upload": True,
+        }
+
+        session.status = "storyboard"
+        session.current_stage = self._get_stage_name("storyboard")
+        session.conversation_history = []
+        session.updated_at = datetime.utcnow()
+
+        await self._save_session(session)
+        await self._notify_stage_complete(session.session_id, "reference_image", session.outputs["reference_image"])
 
     async def _generate_story_stage(
         self,
@@ -347,6 +424,7 @@ class InteractivePipelineOrchestrator:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
+        stage_start = datetime.utcnow()
         try:
             logger.info(f"📖 Generating story for session {session_id}...")
 
@@ -377,6 +455,10 @@ class InteractivePipelineOrchestrator:
             if modifications:
                 session.stage_data["story_last_modifications"] = modifications
                 session.prompt = prompt_to_use
+            duration_seconds = (datetime.utcnow() - stage_start).total_seconds()
+            session.stage_data["story_last_duration_seconds"] = duration_seconds
+            if isinstance(session.outputs["story"], dict):
+                session.outputs["story"]["duration_seconds"] = duration_seconds
             session.updated_at = datetime.utcnow()
 
             await self._save_session(session)
@@ -403,6 +485,7 @@ class InteractivePipelineOrchestrator:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
+        stage_start = datetime.utcnow()
         try:
             logger.info(f"🎨 Generating reference images for session {session_id}...")
 
@@ -429,39 +512,50 @@ class InteractivePipelineOrchestrator:
 
             # Generate 2-3 reference images for user to choose from
             output_dir = f"{settings.OUTPUT_BASE_DIR}/interactive/{session_id}/reference_images"
-            reference_images = []
+            enhanced_prompt_text = enhanced_prompt_result.get("enhanced_prompt", prompt_to_use)
 
-            for i in range(3):  # Generate 3 variations
+            try:
+                from app.services.pipeline.image_quality_scoring import score_image as score_image_fn
+            except Exception:
+                score_image_fn = None
+
+            async def generate_and_score(index: int) -> Optional[Dict[str, Any]]:
+                scene_number = index + 1
                 try:
                     image_path = await generate_image(
-                        prompt=enhanced_prompt_result.get("enhanced_prompt", prompt_to_use),
+                        prompt=enhanced_prompt_text,
                         output_dir=output_dir,
                         generation_id=f"{session_id}_ref",
-                        scene_number=i + 1
+                        scene_number=scene_number
                     )
 
-                    # Score image quality
                     quality_score = None
-                    try:
-                        from app.services.pipeline.image_quality_scoring import score_image
-                        scores = await score_image(image_path, enhanced_prompt_result.get("enhanced_prompt", prompt_to_use))
-                        quality_score = scores.get("overall", None)
-                    except Exception as e:
-                        logger.warning(f"Quality scoring failed for image {i+1}: {e}")
+                    quality_metrics = None
+                    if score_image_fn:
+                        try:
+                            scores = await score_image_fn(image_path, enhanced_prompt_text)
+                            quality_metrics = scores
+                            quality_score = scores.get("overall", None)
+                        except Exception as score_err:
+                            logger.warning(f"Quality scoring failed for image {scene_number}: {score_err}")
 
-                    reference_images.append({
-                        "index": i + 1,
+                    logger.info(f"✅ Reference image {scene_number}/3 generated")
+                    return {
+                        "index": scene_number,
                         "path": image_path,
                         "url": f"/api/v1/outputs/interactive/{session_id}/reference_images/{Path(image_path).name}",
-                        "prompt": enhanced_prompt_result.get("enhanced_prompt", prompt_to_use),
-                        "quality_score": quality_score
-                    })
+                        "prompt": enhanced_prompt_text,
+                        "quality_score": quality_score,
+                        "quality_metrics": quality_metrics,
+                        "source": "auto",
+                    }
+                except Exception as gen_err:
+                    logger.error(f"Failed to generate reference image {scene_number}: {gen_err}")
+                    return None
 
-                    logger.info(f"✅ Reference image {i + 1}/3 generated")
-
-                except Exception as e:
-                    logger.error(f"Failed to generate reference image {i + 1}: {e}")
-                    # Continue with remaining images
+            tasks = [asyncio.create_task(generate_and_score(i)) for i in range(3)]
+            results = await asyncio.gather(*tasks)
+            reference_images = [img for img in results if img]
 
             if not reference_images:
                 raise RuntimeError("Failed to generate any reference images")
@@ -470,9 +564,12 @@ class InteractivePipelineOrchestrator:
             session.outputs["reference_image"] = {
                 "images": reference_images,
                 "prompt_used": enhanced_prompt_result.get("enhanced_prompt", prompt_to_use),
-                "modifications_applied": modifications or {}
+                "modifications_applied": modifications or {},
             }
             session.stage_data["reference_image_iterations"] = session.stage_data.get("reference_image_iterations", 0) + 1
+            duration_seconds = (datetime.utcnow() - stage_start).total_seconds()
+            session.stage_data["reference_image_last_duration_seconds"] = duration_seconds
+            session.outputs["reference_image"]["duration_seconds"] = duration_seconds
             session.updated_at = datetime.utcnow()
 
             await self._save_session(session)
@@ -499,6 +596,7 @@ class InteractivePipelineOrchestrator:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
+        stage_start = datetime.utcnow()
         try:
             logger.info(f"🎬 Generating storyboard for session {session_id}...")
 
@@ -552,74 +650,98 @@ class InteractivePipelineOrchestrator:
 
             # Generate images for each storyboard scene (clips)
             output_dir = f"{settings.OUTPUT_BASE_DIR}/interactive/{session_id}/storyboard"
-            storyboard_clips = []
+            storyboard_clips: List[Dict[str, Any]] = []
+            existing_clips = session.outputs.get("storyboard", {}).get("clips", [])
+            existing_clip_map = {clip["clip_number"]: clip for clip in existing_clips}
 
             scenes = storyboard_payload.get("scenes", [])
+            clip_results: Dict[int, Dict[str, Any]] = {}
+            concurrency_limit = max(
+                1, getattr(settings, "STORYBOARD_CLIP_CONCURRENCY", 3)
+            )
+            semaphore = asyncio.Semaphore(concurrency_limit)
+            clip_tasks: List[asyncio.Task] = []
+
+            async def process_clip(clip_index: int, scene: Dict[str, Any]):
+                scene_prompt = scene.get("visual_prompt", "")
+                logger.info(f"Generating images for clip {clip_index}...")
+
+                async with semaphore:
+                    start_task = asyncio.create_task(
+                        generate_image(
+                            prompt=f"{scene_prompt} (start frame)",
+                            output_dir=output_dir,
+                            generation_id=f"{session_id}_clip_{clip_index:03d}",
+                            scene_number=None,
+                        )
+                    )
+                    end_task = asyncio.create_task(
+                        generate_image(
+                            prompt=f"{scene_prompt} (end frame)",
+                            output_dir=output_dir,
+                            generation_id=f"{session_id}_clip_{clip_index:03d}_end",
+                            scene_number=None,
+                        )
+                    )
+
+                    start_frame_path, end_frame_path = await asyncio.gather(
+                        start_task, end_task
+                    )
+
+                    quality_score = None
+                    quality_metrics = None
+                    try:
+                        from app.services.pipeline.image_quality_scoring import score_image
+
+                        scores = await score_image(start_frame_path, scene.get("visual", ""))
+                        quality_metrics = scores
+                        quality_score = scores.get("overall", None)
+                    except Exception as e:
+                        logger.warning(f"Quality scoring failed for clip {clip_index}: {e}")
+
+                    logger.info(f"✅ Clip {clip_index}/{len(scenes)} generated")
+                    return (
+                        clip_index,
+                        {
+                            "clip_number": clip_index,
+                            "scene": scene,
+                            "start_frame": {
+                                "path": start_frame_path,
+                                "url": f"/api/v1/outputs/interactive/{session_id}/storyboard/{Path(start_frame_path).name}",
+                            },
+                            "end_frame": {
+                                "path": end_frame_path,
+                                "url": f"/api/v1/outputs/interactive/{session_id}/storyboard/{Path(end_frame_path).name}",
+                            },
+                            "duration": scene.get("duration", 4),
+                            "voiceover": scene.get("scene_type", ""),
+                            "quality_score": quality_score,
+                            "quality_metrics": quality_metrics,
+                        },
+                    )
+
             for i, scene in enumerate(scenes):
                 clip_index = i + 1
 
                 # Skip clips not in affected_indices if regenerating specific ones
                 if affected_indices and clip_index not in affected_indices:
-                    # Reuse existing clip if available
-                    existing_clips = session.outputs.get("storyboard", {}).get("clips", [])
-                    existing_clip = next((c for c in existing_clips if c["clip_number"] == clip_index), None)
+                    existing_clip = existing_clip_map.get(clip_index)
                     if existing_clip:
-                        storyboard_clips.append(existing_clip)
+                        clip_results[clip_index] = existing_clip
                         logger.info(f"Reusing existing clip {clip_index}")
                         continue
 
-                try:
-                    # Generate start and end frame images for each clip
-                    scene_prompt = scene.get("visual_prompt", "")
+                clip_tasks.append(asyncio.create_task(process_clip(clip_index, scene)))
 
-                    logger.info(f"Generating images for clip {clip_index}...")
+            for result in await asyncio.gather(*clip_tasks, return_exceptions=True):
+                if isinstance(result, Exception):
+                    logger.error(f"Storyboard clip generation task failed: {result}")
+                    continue
+                if result:
+                    clip_index, clip_payload = result
+                    clip_results[clip_index] = clip_payload
 
-                    # Generate start frame
-                    start_frame_path = await generate_image(
-                        prompt=f"{scene_prompt} (start frame)",
-                        output_dir=output_dir,
-                        generation_id=f"{session_id}_clip_{clip_index:03d}",
-                        scene_number=None
-                    )
-
-                    # Generate end frame
-                    end_frame_path = await generate_image(
-                        prompt=f"{scene_prompt} (end frame)",
-                        output_dir=output_dir,
-                        generation_id=f"{session_id}_clip_{clip_index:03d}_end",
-                        scene_number=None
-                    )
-
-                    # Score clip quality (using start frame)
-                    quality_score = None
-                    try:
-                        from app.services.pipeline.image_quality_scoring import score_image
-                        scores = await score_image(start_frame_path, scene.get("visual", ""))
-                        quality_score = scores.get("overall", None)
-                    except Exception as e:
-                        logger.warning(f"Quality scoring failed for clip {clip_index}: {e}")
-
-                    storyboard_clips.append({
-                        "clip_number": clip_index,
-                        "scene": scene,
-                        "start_frame": {
-                            "path": start_frame_path,
-                            "url": f"/api/v1/outputs/interactive/{session_id}/storyboard/{Path(start_frame_path).name}"
-                        },
-                        "end_frame": {
-                            "path": end_frame_path,
-                            "url": f"/api/v1/outputs/interactive/{session_id}/storyboard/{Path(end_frame_path).name}"
-                        },
-                        "duration": scene.get("duration", 4),
-                        "voiceover": scene.get("scene_type", ""),
-                        "quality_score": quality_score
-                    })
-
-                    logger.info(f"✅ Clip {clip_index}/{len(scenes)} generated")
-
-                except Exception as e:
-                    logger.error(f"Failed to generate storyboard clip {clip_index}: {e}")
-                    # Continue with remaining clips
+            storyboard_clips = [clip_results[idx] for idx in sorted(clip_results.keys()) if clip_results.get(idx)]
 
             if not storyboard_clips:
                 raise RuntimeError("Failed to generate any storyboard clips")
@@ -632,6 +754,9 @@ class InteractivePipelineOrchestrator:
                 "modifications_applied": modifications or {}
             }
             session.stage_data["storyboard_iterations"] = session.stage_data.get("storyboard_iterations", 0) + 1
+            duration_seconds = (datetime.utcnow() - stage_start).total_seconds()
+            session.stage_data["storyboard_last_duration_seconds"] = duration_seconds
+            session.outputs["storyboard"]["duration_seconds"] = duration_seconds
             session.updated_at = datetime.utcnow()
 
             await self._save_session(session)
@@ -663,14 +788,18 @@ class InteractivePipelineOrchestrator:
         if not clips:
             raise RuntimeError("Cannot generate video without storyboard clips")
 
+        stage_start = datetime.utcnow()
         try:
             logger.info(f"🎥 Generating final video for session {session_id} with Veo 3")
             video_output_dir = f"{settings.OUTPUT_BASE_DIR}/interactive/{session_id}/video"
             Path(video_output_dir).mkdir(parents=True, exist_ok=True)
 
-            generated_clips = []
-            for clip in clips:
-                clip_number = clip.get("clip_number")
+            concurrency_limit = max(1, getattr(settings, "VIDEO_CLIP_CONCURRENCY", 2))
+            semaphore = asyncio.Semaphore(concurrency_limit)
+            clip_tasks: List[asyncio.Task] = []
+
+            async def process_video_clip(clip: Dict[str, Any], default_index: int) -> Optional[Dict[str, Any]]:
+                clip_number = clip.get("clip_number") or default_index
                 scene_data = clip.get("scene", {}) or {}
                 visual_prompt = (
                     scene_data.get("visual_prompt")
@@ -680,7 +809,7 @@ class InteractivePipelineOrchestrator:
                 )
 
                 scene_payload = Scene(
-                    scene_number=clip_number or len(generated_clips) + 1,
+                    scene_number=clip_number or 0,
                     scene_type=scene_data.get("scene_type", "Scene"),
                     visual_prompt=visual_prompt,
                     model_prompts=scene_data.get("model_prompts", {}),
@@ -696,33 +825,74 @@ class InteractivePipelineOrchestrator:
                 if start_reference:
                     reference_images.append(start_reference)
 
-                clip_path, model_used = await generate_video_clip(
-                    scene=scene_payload,
-                    output_dir=video_output_dir,
-                    generation_id=f"{session_id}_video",
-                    scene_number=scene_payload.scene_number,
-                    preferred_model="google/veo-3",
-                    reference_image_path=start_reference,
-                    reference_images=reference_images if reference_images else None,
-                    resolution="1080p",
-                    generate_audio=True,
-                )
+                async with semaphore:
+                    clip_path, model_used = await generate_video_clip(
+                        scene=scene_payload,
+                        output_dir=video_output_dir,
+                        generation_id=f"{session_id}_video",
+                        scene_number=scene_payload.scene_number,
+                        preferred_model="google/veo-3",
+                        reference_image_path=start_reference,
+                        reference_images=reference_images if reference_images else None,
+                        resolution="1080p",
+                        generate_audio=True,
+                    )
 
-                generated_clips.append(
-                    {
-                        "clip_number": scene_payload.scene_number,
-                        "path": clip_path,
-                        "model": model_used,
-                    }
+                return {
+                    "clip_number": scene_payload.scene_number,
+                    "path": clip_path,
+                    "url": f"/api/v1/outputs/interactive/{session_id}/video/{Path(clip_path).name}",
+                    "model": model_used,
+                }
+
+            for clip in clips:
+                default_index = clip.get("clip_number") or (len(clip_tasks) + 1)
+                clip_tasks.append(asyncio.create_task(process_video_clip(clip, default_index)))
+
+            clip_results: List[Dict[str, Any]] = []
+            for result in await asyncio.gather(*clip_tasks, return_exceptions=True):
+                if isinstance(result, Exception):
+                    logger.error(f"Video clip generation failed: {result}")
+                    continue
+                if result:
+                    clip_results.append(result)
+
+            if not clip_results:
+                raise RuntimeError("Video generation produced no clips")
+
+            clip_results.sort(key=lambda c: c.get("clip_number") or 0)
+
+            final_video_path = None
+            final_video_url = None
+            try:
+                stitched_filename = f"{session_id}_final.mp4"
+                stitched_path = Path(video_output_dir) / stitched_filename
+                stitched_result = stitch_video_clips(
+                    clip_paths=[clip["path"] for clip in clip_results],
+                    output_path=str(stitched_path),
                 )
+                final_video_path = stitched_result
+                final_video_url = f"/api/v1/outputs/interactive/{session_id}/video/{Path(stitched_result).name}"
+            except Exception as stitch_err:
+                logger.error(f"Video stitching failed for session {session_id}: {stitch_err}")
+
+            duration_seconds = (datetime.utcnow() - stage_start).total_seconds()
 
             session.outputs["video"] = {
-                "clips": generated_clips,
+                "clips": clip_results,
                 "model": "google/veo-3",
                 "status": "completed",
+                "duration_seconds": duration_seconds,
             }
+            if final_video_path:
+                session.outputs["video"]["final_video"] = {
+                    "path": final_video_path,
+                    "url": final_video_url,
+                }
+
             session.status = "complete"
             session.current_stage = "Complete"
+            session.stage_data["video_last_duration_seconds"] = duration_seconds
             session.updated_at = datetime.utcnow()
             await self._save_session(session)
 

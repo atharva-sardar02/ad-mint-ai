@@ -12,10 +12,12 @@
  * - Loading states between stages
  */
 
+import axios from "axios";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { StoryReview } from "./StoryReview";
 import { ImageReview } from "./ImageReview";
+import { VideoGallery } from "./VideoGallery";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { usePipelineStore } from "../../stores/pipelineStore";
 import { startPipeline, approveStage, regenerate, getFullSession } from "../../services/interactive-api";
@@ -92,20 +94,6 @@ export function InteractivePipeline({
     },
   });
 
-  const refreshSession = useCallback(
-    async (sessionIdOverride?: string) => {
-      const targetId = sessionIdOverride || session?.session_id;
-      if (!targetId) return;
-      try {
-        const latestSession = await getFullSession(targetId);
-        setSession(latestSession);
-      } catch (err) {
-        console.error("Failed to refresh session:", err);
-      }
-    },
-    [session?.session_id, setSession]
-  );
-
   const applyLocalStageTransition = useCallback(
     (nextStage: SessionStatus) => {
       if (!session) return;
@@ -125,18 +113,60 @@ export function InteractivePipeline({
   const [selectedReferenceIndices, setSelectedReferenceIndices] = useState<number[]>([]);
   const [isApprovingAction, setIsApprovingAction] = useState(false);
   const [isRegeneratingAction, setIsRegeneratingAction] = useState(false);
+  const [syncedSessionId, setSyncedSessionId] = useState<string | null>(null);
+
+  const handleUnauthorized = useCallback(() => {
+    setError("Your login expired. Please sign in again to continue the pipeline.");
+    clearSession();
+    setPendingStage(null);
+  }, [clearSession]);
+
+  const refreshSession = useCallback(
+    async (sessionIdOverride?: string) => {
+      const targetId = sessionIdOverride || session?.session_id;
+      if (!targetId) return;
+      try {
+        const latestSession = await getFullSession(targetId);
+        setSession(latestSession);
+      } catch (err) {
+        if (axios.isAxiosError(err)) {
+          if (err.response?.status === 404) {
+            console.warn("Session not found on server, clearing local state.");
+            clearSession();
+            setPendingStage(null);
+          } else if (err.response?.status === 401) {
+            handleUnauthorized();
+          } else {
+            console.error("Failed to refresh session:", err);
+          }
+        } else {
+          console.error("Failed to refresh session:", err);
+        }
+      }
+    },
+    [session?.session_id, setSession, clearSession, handleUnauthorized]
+  );
 
   const storyOutput = session?.outputs?.story || null;
   const referenceImageOutput = session?.outputs?.reference_image || null;
   const storyboardOutput = session?.outputs?.storyboard || null;
+  const videoOutput = session?.outputs?.video;
+  const storyDurationSeconds = storyOutput?.duration_seconds;
+  const referenceDurationSeconds = referenceImageOutput?.duration_seconds;
+  const storyboardDurationSeconds = storyboardOutput?.duration_seconds;
+  const videoDurationSeconds = videoOutput?.duration_seconds;
   const conversationHistory = session?.conversation_history || [];
   useEffect(() => {
     if (!session) {
       setViewStage(null);
       return;
     }
+    if (session.status === "complete" && videoOutput) {
+      setViewStage("video");
+      return;
+    }
     setViewStage(session.status);
-  }, [session?.status]);
+  }, [session?.status, videoOutput]);
 
   useEffect(() => {
     if (!pendingStage || !session) return;
@@ -159,6 +189,10 @@ export function InteractivePipeline({
             break;
           }
         } catch (err) {
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
+            handleUnauthorized();
+            break;
+          }
           console.error("Failed to poll session:", err);
           break;
         }
@@ -170,7 +204,7 @@ export function InteractivePipeline({
     return () => {
       cancelled = true;
     };
-  }, [pendingStage, session, setSession]);
+  }, [pendingStage, session, setSession, handleUnauthorized]);
 
   useEffect(() => {
     if (session?.status !== "reference_image") {
@@ -208,10 +242,14 @@ export function InteractivePipeline({
           setSession(restoredSession);
           console.log("Session restored from server:", sessionIdToUse);
         } catch (err) {
-          console.error("Failed to restore session:", err);
-          setError(
-            err instanceof Error ? err.message : "Failed to restore session"
-          );
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
+            handleUnauthorized();
+          } else {
+            console.error("Failed to restore session:", err);
+            setError(
+              err instanceof Error ? err.message : "Failed to restore session"
+            );
+          }
         } finally {
           setIsInitializing(false);
         }
@@ -242,10 +280,14 @@ export function InteractivePipeline({
           setSession(newSession);
           console.log("Pipeline started:", newSession.session_id);
         } catch (err) {
-          console.error("Failed to start pipeline:", err);
-          setError(
-            err instanceof Error ? err.message : "Failed to start pipeline"
-          );
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
+            handleUnauthorized();
+          } else {
+            console.error("Failed to start pipeline:", err);
+            setError(
+              err instanceof Error ? err.message : "Failed to start pipeline"
+            );
+          }
         } finally {
           setIsInitializing(false);
         }
@@ -253,7 +295,24 @@ export function InteractivePipeline({
     };
 
     initPipeline();
-  }, [initialPrompt, sessionIdToUse, session, isInitializing, hasStartedWithPrompt, clearSession, setSession, targetDuration]);
+  }, [initialPrompt, sessionIdToUse, session, isInitializing, hasStartedWithPrompt, clearSession, setSession, targetDuration, handleUnauthorized]);
+
+  useEffect(() => {
+    if (!session || initialPrompt) return;
+    if (syncedSessionId === session.session_id) return;
+
+    let cancelled = false;
+    (async () => {
+      await refreshSession(session.session_id);
+      if (!cancelled) {
+        setSyncedSessionId(session.session_id);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.session_id, initialPrompt, refreshSession, syncedSessionId]);
 
   // Handle approve
   const handleApprove = async () => {
@@ -285,8 +344,12 @@ export function InteractivePipeline({
       // Refresh session in case WebSocket message was missed
       await refreshSession(session.session_id);
     } catch (err) {
-      console.error("Failed to approve stage:", err);
-      setError(err instanceof Error ? err.message : "Failed to approve stage");
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        console.error("Failed to approve stage:", err);
+        setError(err instanceof Error ? err.message : "Failed to approve stage");
+      }
     } finally {
       setIsApprovingAction(false);
     }
@@ -311,8 +374,12 @@ export function InteractivePipeline({
       // Refresh session to pull latest outputs if WebSocket update is missed
       await refreshSession(session.session_id);
     } catch (err) {
-      console.error("Failed to regenerate:", err);
-      setError(err instanceof Error ? err.message : "Failed to regenerate");
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        handleUnauthorized();
+      } else {
+        console.error("Failed to regenerate:", err);
+        setError(err instanceof Error ? err.message : "Failed to regenerate");
+      }
     } finally {
       setIsRegeneratingAction(false);
     }
@@ -551,6 +618,7 @@ export function InteractivePipeline({
               onApprove={handleApprove}
               onRegenerate={handleRegenerate}
               disabled={stageActionsDisabled}
+              durationSeconds={storyDurationSeconds}
             />
           )}
           {displayStage === "story" && !storyOutput && (
@@ -573,11 +641,14 @@ export function InteractivePipeline({
               sessionId={session.session_id}
               onSelectionChange={setSelectedReferenceIndices}
               initialSelection={selectedReferenceIndices}
+              durationSeconds={referenceDurationSeconds}
             />
           ) : null}
           {displayStage === "reference_image" && !referenceImageOutput?.images?.length && (
             <div className="text-center text-gray-500 py-12 bg-white rounded-lg border">
-              Waiting for story approval before generating reference images.
+              {session?.status === "reference_image"
+                ? "Generating reference images..."
+                : "Waiting for story approval before generating reference images."}
             </div>
           )}
 
@@ -592,42 +663,20 @@ export function InteractivePipeline({
               onApprove={handleApprove}
               onRegenerate={handleRegenerate}
               disabled={stageActionsDisabled}
+              durationSeconds={storyboardDurationSeconds}
             />
           ) : null}
           {displayStage === "storyboard" && !storyboardOutput?.clips?.length && (
             <div className="text-center text-gray-500 py-12 bg-white rounded-lg border">
-              Waiting for reference images to be approved.
+              {session?.status === "storyboard"
+                ? "Generating storyboard clips..."
+                : "Waiting for reference images to be approved."}
             </div>
           )}
 
-          {/* Video stage placeholder */}
-          {displayStage === "video" && session.outputs?.video?.clips && (
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="text-xl font-semibold mb-4">Generated Clips (Veo 3)</h2>
-              <ul className="space-y-2 text-sm text-gray-700">
-                {session.outputs.video.clips.map((clip: any) => (
-                  <li key={clip.clip_number} className="flex items-center justify-between">
-                    <span>Clip {clip.clip_number}</span>
-                    <a
-                      href={clip.path}
-                      className="text-blue-600 hover:underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Download
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {displayStage === "video" && !session.outputs?.video?.clips && (
-            <div className="text-center text-gray-600 py-12 bg-white rounded-lg border">
-              <p className="text-lg font-semibold mb-2">Video Generation</p>
-              <p className="text-gray-500">
-                Video generation kicks off after storyboard approval. Hang tight!
-              </p>
-            </div>
+          {/* Video stage */}
+          {displayStage === "video" && (
+            <VideoGallery video={videoOutput} durationSeconds={videoDurationSeconds} />
           )}
 
           {/* Complete state */}
@@ -643,6 +692,11 @@ export function InteractivePipeline({
                 >
                   View Video
                 </button>
+              )}
+              {videoOutput && (
+                <div className="mt-8">
+                  <VideoGallery video={videoOutput} durationSeconds={videoDurationSeconds} />
+                </div>
               )}
             </div>
           )}

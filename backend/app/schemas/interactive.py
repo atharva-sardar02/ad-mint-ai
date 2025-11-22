@@ -462,6 +462,62 @@ class PipelineSessionState(BaseModel):
 
 
 # ============================================================================
+# Manual Reference Image Upload Schemas
+# ============================================================================
+
+
+class ReferenceImageAsset(BaseModel):
+    """Metadata for a reference image stored in the pipeline outputs."""
+
+    index: int = Field(..., description="Display order of the image")
+    path: str = Field(..., description="Filesystem path to the image")
+    url: str = Field(..., description="Public API URL to download the image")
+    prompt: Optional[str] = Field(None, description="Prompt used to generate or describe the image")
+    quality_score: Optional[float] = Field(None, description="Optional automated quality score")
+    source: Optional[Literal["auto", "manual"]] = Field(
+        None, description="Whether the image was generated automatically or uploaded by the user"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "index": 1,
+                "path": "/outputs/interactive/sess_123/reference_images/manual_ref_1.png",
+                "url": "/api/v1/outputs/interactive/sess_123/reference_images/manual_ref_1.png",
+                "prompt": "User supplied hero shot",
+                "quality_score": None,
+                "source": "manual"
+            }
+        }
+
+
+class ManualReferenceUploadResponse(BaseModel):
+    """Response after uploading manual reference images."""
+
+    session_id: str
+    images: List[ReferenceImageAsset]
+    message: str = Field(..., description="Status message for the upload")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "sess_abc123",
+                "images": [
+                    {
+                        "index": 1,
+                        "path": "/outputs/interactive/sess_abc123/reference_images/manual_ref_1.png",
+                        "url": "/api/v1/outputs/interactive/sess_abc123/reference_images/manual_ref_1.png",
+                        "prompt": "Brand-approved hero image",
+                        "quality_score": None,
+                        "source": "manual"
+                    }
+                ],
+                "message": "Uploaded 1 manual reference image. The pipeline will skip automatic generation."
+            }
+        }
+
+
+# ============================================================================
 # Image Editing Schemas (Story 4: Advanced Image Editing)
 # ============================================================================
 

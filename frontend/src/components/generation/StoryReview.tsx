@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { ChatInterface } from "./ChatInterface";
 import type { ChatMessage, StoryOutput } from "../../types/pipeline";
+import { formatDuration } from "../../utils/time";
 
 export interface StoryReviewProps {
   /** Generated story output */
@@ -31,6 +32,8 @@ export interface StoryReviewProps {
   onRegenerate: () => void;
   /** Disabled state */
   disabled?: boolean;
+  /** Stage duration in seconds */
+  durationSeconds?: number;
 }
 
 export function StoryReview({
@@ -41,6 +44,7 @@ export function StoryReview({
   onApprove,
   onRegenerate,
   disabled = false,
+  durationSeconds,
 }: StoryReviewProps) {
   const [showFullStory, setShowFullStory] = useState(true);
 
@@ -79,6 +83,11 @@ export function StoryReview({
             <p className="text-sm text-gray-600 mt-1">
               Review the generated narrative before moving on
             </p>
+            {durationSeconds && (
+              <p className="text-xs text-gray-500 mt-1">
+                Stage completed in {formatDuration(durationSeconds)}
+              </p>
+            )}
           </div>
           <button
             onClick={() => setShowFullStory(!showFullStory)}

@@ -239,10 +239,13 @@ export class WebSocketService {
     try {
       const message: WSServerMessage = JSON.parse(event.data);
 
-      // Handle pong for ping-pong
+      // Heartbeat/pong handling keeps connection healthy
       if (message.type === "pong") {
         this.clearPongTimeout();
         return;
+      }
+      if (message.type === "heartbeat") {
+        this.clearPongTimeout();
       }
 
       // Notify all message handlers

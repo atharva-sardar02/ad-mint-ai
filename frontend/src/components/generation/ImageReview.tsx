@@ -18,6 +18,7 @@ import { ChatInterface } from "./ChatInterface";
 import ImageEditor from "./ImageEditor";
 import type { ChatMessage } from "../../types/pipeline";
 import { getAssetUrl } from "../../utils/url";
+import { formatDuration } from "../../utils/time";
 
 export interface ImageData {
   index: number;
@@ -25,6 +26,7 @@ export interface ImageData {
   url: string;
   prompt?: string;
   quality_score?: number | null;
+  quality_metrics?: Record<string, number | null>;
   is_edited?: boolean; // Story 4: Track if image has been edited
   edit_version?: number; // Story 4: Current edit version
 }
@@ -45,6 +47,7 @@ export interface StoryboardClip {
   voiceover?: string;
   scene?: any;
   quality_score?: number | null;
+  quality_metrics?: Record<string, number | null>;
 }
 
 export interface ImageReviewProps {
@@ -73,6 +76,8 @@ export interface ImageReviewProps {
   onSelectionChange?: (selectedIndices: number[]) => void;
   /** Initial selection to seed UI */
   initialSelection?: number[];
+  /** Stage duration in seconds */
+  durationSeconds?: number;
 }
 
 export function ImageReview({
@@ -89,6 +94,7 @@ export function ImageReview({
   onImageEdited,
   onSelectionChange,
   initialSelection,
+  durationSeconds,
 }: ImageReviewProps) {
   const getDefaultSelection = () => {
     if (initialSelection && initialSelection.length > 0) {
@@ -131,8 +137,19 @@ export function ImageReview({
 
   useEffect(() => {
     const defaults = getDefaultSelection();
+
+    // Compare with current selection to avoid infinite update loops
+    const isDifferent =
+      defaults.size !== selectedIndices.size ||
+      Array.from(defaults).some((value) => !selectedIndices.has(value));
+
+    if (!isDifferent) {
+      return;
+    }
+
     setSelectedIndices(defaults);
     onSelectionChange?.(Array.from(defaults));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images, initialSelection, stage]);
 
   // Handle enlarge (with Shift+Click or dedicated button)
@@ -175,6 +192,30 @@ export function ImageReview({
   // Story 4: Handle cancel editing
   const handleCancelEdit = () => {
     setEditingImage(null);
+  };
+
+  const renderQualityDetails = (metrics?: Record<string, number | null>) => {
+    if (!metrics) return null;
+    const entries = Object.entries(metrics).filter(
+      ([, value]) => value !== undefined && value !== null
+    );
+    if (!entries.length) return null;
+
+    return (
+      <div className="mt-3 bg-white/90 rounded border border-gray-100 p-2 text-xs text-gray-600">
+        <p className="font-semibold text-gray-800 mb-1">Quality Metrics</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+          {entries.map(([key, value]) => (
+            <div key={key} className="flex items-center justify-between">
+              <dt className="capitalize">{key.replace(/_/g, " ")}</dt>
+              <dd className="font-semibold">
+                {typeof value === "number" ? value.toFixed(1) : value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    );
   };
 
   // Render quality score badge
@@ -262,6 +303,8 @@ export function ImageReview({
         <div className="absolute bottom-2 right-2 px-2 py-1 bg-gray-900 bg-opacity-75 text-white text-xs rounded">
           Image {image.index}
         </div>
+
+        {renderQualityDetails(image.quality_metrics)}
       </div>
     );
   };
@@ -318,6 +361,7 @@ export function ImageReview({
               {clip.voiceover}
             </p>
           )}
+          {renderQualityDetails(clip.quality_metrics)}
         </div>
 
         {/* Selection indicator */}
@@ -353,6 +397,11 @@ export function ImageReview({
               ? `${selectedIndices.size} selected • Click to select/deselect images for targeted feedback`
               : "Click images to select for targeted feedback, or provide general feedback for all"}
           </p>
+          {durationSeconds && (
+            <p className="text-xs text-gray-500 mt-1">
+              Stage completed in {formatDuration(durationSeconds)}
+            </p>
+          )}
           {stage === "reference_image" && (
             <p className="text-xs text-gray-500 mt-1">
               {selectedIndices.size > 0

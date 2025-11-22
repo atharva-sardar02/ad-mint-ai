@@ -154,6 +154,75 @@ class TestReferenceImageStage:
             assert saved_session.error_count > 0
 
 
+class TestManualReferenceBypass:
+    """Tests for manual reference image workflows."""
+
+    @pytest.fixture
+    def orchestrator(self):
+        return InteractivePipelineOrchestrator(session_ttl_hours=1)
+
+    @pytest.fixture
+    def story_session(self):
+        return PipelineSessionState(
+            session_id="sess_manual",
+            user_id="user_123",
+            status="story",
+            current_stage="Story Generation",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+            prompt="Brand prompt",
+            target_duration=15,
+            mode="interactive",
+            title=None,
+            outputs={"story": {"narrative": "Story text"}},
+            conversation_history=[],
+            stage_data={},
+            error=None,
+            error_count=0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_register_manual_reference_images_persists_data(self, orchestrator, story_session):
+        images = [
+            {"index": 1, "path": "/tmp/manual.png", "url": "/manual.png", "prompt": "Manual prompt"},
+        ]
+
+        with patch.object(orchestrator, "get_session", AsyncMock(return_value=story_session)), \
+             patch.object(orchestrator, "_save_session", new_callable=AsyncMock) as mock_save:
+
+            await orchestrator.register_manual_reference_images("sess_manual", images)
+
+        assert "manual_reference_images" in story_session.stage_data
+        assert story_session.stage_data["manual_reference_images"][0]["path"] == "/tmp/manual.png"
+        assert story_session.stage_data["reference_image_selected_indices"] == [1]
+        mock_save.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_story_approval_skips_reference_stage_with_manual_images(
+        self,
+        orchestrator,
+        story_session,
+    ):
+        manual_images = [
+            {"index": 1, "path": "/tmp/manual.png", "url": "/manual.png", "prompt": "Manual prompt"},
+        ]
+        story_session.stage_data["manual_reference_images"] = manual_images
+
+        with patch.object(orchestrator, "get_session", AsyncMock(return_value=story_session)), \
+             patch.object(orchestrator, "_save_session", new_callable=AsyncMock), \
+             patch.object(orchestrator, "_notify_stage_complete", new_callable=AsyncMock) as mock_notify, \
+             patch.object(orchestrator, "_generate_storyboard_stage", new_callable=AsyncMock) as mock_storyboard:
+
+            result = await orchestrator.approve_stage("sess_manual", "story")
+
+        assert result["next_stage"] == "storyboard"
+        mock_storyboard.assert_called_once_with("sess_manual")
+        mock_notify.assert_called_once()
+        assert story_session.status == "storyboard"
+        assert story_session.outputs["reference_image"]["manual_upload"] is True
+
+
 class TestStoryboardStage:
     """Test suite for storyboard generation stage."""
 
@@ -207,7 +276,7 @@ class TestStoryboardStage:
         with patch.object(orchestrator, 'get_session', return_value=mock_session_with_images), \
              patch.object(orchestrator, '_save_session', new_callable=AsyncMock) as mock_save, \
              patch.object(orchestrator, '_notify_stage_complete', new_callable=AsyncMock), \
-             patch('app.services.pipeline.storyboard_service.generate_storyboard', new_callable=AsyncMock) as mock_gen_sb, \
+             patch('app.services.pipeline.storyboard_generator.generate_storyboard', new_callable=AsyncMock) as mock_gen_sb, \
              patch('app.services.pipeline.image_generation.generate_image', new_callable=AsyncMock) as mock_gen_image, \
              patch('app.core.config.settings.OUTPUT_BASE_DIR', '/tmp/test_output'):
 
@@ -260,7 +329,7 @@ class TestStoryboardStage:
         with patch.object(orchestrator, 'get_session', return_value=mock_session_with_images), \
              patch.object(orchestrator, '_save_session', new_callable=AsyncMock) as mock_save, \
              patch.object(orchestrator, '_notify_stage_complete', new_callable=AsyncMock), \
-             patch('app.services.pipeline.storyboard_service.generate_storyboard', new_callable=AsyncMock) as mock_gen_sb, \
+             patch('app.services.pipeline.storyboard_generator.generate_storyboard', new_callable=AsyncMock) as mock_gen_sb, \
              patch('app.services.pipeline.image_generation.generate_image', new_callable=AsyncMock) as mock_gen_image, \
              patch('app.core.config.settings.OUTPUT_BASE_DIR', '/tmp/test_output'):
 
@@ -301,7 +370,7 @@ class TestStoryboardStage:
         with patch.object(orchestrator, 'get_session', return_value=mock_session_with_images), \
              patch.object(orchestrator, '_save_session', new_callable=AsyncMock), \
              patch.object(orchestrator, '_notify_stage_complete', new_callable=AsyncMock), \
-             patch('app.services.pipeline.storyboard_service.generate_storyboard', new_callable=AsyncMock) as mock_gen_sb, \
+             patch('app.services.pipeline.storyboard_generator.generate_storyboard', new_callable=AsyncMock) as mock_gen_sb, \
              patch('app.services.pipeline.image_generation.generate_image', new_callable=AsyncMock) as mock_gen_image, \
              patch('app.core.config.settings.OUTPUT_BASE_DIR', '/tmp/test_output'):
 
@@ -366,6 +435,7 @@ class TestSessionManagement:
 
             # Regenerate with feedback
             mock_save.reset_mock()
+            mock_gen_image.side_effect = ["/img1.png", "/img2.png", "/img3.png"]
             await orchestrator._generate_reference_image_stage("test_session_123")
             saved_session = mock_save.call_args[0][0]
             assert saved_session.stage_data.get("reference_image_iterations") == 2
