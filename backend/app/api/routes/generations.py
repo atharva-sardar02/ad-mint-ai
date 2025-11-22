@@ -99,6 +99,29 @@ async def process_generation(
     top_note: Optional[str] = None,
     heart_note: Optional[str] = None,
     base_note: Optional[str] = None,
+    use_advanced_image_generation: bool = False,
+    advanced_image_quality_threshold: float = 30.0,
+    advanced_image_num_variations: int = 4,
+    advanced_image_max_enhancement_iterations: int = 4,
+):
+    """
+    Background task to process video generation.
+    This runs asynchronously after the API returns a response.
+    """
+    logger.info(f"[{generation_id}] ========== STARTING GENERATION TASK ==========")
+    logger.info(f"[{generation_id}] Parameters received:")
+    logger.info(f"[{generation_id}]   - prompt: {prompt[:100]}...")
+    logger.info(f"[{generation_id}]   - preferred_model: {preferred_model}")
+    logger.info(f"[{generation_id}]   - target_duration: {target_duration}")
+    logger.info(f"[{generation_id}]   - use_llm: {use_llm}")
+    logger.info(f"[{generation_id}]   - image_path: {image_path}")
+    logger.info(f"[{generation_id}]   - refinement_instructions: {refinement_instructions}")
+    logger.info(f"[{generation_id}]   - brand_name: {brand_name}")
+    logger.info(f"[{generation_id}]   - product_image_id: {product_image_id}")
+    logger.info(f"[{generation_id}]   - user_id: {user_id}")
+    logger.info(f"[{generation_id}]   - top_note: {top_note}")
+    logger.info(f"[{generation_id}]   - heart_note: {heart_note}")
+    logger.info(f"[{generation_id}]   - base_note: {base_note}")
     
     # Track generation start time
     generation_start_time = time.time()
@@ -167,6 +190,11 @@ async def process_generation(
                         pipeline_type = "kling"
                         logger.info(f"[{generation_id}] Detected KLING model '{preferred_model}', using V2 storyboard prompt")
                 
+                logger.info(f"[{generation_id}] Calling plan_storyboard with:")
+                logger.info(f"[{generation_id}]   - user_prompt: {prompt[:100]}...")
+                logger.info(f"[{generation_id}]   - reference_image_path: {image_path}")
+                logger.info(f"[{generation_id}]   - target_duration: {target_duration_seconds}")
+                logger.info(f"[{generation_id}]   - pipeline_type: {pipeline_type}")
                 try:
                     # LLM will decide number of scenes based on target_duration
                     logger.info(f"[{generation_id}] ⏳ Awaiting plan_storyboard()...")
@@ -175,6 +203,24 @@ async def process_generation(
                         reference_image_path=image_path,
                         target_duration=target_duration_seconds,
                         pipeline_type=pipeline_type,
+                    )
+                    logger.info(f"[{generation_id}] ✅ plan_storyboard() completed successfully")
+                    logger.info(f"[{generation_id}] Storyboard plan keys: {list(storyboard_plan.keys()) if storyboard_plan else 'None'}")
+                    
+                    # Log storyboard plan summary for this generation
+                    if storyboard_plan:
+                        scenes = storyboard_plan.get("scenes", [])
+                        consistency_markers = storyboard_plan.get("consistency_markers", {})
+                        logger.info(f"[{generation_id}] 📋 Storyboard Plan Summary:")
+                        logger.info(f"[{generation_id}]   - Number of scenes: {len(scenes)}")
+                        logger.info(f"[{generation_id}]   - Consistency markers: {list(consistency_markers.keys())}")
+                        for idx, scene in enumerate(scenes, 1):
+                            scene_num = scene.get("scene_number", idx)
+                            duration = scene.get("duration_seconds", 0)
+                            aida = scene.get("aida_stage", "N/A")
+                            detailed_prompt = scene.get("detailed_prompt", "")[:100] + "..." if len(scene.get("detailed_prompt", "")) > 100 else scene.get("detailed_prompt", "")
+                            logger.info(f"[{generation_id}]   - Scene {scene_num} ({aida}): {duration}s - {detailed_prompt}")
+                    
                     # Extract consistency markers and detailed prompts
                     consistency_markers = storyboard_plan.get("consistency_markers", {})
                     scenes = storyboard_plan.get("scenes", [])
@@ -927,6 +973,713 @@ async def process_generation(
                             brand_style_json=video_enhancement_brand_style,
                             product_style_json=video_enhancement_product_style,
                             scent_profile=video_enhancement_scent_profile,
+                        )
+                        logger.info(f"[{generation_id}] Clip {scene_number} generated successfully: {clip_path} (model: {model_used})")
+                        
+                        # Store the enhanced video generation prompt in storyboard_plan
+                        # Always reload from database to get latest version and avoid race conditions
+                        try:
+                            from app.services.pipeline.video_generation import _enhance_prompt_with_markers
+                            import json
+                            import copy
+                            
+                            # Reload generation and storyboard_plan from database
+                            db.refresh(generation)
+                            
+                            # Get storyboard_plan from database (always use fresh copy)
+                            current_storyboard_plan = None
+                            if generation.coherence_settings and "storyboard_plan" in generation.coherence_settings:
+                                current_storyboard_plan = generation.coherence_settings["storyboard_plan"]
+                                # Handle JSON string case
+                                if isinstance(current_storyboard_plan, str):
+                                    current_storyboard_plan = json.loads(current_storyboard_plan)
+                            
+                            # Only proceed if we have a valid storyboard_plan
+                            if current_storyboard_plan and isinstance(current_storyboard_plan, dict):
+                                scenes_list = current_storyboard_plan.get("scenes", [])
+                                scene_idx = scene_number - 1
+                                
+                                if 0 <= scene_idx < len(scenes_list):
+                                    # Deep copy to avoid modifying the database object directly
+                                    updated_storyboard_plan = copy.deepcopy(current_storyboard_plan)
+                                    scene_data = updated_storyboard_plan["scenes"][scene_idx]
+                                    
+                                    base_video_prompt = scene.visual_prompt
+                                    
+                                    # Enhance prompt with consistency markers
+                                    enhanced_video_prompt = _enhance_prompt_with_markers(
+                                        base_prompt=base_video_prompt,
+                                        consistency_markers=consistency_markers
+                                    )
+                                    
+                                    # Add subject presence information to video prompt if available
+                                    scene_subject_presence_info = scene_data.get("subject_presence", "full")
+                                    scene_subject_timing_info = scene_data.get("subject_appearance_timing", "")
+                                    if scene_subject_presence_info and scene_subject_presence_info != "full":
+                                        # Add explicit instruction about subject presence
+                                        if scene_subject_presence_info == "none":
+                                            enhanced_video_prompt += " | IMPORTANT: This scene does NOT include the main subject. Focus on environment, atmosphere, and supporting elements."
+                                        elif scene_subject_presence_info == "partial":
+                                            enhanced_video_prompt += f" | IMPORTANT: Subject appears only partially in this scene. {scene_subject_timing_info}"
+                                        elif scene_subject_presence_info in ("appears_at_start", "appears_at_end", "appears_mid_scene", "disappears_mid_scene"):
+                                            enhanced_video_prompt += f" | IMPORTANT: Subject {scene_subject_presence_info.replace('_', ' ')}. {scene_subject_timing_info}"
+                                    
+                                    scene_data["video_generation_prompt"] = enhanced_video_prompt
+                                    scene_data["video_generation_model"] = model_used
+                                    scene_data["video_generation_base_prompt"] = base_video_prompt
+                                    
+                                    # Update storyboard_plan in database
+                                    generation.coherence_settings["storyboard_plan"] = updated_storyboard_plan
+                                    db.commit()
+                                    logger.info(f"[{generation_id}] ✅ Updated storyboard_plan with video generation prompt for scene {scene_number} (model: {model_used})")
+                                else:
+                                    logger.warning(f"[{generation_id}] Scene index {scene_idx} out of range for storyboard_plan scenes (total: {len(scenes_list)}, scene_number: {scene_number})")
+                            else:
+                                logger.debug(f"[{generation_id}] No storyboard_plan in database for scene {scene_number} - skipping prompt storage (this is normal if use_llm was False)")
+                        except Exception as e:
+                            # Don't fail the entire generation if prompt storage fails
+                            logger.warning(f"[{generation_id}] Failed to store video generation prompt for scene {scene_number}: {e}. Continuing without storing prompt.")
+                        
+                        # Quality control evaluation (if enabled)
+                        quality_passed = True
+                        quality_details = {}
+                        try:
+                            quality_passed, quality_details = await evaluate_and_store_quality(
+                                db=db,
+                                generation_id=generation_id,
+                                scene_number=scene_number,
+                                clip_path=clip_path,
+                                prompt_text=scene.visual_prompt,
+                                coherence_settings=generation.coherence_settings
+                            )
+                            
+                            # Log performance metrics
+                            perf_info = quality_details.get("performance", {})
+                            if perf_info:
+                                eval_time = perf_info.get("evaluation_time_seconds", 0)
+                                within_target = perf_info.get("within_target", True)
+                                if not within_target:
+                                    logger.warning(
+                                        f"[{generation_id}] Quality evaluation exceeded target time: "
+                                        f"{eval_time:.2f}s > 30s for clip {scene_number}"
+                                    )
+                            
+                            if not quality_passed and not quality_details.get("skipped", False):
+                                # Check if automatic regeneration is enabled in coherence settings
+                                coherence_settings_dict = generation.coherence_settings or {}
+                                automatic_regeneration_enabled = coherence_settings_dict.get("automatic_regeneration", False)
+                                
+                                # Log quality issue (metrics are stored, available via API)
+                                logger.warning(
+                                    f"[{generation_id}] Clip {scene_number} quality below threshold "
+                                    f"(overall: {quality_details.get('scores', {}).get('overall_quality', 0):.2f}). "
+                                    f"Quality metrics stored. Automatic regeneration: {'enabled' if automatic_regeneration_enabled else 'disabled'}."
+                                )
+                                
+                                # Only trigger regeneration if explicitly enabled in coherence settings
+                                if automatic_regeneration_enabled:
+                                    logger.info(
+                                        f"[{generation_id}] Automatic regeneration enabled. Triggering regeneration for clip {scene_number}."
+                                    )
+                                    
+                                    # Update progress to show regeneration
+                                    update_generation_progress(
+                                        db=db,
+                                        generation_id=generation_id,
+                                        progress=progress_start,
+                                        current_step=f"Regenerating clip {scene_number} due to quality issues"
+                                    )
+                                    
+                                    # Attempt regeneration
+                                    try:
+                                        regenerated_clip_path, regen_success, regen_details = await regenerate_clip(
+                                            db=db,
+                                            generation_id=generation_id,
+                                            scene_number=scene_number,
+                                            scene=scene,
+                                            output_dir=temp_output_dir,
+                                            original_clip_path=clip_path,
+                                            prompt_text=scene.visual_prompt,
+                                            coherence_settings=generation.coherence_settings,
+                                            cancellation_check=check_cancellation,
+                                            seed=seed,
+                                            preferred_model=preferred_model,
+                                            max_attempts=3
+                                        )
+                                        
+                                        if regenerated_clip_path and regen_success:
+                                            # Use regenerated clip
+                                            clip_path = regenerated_clip_path
+                                            logger.info(
+                                                f"[{generation_id}] Regeneration successful for clip {scene_number}. "
+                                                f"New quality: {regen_details.get('overall_quality', 0):.2f}"
+                                            )
+                                        elif regenerated_clip_path:
+                                            # Regeneration completed but quality still below threshold
+                                            clip_path = regenerated_clip_path
+                                            logger.warning(
+                                                f"[{generation_id}] Regeneration completed for clip {scene_number} "
+                                                f"but quality still below threshold. Using best available clip."
+                                            )
+                                        else:
+                                            # Regeneration failed - use original clip
+                                            logger.error(
+                                                f"[{generation_id}] Regeneration failed for clip {scene_number}. "
+                                                f"Using original clip despite quality issues."
+                                            )
+                                            
+                                    except Exception as regen_error:
+                                        logger.error(
+                                            f"[{generation_id}] Error during regeneration for clip {scene_number}: {regen_error}",
+                                            exc_info=True
+                                        )
+                                        # Continue with original clip on regeneration failure
+                                else:
+                                    # Automatic regeneration disabled - continue with original clip
+                                    # Quality metrics are already stored and available via API
+                                    logger.info(
+                                        f"[{generation_id}] Continuing with clip {scene_number} despite quality below threshold. "
+                                        f"Quality metrics available for review via API."
+                                    )
+                        except Exception as e:
+                            logger.error(f"[{generation_id}] Quality evaluation failed for clip {scene_number}: {e}", exc_info=True)
+                            # Rollback the session if quality evaluation failed (e.g., missing table)
+                            # This ensures subsequent database operations can proceed
+                            try:
+                                db.rollback()
+                            except Exception as rollback_error:
+                                logger.warning(f"[{generation_id}] Error rolling back session after quality evaluation failure: {rollback_error}")
+                            # Graceful degradation: continue even if quality assessment fails
+                            quality_passed = True
+                        
+                        # Cache the clip if caching is enabled
+                        if use_cache:
+                            cache_clip(prompt, scene_index, clip_path)
+                        
+                        # Calculate cost using the actual model that was used
+                        model_cost_per_sec = MODEL_COSTS.get(model_used, 0.05)
+                        clip_cost = model_cost_per_sec * scene.duration
+                        logger.info(f"[{generation_id}] Clip {scene_number} cost calculated: ${clip_cost:.4f} (model: {model_used}, ${model_cost_per_sec}/sec × {scene.duration}s)")
+                    
+                    # Track cost with actual model used (only for non-cached clips)
+                    if not cached_clip:
+                        track_video_generation_cost(
+                            db=db,
+                            generation_id=generation_id,
+                            scene_number=scene_number,
+                            cost=clip_cost,
+                            model_name=model_used
+                        )
+                    
+                    return (clip_path, model_used, clip_cost, scene_number)
+                
+                # Generate all clips in parallel using asyncio.gather
+                clip_tasks = [
+                    generate_single_clip(scene, i) 
+                    for i, scene in enumerate(scene_plan.scenes)
+                ]
+                
+                # Wait for all clips to complete (in parallel)
+                clip_results = await asyncio.gather(*clip_tasks, return_exceptions=True)
+                
+                # Process results and handle any errors
+                clip_paths = []
+                total_video_cost = 0.0
+                completed_clips = 0
+                
+                for result in clip_results:
+                    if isinstance(result, Exception):
+                        logger.error(f"[{generation_id}] Clip generation failed: {result}", exc_info=True)
+                        if "cancelled" in str(result).lower():
+                            update_generation_status(
+                                db=db,
+                                generation_id=generation_id,
+                                status="failed",
+                                error_message="Cancelled by user"
+                            )
+                            return
+                        raise result
+                    
+                    clip_path, model_used, clip_cost, scene_number = result
+                    clip_paths.append(clip_path)
+                    total_video_cost += clip_cost
+                    completed_clips += 1
+                    
+                    logger.info(f"[{generation_id}] Clip {scene_number} completed: ${clip_cost:.4f}, total cost so far: ${total_video_cost:.4f} (model: {model_used})")
+                    
+                    # Update progress as clips complete
+                    progress = int(progress_start + (completed_clips * (progress_end - progress_start) / num_scenes))
+                    update_generation_progress(
+                        db=db,
+                        generation_id=generation_id,
+                        progress=progress,
+                        current_step=f"Completed {completed_clips}/{num_scenes} clips (parallel generation)"
+                    )
+                
+                # Sort clip_paths by scene number to maintain order
+                # Since clips are generated in parallel, they may complete out of order
+                # We need to ensure they're ordered by scene number (1, 2, 3, ...)
+                clip_paths_ordered = [None] * num_scenes
+                for result in clip_results:
+                    if not isinstance(result, Exception):
+                        clip_path, _, _, scene_number = result
+                        clip_paths_ordered[scene_number - 1] = clip_path
+                
+                # Filter out None values and ensure we have all clips
+                clip_paths = [cp for cp in clip_paths_ordered if cp is not None]
+                
+                if len(clip_paths) != num_scenes:
+                    logger.warning(
+                        f"[{generation_id}] Expected {num_scenes} clips but got {len(clip_paths)}. "
+                        f"Some clips may have failed."
+                    )
+                
+                logger.info(f"[{generation_id}] All {len(clip_paths)} clips generated in parallel, total cost: ${total_video_cost:.4f}")
+                
+                # Store temp clip paths
+                generation.temp_clip_paths = clip_paths
+                db.commit()
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=70,
+                    current_step="Adding text overlays"
+                )
+                logger.info(f"[{generation_id}] All {len(clip_paths)} video clips generated, progress: 70% - Adding text overlays")
+                
+                if TEXT_OVERLAYS_ENABLED:
+                    # Add text overlays to all video clips (with error handling)
+                    logger.info(f"[{generation_id}] Starting text overlay addition for {len(clip_paths)} clips...")
+                    try:
+                        scene_plan_obj = ScenePlan(**generation.scene_plan)
+                        overlay_output_dir = str(temp_dir / f"{generation_id}_overlays")
+                        logger.info(f"[{generation_id}] Overlay output directory: {overlay_output_dir}")
+                        overlay_paths = add_overlays_to_clips(
+                            clip_paths=clip_paths,
+                            scene_plan=scene_plan_obj,
+                            output_dir=overlay_output_dir
+                        )
+                        logger.info(f"[{generation_id}] Text overlays added successfully to all clips")
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Text overlay addition failed: {e}. Continuing without overlays.")
+                        overlay_paths = clip_paths  # Fallback to raw clips
+                else:
+                    # Fallback: use raw clips without overlays (should not happen with flag enabled)
+                    overlay_paths = clip_paths
+                    logger.warning(f"[{generation_id}] Text overlay stage disabled - using raw clips")
+                
+                # Update temp_clip_paths with overlay paths
+                generation.temp_clip_paths = overlay_paths
+                db.commit()
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=80,
+                    current_step="Stitching video clips"
+                )
+                logger.info(f"[{generation_id}] Progress: 80% - Stitching video clips")
+                
+                # Check cancellation before stitching
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before stitching")
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
+                    return
+                
+                # Video Stitching Stage (80% progress)
+                logger.info(f"[{generation_id}] Stitching {len(overlay_paths)} video clips together...")
+                stitched_output_dir = str(temp_dir / f"{generation_id}_stitched")
+                stitched_output_path = str(Path(stitched_output_dir) / "stitched.mp4")
+                logger.info(f"[{generation_id}] Stitched video will be saved to: {stitched_output_path}")
+                
+                # Extract transitions from scene plan
+                transitions = []
+                if scene_plan_obj and scene_plan_obj.scenes:
+                    for scene in scene_plan_obj.scenes[:-1]:  # All scenes except last
+                        transition = getattr(scene, 'transition_to_next', 'crossfade')
+                        if transition is None:
+                            transition = 'crossfade'
+                        transitions.append(transition)
+                    logger.info(f"[{generation_id}] Using LLM-selected transitions: {transitions}")
+                else:
+                    # Fallback to default crossfade transitions
+                    transitions = ["crossfade"] * (len(overlay_paths) - 1)
+                    logger.info(f"[{generation_id}] Using default crossfade transitions")
+                
+                stitched_video_path = stitch_video_clips(
+                    clip_paths=overlay_paths,
+                    output_path=stitched_output_path,
+                    transitions=transitions,
+                    cancellation_check=check_cancellation
+                )
+                logger.info(f"[{generation_id}] Video stitching completed: {stitched_video_path}")
+                
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=90,
+                    current_step="Adding audio layer"
+                )
+                logger.info(f"[{generation_id}] Progress: 90% - Adding audio layer")
+                
+                # Check cancellation before audio
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before audio")
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
+                    return
+                
+                # Audio Layer Stage (85-90% progress)
+                logger.info(f"[{generation_id}] Starting audio layer addition...")
+                # Extract music style from LLM specification
+                music_style = "professional"  # Default
+                if generation.llm_specification:
+                    brand_guidelines = generation.llm_specification.get("brand_guidelines", {})
+                    mood = brand_guidelines.get("mood", "professional")
+                    music_style = mood.lower() if mood else "professional"
+                logger.info(f"[{generation_id}] Selected music style: {music_style}")
+                
+                audio_output_dir = str(temp_dir / f"{generation_id}_audio")
+                audio_output_path = str(Path(audio_output_dir) / "with_audio.mp4")
+                logger.info(f"[{generation_id}] Audio output path: {audio_output_path}")
+                
+                # Pass scene plan for transition detection
+                scene_plan_obj = ScenePlan(**generation.scene_plan) if generation.scene_plan else None
+                
+                # Pass LLM specification to audio layer for sound_design extraction
+                llm_spec = generation.llm_specification if generation.llm_specification else None
+                
+                # Add audio layer (with error handling - don't fail generation if audio fails)
+                try:
+                    video_with_audio = add_audio_layer(
+                        video_path=stitched_video_path,
+                        music_style=music_style,
+                        output_path=audio_output_path,
+                        scene_plan=scene_plan_obj,
+                        cancellation_check=check_cancellation,
+                        llm_specification=llm_spec,  # Pass LLM spec for sound_design
+                    )
+                    logger.info(f"[{generation_id}] Audio layer added successfully: {video_with_audio}")
+                except Exception as e:
+                    logger.warning(f"[{generation_id}] Audio layer addition failed: {e}. Continuing without audio.")
+                    # Fallback: use stitched video without audio
+                    video_with_audio = stitched_video_path
+                
+                # Check cancellation before brand overlay
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before brand overlay")
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
+                    return
+                
+                # Brand Overlay Stage (after audio, before export)
+                logger.info(f"[{generation_id}] Adding brand overlay to final video...")
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=92,
+                    current_step="Adding brand overlay"
+                )
+                
+                # ALWAYS prioritize user-provided brand name
+                # Only extract from prompt if user did NOT provide a brand name
+                if brand_name:
+                    logger.info(f"[{generation_id}] Using user-provided brand name: {brand_name}")
+                else:
+                    # Only try extraction if user didn't provide one
+                    extracted_brand = extract_brand_name(prompt)
+                    if extracted_brand:
+                        brand_name = extracted_brand
+                        logger.info(f"[{generation_id}] Extracted brand name from prompt: {brand_name}")
+                    else:
+                        logger.info(f"[{generation_id}] No brand name provided and none found in prompt - skipping brand overlay")
+                
+                # Add brand overlay if brand name found (with error handling)
+                if brand_name:
+                    try:
+                        brand_overlay_output_path = str(Path(audio_output_dir) / "with_brand_overlay.mp4")
+                        video_with_brand = add_brand_overlay_to_final_video(
+                            video_path=video_with_audio,
+                            brand_name=brand_name,
+                            output_path=brand_overlay_output_path,
+                            duration=2.0  # Show brand for 2 seconds at the end
+                        )
+                        logger.info(f"[{generation_id}] Brand overlay added successfully: {video_with_brand}")
+                        video_for_export = video_with_brand
+                    except Exception as e:
+                        logger.warning(f"[{generation_id}] Brand overlay addition failed: {e}. Continuing without brand overlay.")
+                        video_for_export = video_with_audio  # Fallback to video without brand overlay
+                else:
+                    logger.info(f"[{generation_id}] No brand name found in prompt, skipping brand overlay")
+                    video_for_export = video_with_audio
+                
+                # Check cancellation before export
+                if check_cancellation():
+                    logger.info(f"[{generation_id}] Generation cancelled before export")
+                    update_generation_status(
+                        db=db,
+                        generation_id=generation_id,
+                        status="failed",
+                        error_message="Cancelled by user"
+                    )
+                    return
+                
+                # Post-Processing and Export Stage
+                logger.info(f"[{generation_id}] Starting final video export...")
+                # Extract brand style from LLM specification
+                brand_style = "default"  # Default
+                if generation.llm_specification:
+                    brand_guidelines = generation.llm_specification.get("brand_guidelines", {})
+                    visual_style = brand_guidelines.get("visual_style_keywords", "default")
+                    brand_style = visual_style.lower() if visual_style else "default"
+                logger.info(f"[{generation_id}] Brand style: {brand_style}")
+                
+                # Check if color grading is enabled in coherence settings
+                coherence_settings_dict = generation.coherence_settings or {}
+                apply_color_grading = coherence_settings_dict.get("color_grading", False)
+                logger.info(f"[{generation_id}] Color grading enabled: {apply_color_grading}")
+                
+                # Use output directory from config or default
+                output_base_dir = "output"
+                logger.info(f"[{generation_id}] Exporting to: {output_base_dir}")
+                
+                video_url, thumbnail_url = export_final_video(
+                    video_path=video_for_export,
+                    brand_style=brand_style,
+                    output_dir=output_base_dir,
+                    generation_id=generation_id,
+                    cancellation_check=check_cancellation,
+                    apply_color_grading=apply_color_grading
+                )
+                logger.info(f"[{generation_id}] Final video exported - Video URL: {video_url}, Thumbnail URL: {thumbnail_url}")
+                
+                # Calculate generation time
+                generation_elapsed = int(time.time() - generation_start_time)
+                
+                # Update Generation record with final URLs and generation time
+                generation.video_url = video_url
+                generation.thumbnail_url = thumbnail_url
+                generation.completed_at = datetime.utcnow()
+                generation.generation_time_seconds = generation_elapsed
+                db.commit()
+                
+                logger.info(f"[{generation_id}] Generation completed in {generation_elapsed} seconds")
+                
+                # Mark as completed
+                update_generation_progress(
+                    db=db,
+                    generation_id=generation_id,
+                    progress=100,
+                    current_step="Complete",
+                    status="completed"
+                )
+                logger.info(f"[{generation_id}] Generation marked as completed in database")
+                
+                # Clean up temp files
+                logger.info(f"[{generation_id}] Starting cleanup of temporary files...")
+                try:
+                    temp_gen_dir = temp_dir / generation_id
+                    if temp_gen_dir.exists():
+                        shutil.rmtree(temp_gen_dir)
+                    overlay_dir = temp_dir / f"{generation_id}_overlays"
+                    if overlay_dir.exists():
+                        shutil.rmtree(overlay_dir)
+                    stitched_dir = temp_dir / f"{generation_id}_stitched"
+                    if stitched_dir.exists():
+                        shutil.rmtree(stitched_dir)
+                    audio_dir = temp_dir / f"{generation_id}_audio"
+                    if audio_dir.exists():
+                        shutil.rmtree(audio_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp files: {e}")
+                
+                # Track complete generation cost
+                track_complete_generation_cost(
+                    db=db,
+                    generation_id=generation_id,
+                    video_cost=total_video_cost,
+                    llm_cost=0.01  # Approximate LLM cost
+                )
+                
+                # Update user statistics (total_generations and total_cost)
+                # This must be called after track_complete_generation_cost() to ensure generation.cost is set
+                update_user_statistics_on_completion(
+                    db=db,
+                    generation_id=generation_id
+                )
+                
+                logger.info(
+                    f"[{generation_id}] ✅ Generation completed successfully! "
+                    f"Video: {video_url}, Thumbnail: {thumbnail_url}, Total cost: ${total_video_cost:.4f}"
+                )
+                
+            except RuntimeError as e:
+                if "cancelled" in str(e).lower():
+                    # Already handled above
+                    return
+                logger.error(f"Video generation failed for {generation_id}: {e}", exc_info=True)
+                update_generation_status(
+                    db=db,
+                    generation_id=generation_id,
+                    status="failed",
+                    error_message=str(e)
+                )
+                
+        except ValueError as e:
+            logger.error(f"Validation error in generation {generation_id}: {e}")
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=0,
+                status="failed"
+            )
+            update_generation_status(
+                db=db,
+                generation_id=generation_id,
+                status="failed",
+                error_message=str(e)
+            )
+        except Exception as e:
+            logger.error(f"[{generation_id}] ========== UNEXPECTED ERROR ==========")
+            logger.error(f"[{generation_id}] Exception type: {type(e).__name__}")
+            logger.error(f"[{generation_id}] Exception message: {str(e)}")
+            logger.error(f"[{generation_id}] Full traceback:", exc_info=True)
+            
+            # Create user-friendly error message
+            error_str = str(e)
+            logger.error(f"[{generation_id}] Error string: {error_str}")
+            if "refused" in error_str.lower() or "content filtering" in error_str.lower():
+                user_error = "The AI model refused to process this request. This may be due to content filtering. Please try rephrasing your prompt or using different wording."
+            elif "storyboard planning failed" in error_str.lower():
+                user_error = f"Failed to create storyboard: {error_str}. Please try again with a different prompt."
+            else:
+                user_error = f"Generation failed: {error_str[:200]}"  # Truncate long errors
+            
+            update_generation_progress(
+                db=db,
+                generation_id=generation_id,
+                progress=0,
+                status="failed",
+                current_step="Error occurred"
+            )
+            update_generation_status(
+                db=db,
+                generation_id=generation_id,
+                status="failed",
+                error_message=user_error
+            )
+    finally:
+        db.close()
+
+
+@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
+async def create_generation(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> GenerateResponse:
+    """
+    Start a new video generation from a user prompt.
+    
+    Args:
+        request: GenerateRequest with prompt (10-2000 characters)
+        current_user: Authenticated user (from JWT)
+        db: Database session
+    
+    Returns:
+        GenerateResponse with generation_id and status
+    
+    Raises:
+        HTTPException: 422 if validation fails (handled by FastAPI)
+        HTTPException: 500 if LLM or scene planning fails
+    """
+    logger.info(f"========== /api/generate ENDPOINT CALLED ==========")
+    logger.info(f"User ID: {current_user.id}")
+    logger.info(f"Request received:")
+    logger.info(f"  - prompt length: {len(request.prompt)}")
+    logger.info(f"  - prompt preview: {request.prompt[:100]}...")
+    logger.info(f"  - title: {request.title}")
+    logger.info(f"  - model: {request.model}")
+    logger.info(f"  - target_duration: {request.target_duration}")
+    logger.info(f"  - use_llm: {request.use_llm}")
+    logger.info(f"  - coherence_settings: {request.coherence_settings}")
+    logger.info(f"  - refinement_instructions: {request.refinement_instructions}")
+    logger.info(f"  - brand_name: {request.brand_name}")
+    logger.info(f"  - product_image_id: {request.product_image_id}")
+    logger.info(f"  - top_note: {request.top_note}")
+    logger.info(f"  - heart_note: {request.heart_note}")
+    logger.info(f"  - base_note: {request.base_note}")
+    
+    # Handle product_image_id if provided
+    product_image_path = None
+    if request.product_image_id:
+        try:
+            from app.db.models.uploaded_image import UploadedImage
+            from app.db.models.product_image import ProductImageFolder
+            
+            # Query product image and validate it belongs to current user
+            product_image = db.query(UploadedImage).filter(
+                UploadedImage.id == request.product_image_id,
+                UploadedImage.folder_type == "product"
+            ).first()
+            
+            if not product_image:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={
+                        "error": {
+                            "code": "PRODUCT_IMAGE_NOT_FOUND",
+                            "message": f"Product image with ID {request.product_image_id} not found"
+                        }
+                    }
+                )
+            
+            # Validate that the product image belongs to the current user
+            product_folder = db.query(ProductImageFolder).filter(
+                ProductImageFolder.id == product_image.folder_id
+            ).first()
+            
+            if not product_folder or product_folder.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": {
+                            "code": "PRODUCT_IMAGE_ACCESS_DENIED",
+                            "message": "You do not have access to this product image"
+                        }
+                    }
+                )
+            
+            # Get the file path
+            product_image_path = product_image.file_path
+            logger.info(f"Loaded product image path: {product_image_path} for product_image_id: {request.product_image_id}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error loading product image: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": {
+                        "code": "PRODUCT_IMAGE_LOAD_FAILED",
+                        "message": "Failed to load product image"
+                    }
+                }
+            )
     
     # Process coherence settings: apply defaults if not provided, validate if provided
     coherence_settings_dict = None
