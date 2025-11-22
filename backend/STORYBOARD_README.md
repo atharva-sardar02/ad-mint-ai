@@ -268,5 +268,3 @@ For issues or questions:
 2. Review story documentation: `docs/sprint-artifacts/8-3-storyboard-creation-cli.md`
 3. Check logs with `--verbose` flag for detailed error messages
 
-
-

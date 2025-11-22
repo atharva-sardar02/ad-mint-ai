@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Default model: Google Veo 3.1 - Premium cinematic quality with native audio, reference images, and start/end frame control
 # Top models ranked by quality: Sora 2, Veo 3.1, Wan 2.5, PixVerse V5, Kling 2.5 Turbo, Hailuo 02, Seedance 1.0
 REPLICATE_MODELS = {
-    "default": "google/veo-3",  # Default to Veo 3 per requirements
+    "default": "google/veo-3.1",  # Default to Veo 3.1 per latest requirements
     "veo_3": "google/veo-3",
     "veo_3_1": "google/veo-3.1",
     "pixverse_v5": "pixverse/pixverse-v5",
@@ -302,13 +302,13 @@ async def generate_video_clip(
     # Store the final cinematic prompt that gets sent to KLING
     scene.final_cinematic_prompt = enhanced_prompt
     
-    # Try models in order: preferred_model (if specified) -> default (Google Veo 3) -> fallback chain
+    # Try models in order: preferred_model (if specified) -> default (Google Veo 3.1) -> fallback chain
     models_to_try = []
     if preferred_model and preferred_model in MODEL_COSTS:
         models_to_try.append(preferred_model)
         logger.info(f"Using preferred model: {preferred_model}")
     else:
-        # Use Google Veo 3 as default when no model is specified
+        # Use Google Veo 3.1 as default when no model is specified
         models_to_try.append(REPLICATE_MODELS["default"])
         logger.info(f"Using default model: {REPLICATE_MODELS['default']}")
     
@@ -320,7 +320,8 @@ async def generate_video_clip(
     # - bytedance/seedance-1 (404)
     # - minimax-ai/hailuo-02 (404)
     models_to_try.extend([
-        REPLICATE_MODELS["veo_3_1"],  # Backup Veo model
+        REPLICATE_MODELS["veo_3_1"],  # Backup Veo model (3.1)
+        REPLICATE_MODELS["veo_3"],  # Legacy Veo 3 model
         REPLICATE_MODELS["pixverse_v5"],  # Reliable fallback
         # Legacy fallbacks (verified to exist)
         REPLICATE_MODELS["primary"],  # bytedance/seedance-1-lite

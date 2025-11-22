@@ -27,6 +27,10 @@ class User(Base):
     # Relationships
     generations = relationship("Generation", back_populates="user")
     generation_groups = relationship("GenerationGroup", back_populates="user")
-    brand_style_folder = relationship("BrandStyleFolder", back_populates="user", uselist=False)
-    product_image_folder = relationship("ProductImageFolder", back_populates="user", uselist=False)
+    brand_style_folder = relationship(
+        "BrandStyleFolder", back_populates="user", uselist=False
+    )
+    product_image_folder = relationship(
+        "ProductImageFolder", back_populates="user", uselist=False
+    )
 

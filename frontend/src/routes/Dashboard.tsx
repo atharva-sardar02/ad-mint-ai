@@ -265,6 +265,17 @@ export const Dashboard: React.FC = () => {
 
 
   /**
+   * Cleanup object URL when reference image preview changes/unmounts.
+   */
+  useEffect(() => {
+    return () => {
+      if (referenceImagePreview) {
+        URL.revokeObjectURL(referenceImagePreview);
+      }
+    };
+  }, [referenceImagePreview]);
+
+  /**
    * Poll status endpoint every 2 seconds when there's an active generation.
    * Handles network errors gracefully and stops polling when generation completes.
    */

@@ -32,8 +32,6 @@ MIGRATIONS = [
     "app.db.migrations.add_coherence_settings",
     "app.db.migrations.add_parent_generation_id",
     "app.db.migrations.add_basic_settings_and_generation_time",
-    "app.db.migrations.create_brand_product_image_tables",
-    "app.db.migrations.add_extraction_fields",
 ]
 
 

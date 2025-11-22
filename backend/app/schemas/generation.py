@@ -272,7 +272,10 @@ class Scene(BaseModel):
     visual_prompt: str = Field(..., description="Base visual prompt from storyboard")
     # Model-specific prompts (optimized for each video generation model)
     model_prompts: dict[str, str] = Field(default_factory=dict, description="Model-specific optimized prompts: {'openai/sora-2': '...', 'google/veo-3': '...', etc.}")
-    final_cinematic_prompt: Optional[str] = Field(None, description="Final enhanced prompt sent to KLING (enhanced with brand/product style and scent profile at video generation time)")
+    final_cinematic_prompt: Optional[str] = Field(
+        None,
+        description="Final enhanced prompt sent to KLING (enhanced with brand/product style and scent profile at video generation time)",
+    )
     reference_image_path: Optional[str] = Field(None, description="Path to reference image for this scene (from storyboard)")
     start_image_path: Optional[str] = Field(None, description="Path to start image (first frame) for Kling 2.5 Turbo")
     end_image_path: Optional[str] = Field(None, description="Path to end image (last frame) for Kling 2.5 Turbo")

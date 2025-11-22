@@ -245,4 +245,3 @@ export interface ProductImageUploadResponse {
 export interface ProductImageListResponse {
   images: UploadedImageResponse[];
 }
-

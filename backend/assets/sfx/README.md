@@ -75,10 +75,3 @@ The audio service (`backend/app/services/pipeline/audio.py`) automatically:
 - All SFX are composited with background music
 - Volume levels: Music 30%, Ambient SFX 20%, Transition SFX 100%
 
-
-
-
-
-
-
-

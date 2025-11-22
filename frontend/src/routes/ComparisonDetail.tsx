@@ -26,5 +26,3 @@ export const ComparisonDetail: React.FC = () => {
   return <ComparisonView groupId={groupId} />;
 };
 
-
-

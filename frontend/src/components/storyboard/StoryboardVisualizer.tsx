@@ -180,7 +180,7 @@ export const StoryboardVisualizer: React.FC<StoryboardVisualizerProps> = ({
       {/* Scenes */}
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Scenes</h3>
-        {scenes.map((scene, _index) => (
+        {scenes.map((scene, index) => (
           <div
             key={scene.scene_number}
             className="border border-gray-200 rounded-lg p-5 bg-gray-50 hover:shadow-md transition-shadow"

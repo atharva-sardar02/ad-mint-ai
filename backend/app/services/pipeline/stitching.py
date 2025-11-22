@@ -71,8 +71,6 @@ def _validate_clip(clip: VideoFileClip, clip_name: str = "clip") -> bool:
     except Exception as e:
         logger.warning(f"Error validating {clip_name}: {e}")
         return False
-
-
 def _apply_crossfade_transition(clip1: VideoFileClip, clip2: VideoFileClip, duration: float = 0.5) -> tuple:
     """Apply crossfade transition between two clips."""
     # Apply fade out to end of clip1

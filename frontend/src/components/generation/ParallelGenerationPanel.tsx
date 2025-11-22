@@ -11,7 +11,7 @@ import { ErrorMessage } from "../ui/ErrorMessage";
 import { CoherenceSettingsPanel, validateCoherenceSettings } from "../coherence";
 import type { CoherenceSettings as CoherenceSettingsType } from "../coherence";
 import type { GenerateRequest } from "../../lib/generationService";
-import { VIDEO_MODELS } from "../../lib/models/videoModels";
+import { VIDEO_MODELS, DEFAULT_MODEL, getDefaultModelLabel } from "../../lib/models/videoModels";
 
 /**
  * Tooltip component for help text.

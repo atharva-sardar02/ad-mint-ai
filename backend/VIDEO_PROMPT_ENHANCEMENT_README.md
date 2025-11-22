@@ -264,5 +264,3 @@ Verify that frame images exist at the paths specified in the storyboard JSON.
 - **Story 8.4**: Unified narrative generation
 - **Story 9.2**: Video generation workflow
 
-
-

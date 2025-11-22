@@ -28,5 +28,3 @@ class QualityMetric(Base):
     # Relationships
     generation = relationship("Generation", back_populates="quality_metrics")
 
-
-
