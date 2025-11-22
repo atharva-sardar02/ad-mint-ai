@@ -211,3 +211,6 @@ backend/temp/
 # Master Mode generated content
 temp/
 output/
+
+# Codex authentication (contains API keys)
+.codex/
