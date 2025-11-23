@@ -262,13 +262,23 @@ async def generate_story_draft(
     )
     
     # Build context from conversation history
+    # CRITICAL FIX: Only include the LAST iteration (previous story + critique)
+    # Sending full conversation history causes context length issues and content filtering
     context_messages = []
     if conversation_history:
-        for entry in conversation_history:
+        # Only include the LAST director-critic pair (most recent iteration)
+        # This prevents context explosion while maintaining continuity
+        recent_entries = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
+        
+        for entry in recent_entries:
             if entry.get("role") == "director":
+                # Only include a SUMMARY of previous story (not full text)
+                prev_story = entry.get('content', {}).get('story_draft', '')
+                # Truncate to first 500 chars to give context without overwhelming
+                story_summary = prev_story[:500] + "..." if len(prev_story) > 500 else prev_story
                 context_messages.append({
                     "role": "assistant",
-                    "content": f"Previous story draft (Iteration {entry.get('iteration', '?')}):\n\n{entry.get('content', {}).get('story_draft', '')}"
+                    "content": f"Previous story draft (Iteration {entry.get('iteration', '?')}) - SUMMARY:\n\n{story_summary}"
                 })
             elif entry.get("role") == "critic":
                 critique = entry.get("content", {})
@@ -351,6 +361,8 @@ async def generate_story_draft(
     user_message = "\n".join(user_message_parts)
     
     last_error = None
+    # Track whether to use reference images (may be disabled after failed attempts)
+    use_reference_images = reference_image_paths is not None
     
     try:
         for attempt in range(1, max_retries + 1):
@@ -363,8 +375,12 @@ async def generate_story_draft(
                     *context_messages
                 ]
                 
-                # Build user message with vision if images provided
-                if reference_image_paths:
+                # Determine if we should use images for THIS attempt
+                # On retries after content filter, skip images
+                attempt_use_images = use_reference_images and (attempt == 1 or not last_error or "Content filtered" not in str(last_error))
+                
+                # Build user message with vision if images provided AND not disabled due to errors
+                if attempt_use_images and reference_image_paths:
                     # Vision format: text + images
                     content_parts = [{"type": "text", "text": user_message}]
                     
@@ -392,6 +408,8 @@ async def generate_story_draft(
                     messages.append({"role": "user", "content": content_parts})
                 else:
                     # Text-only format
+                    if not attempt_use_images and reference_image_paths:
+                        logger.warning(f"[Story Director] Skipping reference images on attempt {attempt} due to previous errors")
                     messages.append({"role": "user", "content": user_message})
                 
                 response = await async_client.chat.completions.create(
@@ -409,14 +427,46 @@ async def generate_story_draft(
                         continue
                     raise ValueError(error_msg)
                 
+                # Check finish reason for content filtering or length issues
+                finish_reason = response.choices[0].finish_reason
+                if finish_reason != "stop":
+                    logger.warning(f"[Story Director] Unexpected finish_reason: {finish_reason}")
+                    if finish_reason == "length":
+                        logger.error("[Story Director] Response truncated due to max_tokens limit. Story may be incomplete.")
+                    elif finish_reason == "content_filter":
+                        logger.error("[Story Director] Response blocked by content filter!")
+                        if attempt < max_retries:
+                            # Try removing images on next attempt to bypass filter
+                            if reference_image_paths:
+                                logger.warning("[Story Director] Removing reference images to bypass content filter on next attempt")
+                                reference_image_paths = None
+                            last_error = "Content filtered by OpenAI"
+                            continue
+                
                 story_draft = response.choices[0].message.content
                 if not story_draft:
                     error_msg = "Response content is None"
                     logger.error(f"[Story Director Error] {error_msg}")
+                    # Log response details for debugging
+                    logger.error(f"[Story Director] Response finish_reason: {finish_reason}")
+                    logger.error(f"[Story Director] Response refusal: {getattr(response.choices[0].message, 'refusal', 'None')}")
                     if attempt < max_retries:
                         last_error = error_msg
                         continue
                     raise ValueError(error_msg)
+                
+                # Validate story is not too short
+                if len(story_draft) < 500:
+                    error_msg = f"Story too short ({len(story_draft)} characters). Expected at least 1500 words (~7500 chars)."
+                    logger.warning(f"[Story Director Warning] {error_msg}")
+                    logger.warning(f"[Story Director] Story content: {story_draft[:200]}")
+                    if attempt < max_retries:
+                        logger.warning(f"[Story Director] Retrying to get a complete story...")
+                        last_error = error_msg
+                        continue
+                    else:
+                        # On last attempt, log but don't fail - let it through
+                        logger.error(f"[Story Director] Story is too short even after {max_retries} attempts!")
                 
                 logger.info(f"[Story Director] Successfully generated story draft ({len(story_draft)} characters)")
                 return story_draft.strip()
