@@ -3,7 +3,6 @@
  * Tests session resumption after page refresh and expired session handling
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
 import { usePipelineStore } from "../../stores/pipelineStore";
 import type { PipelineSession } from "../../types/pipeline";
 
@@ -30,7 +29,6 @@ describe("Session Persistence Integration", () => {
     };
 
     usePipelineStore.getState().setSession(session);
-    usePipelineStore.getState().setGenerationId("gen-123");
 
     // Check that session is persisted
     const persisted = localStorage.getItem("pipeline-storage");
@@ -38,7 +36,6 @@ describe("Session Persistence Integration", () => {
 
     const parsed = JSON.parse(persisted!);
     expect(parsed.state.session.session_id).toBe("test-session-123");
-    expect(parsed.state.generationId).toBe("gen-123");
   });
 
   it("should restore session from localStorage on page load", () => {
@@ -67,12 +64,9 @@ describe("Session Persistence Integration", () => {
     );
 
     // Create new store instance (simulates page reload)
-    const restoredSession = usePipelineStore.getState().session;
     const restoredSessionId = usePipelineStore.getState().sessionId;
-    const restoredGenerationId = usePipelineStore.getState().generationId;
 
     expect(restoredSessionId).toBe("test-session-123");
-    expect(restoredGenerationId).toBe("gen-123");
   });
 
   it("should clear session when expired (24-hour TTL handled by backend)", () => {

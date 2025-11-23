@@ -5,7 +5,7 @@
  * Displays conversation messages with auto-scroll to latest.
  */
 
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { ChatMessage } from "../../types/pipeline";
 import { MessageBubble } from "./MessageBubble";
 

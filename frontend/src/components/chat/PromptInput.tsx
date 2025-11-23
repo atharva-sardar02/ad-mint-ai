@@ -5,7 +5,7 @@
  * Handles Enter key submission and disabled states.
  */
 
-import React, { useState, KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 export interface PromptInputProps {
   /** Callback when user sends a message */

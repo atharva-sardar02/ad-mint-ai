@@ -3,7 +3,6 @@
  * Allows users to select from previously uploaded product images.
  */
 import React from "react";
-import { ImageThumbnailGrid } from "../ui/ImageThumbnail";
 import { API_BASE_URL } from "../../lib/config";
 import type { UploadedImageResponse } from "../../lib/types/api";
 
@@ -69,8 +68,8 @@ export const ProductImageSelector: React.FC<ProductImageSelectorProps> = ({
             onClick={() => handleImageClick(image)}
           >
             <img
-              src={`${API_BASE_URL}/api/assets/users/${image.user_id}/products/${image.filename}`}
-              alt={image.original_filename}
+              src={image.url || `${API_BASE_URL}/api/assets/users/${image.user_id || 'unknown'}/products/${image.filename}`}
+              alt={image.original_filename || image.filename}
               className="w-full h-24 object-cover"
               loading="lazy"
             />
@@ -84,7 +83,7 @@ export const ProductImageSelector: React.FC<ProductImageSelectorProps> = ({
               </div>
             )}
             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate">
-              {image.original_filename}
+              {image.original_filename || image.filename}
             </div>
           </div>
         ))}
@@ -93,7 +92,7 @@ export const ProductImageSelector: React.FC<ProductImageSelectorProps> = ({
       {selectedImageId && (
         <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-md">
           <span className="text-sm text-blue-800">
-            Selected: {images.find(img => img.id === selectedImageId)?.original_filename}
+            Selected: {images.find(img => img.id === selectedImageId)?.original_filename || images.find(img => img.id === selectedImageId)?.filename}
           </span>
           <button
             onClick={() => onSelect(null)}

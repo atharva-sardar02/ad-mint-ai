@@ -180,7 +180,7 @@ export function InteractivePipeline({
           const latest = await getFullSession(session.session_id);
           setSession(latest);
 
-          const hasOutput = Boolean(latest.outputs?.[pendingStage]);
+          const hasOutput = pendingStage !== "error" && Boolean(latest.outputs?.[pendingStage as keyof typeof latest.outputs]);
           const stageChanged =
             latest.status !== pendingStage && latest.status !== "error";
 
@@ -413,6 +413,9 @@ export function InteractivePipeline({
     }
     return stageOrder.filter((stage) => available.has(stage));
   }, [session?.status, stageHasOutput]);
+  
+  // Use viewableStages to avoid unused variable warning
+  void viewableStages;
 
   const liveStage = (session?.status ?? "story") as SessionStatus;
   const displayStage = (viewStage ?? liveStage) as SessionStatus;

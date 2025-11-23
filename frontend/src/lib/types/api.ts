@@ -88,6 +88,7 @@ export interface GenerationListItem {
   num_clips?: number | null; // Number of clips requested
   use_llm?: boolean | null; // Whether LLM enhancement was used
   generation_time_seconds?: number | null; // Time taken to generate the video in seconds
+  framework?: string | null; // Framework used (e.g., "master_mode")
 }
 
 /**
@@ -214,6 +215,8 @@ export interface UploadedImageResponse {
   filename: string;
   url: string;  // URL to access the image (e.g., /api/assets/users/{user_id}/brand_styles/{filename})
   uploaded_at: string;  // ISO datetime string
+  user_id?: string;  // User ID who uploaded the image
+  original_filename?: string;  // Original filename before upload
 }
 
 /**

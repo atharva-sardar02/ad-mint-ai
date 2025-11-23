@@ -119,7 +119,7 @@ export const authService = {
           throw new Error(axiosError.response.data.error.message);
         }
         // If there's a response but no error structure, log it
-        if (axiosError.response) {
+        if (axiosError.response && 'status' in axiosError.response) {
           console.error("API error response:", axiosError.response.status, axiosError.response.data);
         }
       }

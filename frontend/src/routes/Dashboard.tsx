@@ -3,7 +3,6 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuthStore } from "../store/authStore";
 import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Textarea";
 import { ErrorMessage } from "../components/ui/ErrorMessage";
@@ -17,8 +16,7 @@ import { ParallelGenerationPanel } from "../components/generation";
 import { StoryboardVisualizer } from "../components/storyboard";
 import { generationService } from "../lib/generationService";
 import type { StatusResponse, GenerateRequest } from "../lib/generationService";
-import { getUserProfile } from "../lib/userService";
-import type { UserProfile, UploadedImageResponse } from "../lib/types/api";
+import type { UploadedImageResponse } from "../lib/types/api";
 import { getProductImages, deleteProductImages } from "../lib/services/productImageService";
 import { getBrandStyles, deleteBrandStyles } from "../lib/services/brandStyleService";
 import type { BrandStyleListResponse } from "../lib/types/api";
@@ -37,7 +35,6 @@ interface ValidationErrors {
  * Dashboard component with prompt input form for video generation.
  */
 export const Dashboard: React.FC = () => {
-  const { user } = useAuthStore();
   const navigate = useNavigate();
 
   const [prompt, setPrompt] = useState("");
@@ -50,7 +47,6 @@ export const Dashboard: React.FC = () => {
   const [apiError, setApiError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeGeneration, setActiveGeneration] = useState<StatusResponse | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [coherenceSettings, setCoherenceSettings] = useState<CoherenceSettingsType>({
     seed_control: true,
     ip_adapter_reference: false,
@@ -72,8 +68,6 @@ export const Dashboard: React.FC = () => {
     model: "",
     targetDuration: 15,
   });
-  const [referenceImage, setReferenceImage] = useState<File | null>(null);
-  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const consecutiveErrorsRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
@@ -89,34 +83,7 @@ export const Dashboard: React.FC = () => {
     isVisible: boolean;
   }>({ message: "", type: "info", isVisible: false });
 
-  /**
-   * Fetch latest user profile data on mount and when generation completes.
-   */
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchProfile = async () => {
-      try {
-        const profile = await getUserProfile();
-        
-        // Check if component is still mounted before updating state
-        if (!isMounted) return;
-        
-        setUserProfile(profile);
-      } catch (error) {
-        // Silently fail - user data from auth store will be used as fallback
-        if (isMounted) {
-          console.warn("Failed to fetch user profile:", error);
-        }
-      }
-    };
-
-    fetchProfile();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  // User profile fetching removed - no longer needed
 
   /**
    * Fetch product images on component mount.
@@ -218,36 +185,7 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
 
-  /**
-   * Refresh user profile when generation completes.
-   */
-  useEffect(() => {
-    if (activeGeneration?.status === "completed") {
-      let isMounted = true;
-
-      const fetchProfile = async () => {
-        try {
-          const profile = await getUserProfile();
-          
-          // Check if component is still mounted before updating state
-          if (!isMounted) return;
-          
-          setUserProfile(profile);
-        } catch (error) {
-          // Silently fail - existing profile data will remain
-          if (isMounted) {
-            console.warn("Failed to refresh user profile:", error);
-          }
-        }
-      };
-
-      fetchProfile();
-
-      return () => {
-        isMounted = false;
-      };
-    }
-  }, [activeGeneration?.status]);
+  // User profile fetching removed - no longer needed
 
   /**
    * Real-time validation as user types.
@@ -266,16 +204,7 @@ export const Dashboard: React.FC = () => {
   }, [prompt]);
 
 
-  /**
-   * Cleanup object URL when reference image preview changes/unmounts.
-   */
-  useEffect(() => {
-    return () => {
-      if (referenceImagePreview) {
-        URL.revokeObjectURL(referenceImagePreview);
-      }
-    };
-  }, [referenceImagePreview]);
+  // Reference image preview cleanup removed - no longer needed
 
   /**
    * Poll status endpoint every 2 seconds when there's an active generation.
