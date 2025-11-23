@@ -50,7 +50,8 @@ async def generate_scenes_from_story(
     story: str,
     max_iterations_per_scene: int = 3,
     max_cohesor_iterations: int = 2,
-    trace_dir: Optional[Path] = None
+    trace_dir: Optional[Path] = None,
+    expected_scene_count: Optional[int] = None
 ) -> ScenesGenerationResult:
     """
     Generate detailed scenes from a complete story.
@@ -64,6 +65,7 @@ async def generate_scenes_from_story(
         max_iterations_per_scene: Max iterations per scene (default: 3)
         max_cohesor_iterations: Max cohesion review iterations (default: 2)
         trace_dir: Optional directory to save traces
+        expected_scene_count: Expected number of scenes (from Story Director calculation)
         
     Returns:
         ScenesGenerationResult with all scenes and cohesion analysis
@@ -76,8 +78,17 @@ async def generate_scenes_from_story(
         (trace_dir / "story.md").write_text(story, encoding="utf-8")
     
     # Extract number of scenes from story
-    total_scenes = _extract_scene_count_from_story(story)
-    logger.info(f"Detected {total_scenes} scenes in story")
+    extracted_count = _extract_scene_count_from_story(story)
+    
+    # Use expected scene count if provided (from Story Director), otherwise use extracted
+    if expected_scene_count:
+        total_scenes = expected_scene_count
+        logger.info(f"Using expected scene count from Story Director: {total_scenes} scenes")
+        if extracted_count != expected_scene_count:
+            logger.warning(f"Extracted scene count ({extracted_count}) differs from expected ({expected_scene_count}). Using expected count.")
+    else:
+        total_scenes = extracted_count
+        logger.info(f"Detected {total_scenes} scenes in story")
     
     completed_scenes: List[Dict[str, Any]] = []
     conversation_history: List[Dict[str, Any]] = []

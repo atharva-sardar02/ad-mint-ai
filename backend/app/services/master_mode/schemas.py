@@ -41,6 +41,7 @@ class StoryGenerationResult(BaseModel):
     iterations: List[IterationData] = Field(default_factory=list, description="Full iteration history")
     total_iterations: int = Field(..., description="Total number of iterations completed")
     conversation_history: List[ConversationEntry] = Field(default_factory=list, description="Full conversation history")
+    expected_scene_count: Optional[int] = Field(None, description="Expected number of scenes in the story (calculated based on target duration)")
 
 
 # Scene generation schemas

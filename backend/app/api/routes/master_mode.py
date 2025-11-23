@@ -3,6 +3,7 @@ Master Mode API routes for simplified video generation.
 """
 import logging
 import os
+import re
 import shutil
 import uuid
 from datetime import datetime
@@ -22,6 +23,7 @@ from app.services.master_mode.streaming_wrapper import (
     generate_scenes_with_streaming
 )
 from app.services.master_mode.schemas import StoryGenerationResult, ScenesGenerationResult
+from app.services.master_mode.vision_analysis import analyze_reference_images_for_consistency
 from app.api.routes.master_mode_progress import (
     create_progress_queue,
     send_progress_update,
@@ -34,6 +36,41 @@ from app.api.routes.master_mode_progress import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/master-mode", tags=["master-mode"])
+
+
+def extract_target_duration_from_prompt(prompt: str) -> Optional[int]:
+    """
+    Extract target duration from user prompt if mentioned.
+    
+    Examples:
+    - "make a 30 second video"
+    - "15-second ad"
+    - "create a 20s advertisement"
+    
+    Returns:
+        Duration in seconds if found, None otherwise
+    """
+    prompt_lower = prompt.lower()
+    
+    # Pattern 1: "X second(s)" or "X-second"
+    patterns = [
+        r'(\d+)\s*[-\s]?seconds?(?:\s+(?:video|ad|advertisement|commercial))?',
+        r'(\d+)s(?:\s+(?:video|ad|advertisement|commercial))?',
+        r'(?:video|ad|advertisement|commercial)\s+(?:of|with)?\s*(\d+)\s*seconds?',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, prompt_lower)
+        if match:
+            duration = int(match.group(1))
+            # Validate reasonable range (Veo 3.1 constraints: 12-60 seconds is practical)
+            if 12 <= duration <= 60:
+                logger.info(f"[Master Mode] Extracted target duration from prompt: {duration}s")
+                return duration
+            else:
+                logger.warning(f"[Master Mode] Found duration {duration}s in prompt but outside valid range (12-60s), using default")
+    
+    return None
 
 
 @router.post("/generate-story")
@@ -60,6 +97,14 @@ async def generate_story(
         start_time = datetime.utcnow()
         
         logger.info(f"[Master Mode] Story generation requested by user {current_user.id}, generation_id: {generation_id}")
+        
+        # Extract target duration from prompt if mentioned
+        target_duration = extract_target_duration_from_prompt(prompt)
+        
+        if target_duration:
+            logger.info(f"[Master Mode] User specified target duration: {target_duration}s")
+        else:
+            logger.info(f"[Master Mode] No duration specified, using default (12-20s)")
         
         # Create database record for this generation
         db_generation = Generation(
@@ -100,6 +145,25 @@ async def generate_story(
         
         await send_progress_update(generation_id, "upload", "completed", 10, f"Saved {len(saved_image_paths)} reference images")
         
+        # Analyze reference images for character/product consistency
+        vision_analysis = {}
+        if saved_image_paths:
+            logger.info(f"[Master Mode] Analyzing {len(saved_image_paths)} reference images for consistency...")
+            await send_progress_update(generation_id, "upload", "in_progress", 12, "Analyzing reference images for consistency...")
+            try:
+                vision_analysis = await analyze_reference_images_for_consistency(
+                    reference_image_paths=saved_image_paths,
+                    brand_name=brand_name
+                )
+                if vision_analysis:
+                    logger.info(f"[Master Mode] Vision analysis complete: {list(vision_analysis.keys())}")
+                    await send_progress_update(generation_id, "upload", "completed", 14, "Reference image analysis complete")
+                else:
+                    logger.warning("[Master Mode] Vision analysis returned no results")
+            except Exception as e:
+                logger.error(f"[Master Mode] Vision analysis failed: {e}")
+                # Continue without vision analysis - not a critical failure
+        
         # Generate story iteratively with reference images
         await send_progress_update(generation_id, "story", "in_progress", 15, "Generating story with vision-enhanced AI...")
         
@@ -108,7 +172,8 @@ async def generate_story(
             generation_id=generation_id,
             max_iterations=max_iterations,
             reference_image_paths=saved_image_paths if saved_image_paths else None,
-            brand_name=brand_name
+            brand_name=brand_name,
+            target_duration=target_duration  # Pass the extracted duration
         )
         
         await send_progress_update(generation_id, "story", "completed", 30, f"Story generated (score: {story_result.final_score}/100)")
@@ -158,11 +223,17 @@ async def generate_story(
             await send_progress_update(generation_id, "scenes", "in_progress", 35, "Generating detailed scenes...")
             
             logger.info(f"[Master Mode] Generating scenes from story")
+            
+            # Log expected scene count if available
+            if story_result.expected_scene_count:
+                logger.info(f"[Master Mode] Expected scene count: {story_result.expected_scene_count}")
+            
             scenes_result: ScenesGenerationResult = await generate_scenes_with_streaming(
                 story=story_result.final_story,
                 generation_id=generation_id,
                 max_iterations_per_scene=3,
-                max_cohesor_iterations=2
+                max_cohesor_iterations=2,
+                expected_scene_count=story_result.expected_scene_count  # Pass expected scene count
             )
             
             await send_progress_update(generation_id, "scenes", "completed", 55, f"Generated {scenes_result.total_scenes} scenes (cohesion: {scenes_result.cohesion_score}/100)")
@@ -228,6 +299,7 @@ async def generate_story(
                 ],
                 story=story_result.final_story,
                 reference_image_paths=saved_image_paths if saved_image_paths else None,
+                vision_analysis=vision_analysis if vision_analysis else None,  # NEW: Pass vision analysis
                 generation_id=generation_id  # NEW: Pass for streaming
             )
             

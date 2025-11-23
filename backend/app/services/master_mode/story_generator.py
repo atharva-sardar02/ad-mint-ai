@@ -27,6 +27,7 @@ async def generate_story_iterative(
     max_iterations: int = 3,
     reference_image_paths: Optional[List[str]] = None,
     brand_name: Optional[str] = None,
+    target_duration: Optional[int] = None,
     trace_dir: Optional[Path] = None,
     director_model: str = "gpt-4o",
     critic_model: str = "gpt-4o"
@@ -39,6 +40,7 @@ async def generate_story_iterative(
         max_iterations: Maximum number of iteration rounds (default: 3)
         reference_image_paths: Optional list of paths to reference images (person, product, etc.)
         brand_name: Optional brand name to feature in the advertisement
+        target_duration: Optional target video duration in seconds (extracted from prompt or specified)
         trace_dir: Optional directory to save trace files for debugging
         director_model: OpenAI model for Story Director (default: gpt-4o)
         critic_model: OpenAI model for Story Critic (default: gpt-4o)
@@ -50,8 +52,17 @@ async def generate_story_iterative(
         f"Starting iterative story generation "
         f"(max_iterations={max_iterations}, prompt_length={len(user_prompt)}, "
         f"reference_images={len(reference_image_paths) if reference_image_paths else 0}, "
-        f"brand_name={brand_name or 'None'})"
+        f"brand_name={brand_name or 'None'}, "
+        f"target_duration={target_duration or 'default'}s)"
     )
+    
+    # Calculate expected scene count based on target duration
+    expected_scene_count = None
+    if target_duration:
+        import math
+        min_scenes_required = math.ceil(target_duration / 8)
+        expected_scene_count = max(3, min_scenes_required)
+        logger.info(f"[Story Generator] Expected scene count for {target_duration}s: {expected_scene_count} scenes")
     
     # Initialize trace directory if provided
     if trace_dir:
@@ -105,6 +116,7 @@ async def generate_story_iterative(
             conversation_history=history_dict,
             reference_image_paths=reference_image_paths,
             brand_name=brand_name,
+            target_duration=target_duration,
             model=director_model
         )
         
@@ -221,6 +233,8 @@ PRIORITY FIXES:
     logger.info(f"Final status: {final_approval_status}")
     logger.info(f"Final score: {final_score:.1f}/100")
     logger.info(f"Total iterations: {len(iteration_history)}")
+    if expected_scene_count:
+        logger.info(f"Expected scene count: {expected_scene_count}")
     
     # Create and return result
     result = StoryGenerationResult(
@@ -230,7 +244,8 @@ PRIORITY FIXES:
         final_score=final_score,
         iterations=iteration_history,
         total_iterations=len(iteration_history),
-        conversation_history=conversation_history
+        conversation_history=conversation_history,
+        expected_scene_count=expected_scene_count
     )
     
     return result

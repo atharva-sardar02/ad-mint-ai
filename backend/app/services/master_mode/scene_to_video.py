@@ -73,6 +73,7 @@ async def convert_scenes_to_video_prompts(
     scenes: List[Dict[str, Any]],
     story: str,
     reference_image_paths: Optional[List[str]] = None,
+    vision_analysis: Optional[Dict[str, str]] = None,  # NEW: Vision analysis for consistency
     trace_dir: Optional[Path] = None,
     enhance_prompts: bool = True,
     generation_id: Optional[str] = None
@@ -116,9 +117,21 @@ async def convert_scenes_to_video_prompts(
                 metadata={"num_scenes": len(scenes)}
             )
         
+        # Build reference image descriptions from vision analysis
+        reference_image_descriptions = None
+        if vision_analysis:
+            desc_parts = []
+            if "character" in vision_analysis:
+                desc_parts.append(f"**CHARACTER (maintain EXACT appearance):**\n{vision_analysis['character']}")
+            if "product" in vision_analysis:
+                desc_parts.append(f"**PRODUCT (maintain EXACT appearance):**\n{vision_analysis['product']}")
+            if desc_parts:
+                reference_image_descriptions = "\n\n".join(desc_parts)
+                logger.info(f"[Scene→Video] Using vision analysis for character/product consistency ({len(reference_image_descriptions)} chars)")
+        
         enhanced_scenes = await enhance_all_scenes_for_video(
             scenes=scenes,
-            reference_image_descriptions=None  # Could pass vision analysis here
+            reference_image_descriptions=reference_image_descriptions  # Pass vision analysis
         )
         
         # Stream enhancer results

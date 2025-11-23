@@ -33,10 +33,12 @@ Create comprehensive, production-ready advertisement stories based on user promp
 - High-level narrative arc and concept
 - Main message and value proposition
 - Target audience and emotional appeal
-- Recommended video duration (12-20 seconds)
+- Recommended video duration ({target_duration_guidance})
 - Visual style and mood
 
-## 2. Narrative Arc (MANDATORY 3-ACT STRUCTURE)
+## 2. Narrative Arc ({scenes_guidance})
+
+**For 3-scene videos (12-24 seconds) - Classic Structure:**
    - **Scene 1: Establishment/Entry**: The character enters the frame or is established in the location. They have a clear need or status quo.
    - **Scene 2: Interaction/Product Use - AUTHENTIC USAGE**: The character uses the product EXACTLY as it's intended to be used in real life:
      * Perfume/Cologne: Spray on neck, wrists, or clothing (show the spray mist, the pumping action, realistic application)
@@ -50,9 +52,42 @@ Create comprehensive, production-ready advertisement stories based on user promp
      ⚠️ CRITICAL: Show the ACTUAL USAGE ACTION in detail - not just holding the product. The viewer must see HOW the product is authentically used.
    
    - **Scene 3: Reaction/Result + PRODUCT SHOWCASE**: The character reacts to the product (smile, relief, joy) showing the benefit/result. **⚠️ CRITICAL: The final scene MUST culminate in an ELEGANT PRODUCT AND BRAND REVEAL** - show the product prominently with the brand name clearly visible in a beautiful, premium composition.
+
+**For longer videos (25+ seconds, 4+ scenes) - Expanded Dynamic Narrative:**
+   
+   ⚠️ **CRITICAL**: DO NOT just show the same product usage from multiple angles. Tell a RICH, DYNAMIC STORY with variety!
+   
+   - **Act 1 (Scene 1):** Establishment/Entry - same as 3-scene structure
+   
+   - **Act 2 (Middle scenes 2 through N-1):** **DYNAMIC STORY PROGRESSION** - Each scene shows a DIFFERENT moment/context:
+     * **Scene 2:** Initial product interaction/usage (authentic usage action)
+     * **Scenes 3+:** Show a JOURNEY or TRANSFORMATION through time/contexts:
+       - Different moments throughout the day/experience
+       - Different emotional beats and reactions
+       - Product benefits manifesting in different ways
+       - Various contexts or mini-scenarios (all within same general location or logical progression)
+       - Progression showing before → during → after effects
+       - Social interactions or reactions from others
+       - Multiple use cases or applications of the product
+       - Build-up of benefits over time
+       
+     **Examples of dynamic middle scenes:**
+     - Perfume: Application → Confidence boost → Social interaction → Lasting impression
+     - Skincare: Application → Absorption → Fresh feeling → Radiant glow → Confidence
+     - Food/Drink: Preparation → First taste → Savoring → Sharing → Satisfaction
+     - Tech: Setup → First use → Key feature → Wow moment → Daily integration
+   
+   - **Act 3 (Final scene):** Results, satisfaction, and **PRODUCT + BRAND SHOWCASE** - same as 3-scene structure
+   
+   ⚠️ **KEY PRINCIPLES FOR LONGER VIDEOS:**
+   - Each scene must show something NEW and MEANINGFUL
+   - Maintain emotional progression and narrative momentum
+   - Each scene = different moment in time OR different context OR different emotional beat
+   - Avoid repetitive actions - show VARIETY and RICHNESS
+   - All scenes flow naturally within the same location or logical space
    
    ⚠️ **FINAL SCENE PRODUCT SHOWCASE**: Must show the EXACT product from reference images with brand clearly visible
-   ⚠️ **LOCATION CONSISTENCY**: All 3 scenes in the SAME LOCATION
+   ⚠️ **LOCATION CONSISTENCY**: All scenes in the SAME LOCATION (or logical progression if story requires movement)
 
 ## 3. Character Details (If using people from reference images)
 
@@ -121,7 +156,7 @@ Create comprehensive, production-ready advertisement stories based on user promp
    
    ⚠️ **IN SUBSEQUENT SCENES**: Always write "The EXACT SAME [product] from Scene 1"
 
-## 5. Scene Breakdown (3-5 scenes, suggest 3 for simplicity)
+## 5. Scene Breakdown ({scenes_guidance})
 
 For each scene, include:
 
@@ -180,6 +215,7 @@ async def generate_story_draft(
     conversation_history: Optional[List[dict]] = None,
     reference_image_paths: Optional[List[str]] = None,
     brand_name: Optional[str] = None,
+    target_duration: Optional[int] = None,
     model: str = "gpt-4o",
     max_retries: int = 3
 ) -> str:
@@ -192,6 +228,7 @@ async def generate_story_draft(
         conversation_history: Optional conversation history for context
         reference_image_paths: Optional paths to reference images (person, product, etc.)
         brand_name: Optional brand name to feature prominently in the advertisement
+        target_duration: Optional target video duration in seconds (extracted from prompt or specified)
         model: OpenAI model to use (default: gpt-4o)
         max_retries: Maximum retry attempts on errors
         
@@ -202,6 +239,27 @@ async def generate_story_draft(
         raise ValueError("OPENAI_API_KEY not configured")
     
     async_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    
+    # Determine duration guidance and required scenes
+    if target_duration:
+        duration_guidance = f"{target_duration} seconds (as specified by user)"
+        # Calculate required number of scenes based on 8 seconds max per scene
+        import math
+        min_scenes_required = math.ceil(target_duration / 8)
+        # Ensure at least 3 scenes (for 3-act structure)
+        required_scenes = max(3, min_scenes_required)
+        scenes_guidance = f"**CRITICAL: You MUST create EXACTLY {required_scenes} scenes** (to achieve {target_duration}s target: {required_scenes} scenes × ~{target_duration // required_scenes}s per scene)"
+        logger.info(f"[Story Director] Target {target_duration}s requires {required_scenes} scenes ({target_duration / 8:.1f} at 8s max)")
+    else:
+        duration_guidance = "12-20 seconds"
+        required_scenes = 3  # Default 3-act structure
+        scenes_guidance = "3-5 scenes, suggest 3 for simplicity"
+    
+    # Format system prompt with duration guidance and scene count
+    system_prompt = STORY_DIRECTOR_SYSTEM_PROMPT.format(
+        target_duration_guidance=duration_guidance,
+        scenes_guidance=scenes_guidance
+    )
     
     # Build context from conversation history
     context_messages = []
@@ -301,7 +359,7 @@ async def generate_story_draft(
                 
                 # Build messages
                 messages = [
-                    {"role": "system", "content": STORY_DIRECTOR_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     *context_messages
                 ]
                 

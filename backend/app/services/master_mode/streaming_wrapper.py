@@ -16,7 +16,8 @@ async def generate_story_iterative_with_streaming(
     generation_id: str,
     max_iterations: int = 3,
     reference_image_paths: Optional[List[str]] = None,
-    brand_name: Optional[str] = None
+    brand_name: Optional[str] = None,
+    target_duration: Optional[int] = None
 ) -> StoryGenerationResult:
     """
     Wrapper around story generation that streams LLM interactions to SSE.
@@ -28,7 +29,8 @@ async def generate_story_iterative_with_streaming(
         user_prompt=user_prompt,
         max_iterations=max_iterations,
         reference_image_paths=reference_image_paths,
-        brand_name=brand_name
+        brand_name=brand_name,
+        target_duration=target_duration
     )
     
     # Stream the conversation history retroactively
@@ -91,7 +93,8 @@ async def generate_scenes_with_streaming(
     story: str,
     generation_id: str,
     max_iterations_per_scene: int = 3,
-    max_cohesor_iterations: int = 2
+    max_cohesor_iterations: int = 2,
+    expected_scene_count: Optional[int] = None
 ) -> ScenesGenerationResult:
     """
     Wrapper around scene generation that streams LLM interactions to SSE.
@@ -102,7 +105,8 @@ async def generate_scenes_with_streaming(
     result = await _generate_scenes_from_story(
         story=story,
         max_iterations_per_scene=max_iterations_per_scene,
-        max_cohesor_iterations=max_cohesor_iterations
+        max_cohesor_iterations=max_cohesor_iterations,
+        expected_scene_count=expected_scene_count
     )
     
     # Stream the conversation history

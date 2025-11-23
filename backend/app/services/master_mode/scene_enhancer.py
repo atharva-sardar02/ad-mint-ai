@@ -7,6 +7,7 @@ Veo 3.1-optimized prompts with maximum visual specificity.
 import asyncio
 import json
 import logging
+import re
 from typing import Dict, Any, Optional, List
 from openai import AsyncOpenAI
 import os
@@ -280,6 +281,8 @@ async def align_enhanced_scenes(
     """
     Align all enhanced scenes to ensure visual consistency (lighting, color, subject).
     This runs AFTER parallel enhancement to fix any drift.
+    
+    NOTE: If alignment fails after retries, returns original scenes (graceful degradation).
     """
     async_client = AsyncOpenAI(api_key=openai_api_key)
     
@@ -289,6 +292,13 @@ async def align_enhanced_scenes(
         scenes_text += f"Scene {s['scene_number']}:\n{s['enhanced_content']}\n\n"
     
     logger.info(f"[Scene Enhancer] Aligning {len(scenes)} enhanced scenes for visual consistency...")
+    
+    # If we have many scenes, the JSON output might be too large/complex
+    # Skip alignment for 6+ scenes to avoid JSON parsing issues
+    if len(scenes) >= 6:
+        logger.info(f"[Scene Enhancer] Skipping alignment for {len(scenes)} scenes (too many for reliable JSON output)")
+        logger.info("[Scene Enhancer] Using scenes as-is (already enhanced with consistent style)")
+        return scenes
     
     try:
         for attempt in range(1, max_retries + 1):
@@ -301,11 +311,29 @@ async def align_enhanced_scenes(
                     ],
                     response_format={"type": "json_object"},
                     temperature=0.5,
-                    max_tokens=4000
+                    max_tokens=8000  # Increased from 4000 for longer videos
                 )
                 
                 content = response.choices[0].message.content
-                data = json.loads(content)
+                
+                # Try to parse JSON with better error handling
+                try:
+                    data = json.loads(content)
+                except json.JSONDecodeError as json_err:
+                    # Log the problematic content for debugging
+                    logger.error(f"[Scene Aligner] JSON parsing failed. Content length: {len(content)}")
+                    logger.error(f"[Scene Aligner] Content preview: {content[:500]}...")
+                    
+                    # Try to clean the JSON by fixing common issues
+                    import re
+                    # Remove any potential control characters
+                    cleaned_content = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', content)
+                    try:
+                        data = json.loads(cleaned_content)
+                        logger.info("[Scene Aligner] Successfully parsed JSON after cleaning control characters")
+                    except:
+                        # If still failing, raise the original error
+                        raise json_err
                 aligned_list = data.get("aligned_scenes", [])
                 
                 if len(aligned_list) != len(scenes):
@@ -329,10 +357,20 @@ async def align_enhanced_scenes(
                 if attempt < max_retries:
                     await asyncio.sleep(1)
                     continue
-                raise
+                else:
+                    # After all retries failed, log warning and return original scenes
+                    logger.warning(f"[Scene Aligner] All {max_retries} attempts failed. Using scenes as-is (already enhanced).")
+                    return scenes
                 
+    except Exception as e:
+        # Catch-all: If anything goes wrong, return original scenes
+        logger.error(f"[Scene Aligner] Unexpected error: {e}. Using scenes as-is.")
+        return scenes
     finally:
         await async_client.close()
+    
+    # Fallback (should not reach here, but just in case)
+    return scenes
 
 
 async def enhance_scene_for_video(
