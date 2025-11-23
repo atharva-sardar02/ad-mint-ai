@@ -37,7 +37,7 @@ story_location: "{project-root}/docs/sprint-artifacts"
 
 development_status:
   epic-1: contexted
-  1-1-unified-pipeline-orchestrator-configuration-system: in-progress
+  1-1-unified-pipeline-orchestrator-configuration-system: done
   1-2-master-mode-3-reference-image-consistency-system: backlog
   1-3-parallel-video-clip-generation-with-real-time-progress: backlog
   1-4-background-vbench-quality-scoring-with-non-blocking-ui: backlog
