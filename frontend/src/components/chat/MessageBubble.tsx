@@ -5,7 +5,6 @@
  * Styled with ChatGPT-like appearance.
  */
 
-import React from "react";
 import type { ChatMessage } from "../../types/pipeline";
 
 export interface MessageBubbleProps {

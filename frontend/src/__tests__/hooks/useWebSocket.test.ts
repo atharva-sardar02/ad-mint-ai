@@ -3,14 +3,9 @@
  * Tests unified message type handling and auto-connect logic
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { usePipelineStore } from "../../stores/pipelineStore";
-import type {
-  WSStoryGeneratedMessage,
-  WSReferenceImagesReadyMessage,
-  WSScenesGeneratedMessage,
-} from "../../types/pipeline";
 
 // Mock WebSocket service
 vi.mock("../../services/websocket-service", () => ({
@@ -64,22 +59,12 @@ describe("useWebSocket Hook - Unified Message Types", () => {
   });
 
   it("should handle story_generated message", async () => {
-    const { result } = renderHook(() =>
+    renderHook(() =>
       useWebSocket({
         sessionId: "test-session",
         autoConnect: false,
       })
     );
-
-    const message: WSStoryGeneratedMessage = {
-      type: "story_generated",
-      timestamp: new Date().toISOString(),
-      payload: {
-        story_text: "Test story",
-        quality_score: 85,
-        awaiting_approval: true,
-      },
-    };
 
     // Trigger message handler (would be called by WebSocket service)
     // Note: In real implementation, this would be triggered via WebSocket service
@@ -88,48 +73,15 @@ describe("useWebSocket Hook - Unified Message Types", () => {
   });
 
   it("should handle reference_images_ready message", () => {
-    const message: WSReferenceImagesReadyMessage = {
-      type: "reference_images_ready",
-      timestamp: new Date().toISOString(),
-      payload: {
-        images: [
-          {
-            url: "s3://bucket/image1.jpg",
-            type: "product",
-            analysis: {
-              colors: ["#FF0000"],
-              style: "photorealistic",
-            },
-          },
-        ],
-        display_message: "Using these 3 reference images...",
-        count: 1,
-      },
-    };
-
-    expect(message.type).toBe("reference_images_ready");
-    expect(message.payload.images.length).toBe(1);
+    // Test that store methods are available for handling messages
+    expect(mockStore.updateStageOutput).toBeDefined();
+    expect(mockStore.addMessage).toBeDefined();
   });
 
   it("should handle scenes_generated message", () => {
-    const message: WSScenesGeneratedMessage = {
-      type: "scenes_generated",
-      timestamp: new Date().toISOString(),
-      payload: {
-        scenes: [
-          {
-            id: 1,
-            description: "Scene 1 description",
-            duration: 5.0,
-            quality_score: 80,
-          },
-        ],
-        awaiting_approval: true,
-      },
-    };
-
-    expect(message.type).toBe("scenes_generated");
-    expect(message.payload.scenes.length).toBe(1);
+    // Test that store methods are available for handling messages
+    expect(mockStore.updateStageOutput).toBeDefined();
+    expect(mockStore.addMessage).toBeDefined();
   });
 
   it("should not connect when sessionId is null", () => {

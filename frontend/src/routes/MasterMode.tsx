@@ -260,7 +260,7 @@ export const MasterMode: React.FC = () => {
       });
 
       // Call API
-      const response = await apiClient.post<StoryGenerationResponse>(
+      await apiClient.post<StoryGenerationResponse>(
         "/api/master-mode/generate-story",
         formData,
         {
@@ -386,6 +386,7 @@ export const MasterMode: React.FC = () => {
           <Toast
             message={toast.message}
             type={toast.type}
+            isVisible={toast.isVisible}
             onClose={() => setToast({ ...toast, isVisible: false })}
           />
         )}
@@ -405,7 +406,7 @@ export const MasterMode: React.FC = () => {
               rows={5}
               className={errors.prompt ? "border-red-300" : ""}
             />
-            {errors.prompt && <ErrorMessage>{errors.prompt}</ErrorMessage>}
+            {errors.prompt && <ErrorMessage message={errors.prompt} />}
           </div>
 
           {/* Reference Images */}
@@ -468,7 +469,7 @@ export const MasterMode: React.FC = () => {
                 </div>
               ))}
             </div>
-            {errors.referenceImages && <ErrorMessage>{errors.referenceImages}</ErrorMessage>}
+            {errors.referenceImages && <ErrorMessage message={errors.referenceImages} />}
           </div>
 
           {/* Title (Optional) */}

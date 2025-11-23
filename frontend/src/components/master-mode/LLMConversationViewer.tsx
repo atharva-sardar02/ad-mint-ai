@@ -141,22 +141,24 @@ export const LLMConversationViewer: React.FC<LLMConversationViewerProps> = ({
 
   const getAgentBgColor = (agent: string): string => {
     const color = getAgentColor(agent);
-    return {
+    const colors: Record<string, string> = {
       blue: "bg-blue-50 border-blue-200",
       purple: "bg-purple-50 border-purple-200",
       green: "bg-green-50 border-green-200",
       gray: "bg-gray-50 border-gray-200",
-    }[color];
+    };
+    return colors[color] || colors.gray;
   };
 
   const getAgentTextColor = (agent: string): string => {
     const color = getAgentColor(agent);
-    return {
+    const colors: Record<string, string> = {
       blue: "text-blue-700",
       purple: "text-purple-700",
       green: "text-green-700",
       gray: "text-gray-700",
-    }[color];
+    };
+    return colors[color] || colors.gray;
   };
 
   return (
@@ -187,7 +189,6 @@ export const LLMConversationViewer: React.FC<LLMConversationViewerProps> = ({
         )}
 
         {interactions.map((interaction, idx) => {
-          const isResponse = interaction.interaction_type === "response";
           const agentColor = getAgentBgColor(interaction.agent);
           const textColor = getAgentTextColor(interaction.agent);
 

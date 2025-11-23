@@ -5,7 +5,6 @@
  * Shown at story and scene stages per PRD FR57-FR63/FR29-FR31.
  */
 
-import React from "react";
 
 export interface QuickActionsProps {
   /** Callback when user approves */

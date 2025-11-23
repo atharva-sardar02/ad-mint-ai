@@ -5,7 +5,6 @@
  * Read-only display per Story 1.2 constraint (no feedback/regeneration in MVP).
  */
 
-import React from "react";
 
 export interface ReferenceImage {
   url: string;
