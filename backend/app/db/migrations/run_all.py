@@ -23,6 +23,7 @@ from app.db.migrations.add_parent_generation_id import run_migration as migrate_
 from app.db.migrations.add_generation_groups import run_migration as migrate_groups
 from app.db.migrations.add_coherence_settings import run_migration as migrate_coherence
 from app.db.migrations.create_editing_sessions_table import run_migration as migrate_editing_sessions
+from app.db.migrations.add_basic_settings_and_generation_time import run_migration as migrate_basic_settings
 
 
 def run_all_migrations():
@@ -33,15 +34,16 @@ def run_all_migrations():
         bool: True if all migrations succeeded, False otherwise
     """
     migrations = [
-        ("Add video_url and thumbnail_url", migrate_video_url),
-        ("Add llm_specification and scene_plan", migrate_llm_spec),
-        ("Add temp_clip_paths and cancellation_requested", migrate_temp_clips),
-        ("Add title to generations", migrate_title),
-        ("Add seed_value to generations", migrate_seed),
-        ("Add parent_generation_id to generations", migrate_parent_id),
-        ("Add generation_groups", migrate_groups),
-        ("Add coherence_settings", migrate_coherence),
         ("Create editing_sessions table", migrate_editing_sessions),
+        ("Add generation_groups", migrate_groups),
+        ("Add title to generations", migrate_title),
+        ("Add llm_specification and scene_plan", migrate_llm_spec),
+        ("Add video_url and thumbnail_url", migrate_video_url),
+        ("Add temp_clip_paths and cancellation_requested", migrate_temp_clips),
+        ("Add seed_value to generations", migrate_seed),
+        ("Add coherence_settings", migrate_coherence),
+        ("Add parent_generation_id to generations", migrate_parent_id),
+        ("Add basic_settings and generation_time", migrate_basic_settings),
     ]
     
     print("🔄 Starting database migrations...")

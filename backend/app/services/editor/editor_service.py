@@ -34,10 +34,34 @@ def get_full_url(relative_path: Optional[str]) -> Optional[str]:
     if relative_path.startswith("http://") or relative_path.startswith("https://"):
         return relative_path
     
-    # Convert relative path to full URL
-    base_url = settings.STATIC_BASE_URL.rstrip("/")
-    path = relative_path.lstrip("/")
-    return f"{base_url}/{path}"
+    # Normalize path: convert backslashes to forward slashes (handle Windows paths)
+    normalized_path = relative_path.replace("\\", "/")
+    
+    # If storage mode is S3, generate presigned URL
+    if settings.STORAGE_MODE == "s3":
+        try:
+            from app.services.storage.s3_storage import get_s3_storage
+            s3_storage = get_s3_storage()
+            # Generate presigned URL (expires in 1 hour)
+            presigned_url = s3_storage.generate_presigned_url(normalized_path, expiration=3600)
+            return presigned_url
+        except Exception as e:
+            logger.warning(f"Failed to generate presigned URL for {normalized_path}: {e}, falling back to static URL")
+            # Fall back to static URL if S3 fails
+            base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
+            path = normalized_path.lstrip("/")
+            # Remove "output/" prefix if present (since base_url already includes /output)
+            if path.startswith("output/"):
+                path = path[7:]  # Remove "output/" prefix
+            return f"{base_url}/{path}" if base_url else normalized_path
+    else:
+        # Convert relative path to full URL (local storage)
+        base_url = settings.STATIC_BASE_URL.rstrip("/") if settings.STATIC_BASE_URL else ""
+        path = normalized_path.lstrip("/")
+        # Remove "output/" prefix if present (since base_url already includes /output)
+        if path.startswith("output/"):
+            path = path[7:]  # Remove "output/" prefix
+        return f"{base_url}/{path}" if base_url else normalized_path
 
 
 def extract_clips_from_generation(
