@@ -67,6 +67,14 @@ class Generation(Base):
         index=True
     )  # FK to generation_groups (nullable for backward compatibility)
     parent_generation_id = Column(String(36), ForeignKey("generations.id"), nullable=True, index=True)  # Link to original generation for edited videos
+
+    # Unified Pipeline JSONB fields (Story 1.1)
+    brand_assets = Column(JSON, nullable=True)  # Uploaded brand images: {product_images: [], logo: str, character_images: []}
+    reference_images = Column(JSON, nullable=True)  # 3 reference images with Vision analysis
+    scenes = Column(JSON, nullable=True)  # Array of scene objects with descriptions
+    video_clips = Column(JSON, nullable=True)  # Array of video clip objects with S3 URLs
+    config = Column(JSON, nullable=True)  # Pipeline configuration snapshot used for this generation
+
     created_at = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 

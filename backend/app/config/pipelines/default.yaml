@@ -1,0 +1,98 @@
+# Default Pipeline Configuration for Unified Pipeline
+# This configuration consolidates 4 separate pipelines into 1 system
+
+pipeline:
+  name: "default"
+  description: "Default unified pipeline configuration"
+
+  # Stage enable/disable flags
+  stages:
+    - name: "story"
+      enabled: true
+      max_iterations: 3
+      timeout_seconds: 120
+      agent_model: "gpt-4-turbo"  # OpenAI model for story generation
+
+    - name: "reference_images"
+      enabled: true
+      count: 3  # Number of reference images (Master Mode proven standard)
+      quality_threshold: 0.7
+      timeout_seconds: 180
+      agent_model: "gpt-4-vision-preview"  # For Vision analysis
+      generation_model: "black-forest-labs/flux-schnell"  # Replicate model for image gen
+
+    - name: "scenes"
+      enabled: true
+      max_iterations: 2
+      timeout_seconds: 180
+      agent_model: "gpt-4-turbo"
+      num_scenes: 5  # Default scene count
+      scene_duration: 6  # Seconds per scene
+
+    - name: "videos"
+      enabled: true
+      parallel: true  # Enable parallel video generation (Story 1.3)
+      max_concurrent: 5  # Max simultaneous Replicate API calls
+      timeout_seconds: 600  # 10 minutes per clip
+      model: "google/veo-3"  # Replicate video model
+
+# Quality scoring configuration (Story 1.4)
+quality:
+  vbench:
+    enabled: true
+    run_in_background: true  # FastAPI BackgroundTasks
+    threshold_good: 80.0  # Green score
+    threshold_acceptable: 60.0  # Yellow score
+    score_per_clip: true  # Score individual clips
+    score_overall: true  # Score final stitched video
+
+# Session and state management
+session:
+  redis_ttl_seconds: 86400  # 24 hours
+  postgres_persistence: true  # Save to database on stage completion
+  websocket_heartbeat_seconds: 30
+  websocket_reconnect_attempts: 5
+  websocket_reconnect_backoff: [1, 2, 4, 8, 30]  # Exponential backoff
+
+# A/B testing and parallel variants
+parallel_generation:
+  max_variants: 5  # Maximum parallel variants for A/B testing
+  variant_timeout_multiplier: 1.5  # Extra time allowance for parallel runs
+
+# Rate limiting and cost control
+limits:
+  max_generations_per_hour: 10  # Per user
+  max_prompt_length: 5000  # Characters
+  max_file_upload_mb: 10  # Per file
+  max_total_upload_mb: 50  # Per generation
+
+# Storage configuration
+storage:
+  mode: "local"  # local or s3
+  s3_bucket: "ad-mint-ai-videos"  # If mode=s3
+  s3_region: "us-east-1"
+  presigned_url_expiration_hours: 24
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  structured: true  # JSON logging
+  log_prompts: false  # Privacy: don't log full prompts in production
+  log_api_responses: false  # Don't log full API responses
+
+# Framework-specific settings
+frameworks:
+  AIDA:
+    description: "Attention, Interest, Desire, Action"
+    recommended_scenes: 5
+    scene_focus: ["attention_grab", "interest_build", "desire_peak", "action_call", "brand_outro"]
+
+  PAS:
+    description: "Problem, Agitate, Solution"
+    recommended_scenes: 3
+    scene_focus: ["problem_establish", "agitate_pain", "solution_reveal"]
+
+  FAB:
+    description: "Features, Advantages, Benefits"
+    recommended_scenes: 4
+    scene_focus: ["feature_intro", "advantage_demo", "benefit_outcome", "call_to_action"]

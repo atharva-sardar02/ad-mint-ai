@@ -1,0 +1,273 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>epic-1</epicId>
+    <storyId>1.3</storyId>
+    <title>Parallel Video Clip Generation with Real-Time Progress</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-22</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-3-parallel-video-clip-generation-with-real-time-progress.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>backend developer</asA>
+    <iWant>all scene video clips to generate in parallel using asyncio with per-clip progress updates via WebSocket</iWant>
+    <soThat>total video generation time = longest clip (~1 min), not sum of all clips (~5 min), achieving 5x speed improvement</soThat>
+    <tasks>
+      - Implement video stage module (AC: #1, #2, #3)
+        - Create backend/app/services/unified_pipeline/video_stage.py with main execute() method
+        - Implement asyncio.gather() for parallel Replicate API calls to all scenes
+        - Add asyncio.Semaphore(5) rate limiting for concurrent requests
+        - Inject consistency_context into each scene video prompt
+        - Write unit tests for parallel generation logic
+      - Implement Replicate API integration (AC: #4)
+        - Create async Replicate video generation method using Veo 3 model
+        - Add polling loop (every 2 seconds) for Replicate prediction status
+        - Extract progress percentage from Replicate API response
+        - Map Replicate status to internal status values (queued, processing, rendering, complete, failed)
+        - Write unit tests mocking Replicate API responses
+      - Implement WebSocket progress streaming (AC: #4, #5)
+        - Send video_progress messages during polling loop for each clip
+        - Send video_complete message when clip generation finishes
+        - Use existing WebSocketManager from orchestrator
+        - Write integration tests for WebSocket message delivery
+      - Implement S3 upload and database storage (AC: #5)
+        - Download completed video from Replicate output URL
+        - Upload to S3 using existing S3Storage service
+        - Store video clip metadata in Generation.video_clips JSONB array
+        - Write unit tests for S3 upload error handling
+      - Implement error handling (AC: #7)
+        - Catch exceptions in asyncio tasks, continue other tasks
+        - Store per-clip error messages in video_clips array
+        - Log errors with full context (scene description, Replicate response)
+        - Add retry method for individual failed clips
+        - Write unit tests for partial failure scenarios
+      - Create frontend ParallelProgress component (AC: #6)
+        - Implement frontend/src/components/pipeline/ParallelProgress.tsx
+        - Display progress bar for each clip with percentage
+        - Update progress bars on WebSocket messages
+        - Show green checkmark on clip completion
+        - Write component tests with @testing-library/react
+      - Integration with orchestrator (AC: #1, #8)
+        - Add video stage execution in orchestrator after scene approval
+        - Pass scenes and consistency_context to video stage
+        - Measure total generation time (first API call → last clip complete)
+        - Verify performance target: &lt;90 seconds for 5 clips
+        - Write integration tests for orchestrator → video stage flow
+      - Testing and validation (AC: All)
+        - Test with 5 scenes (standard case)
+        - Test with 1 scene (no parallelism, still works)
+        - Test partial failure (1 clip fails, 4 succeed)
+        - Test Replicate API rate limiting (semaphore blocks excess concurrent calls)
+        - Verify WebSocket messages sent for all clips
+        - Verify S3 uploads complete before video_complete message
+        - Performance test: measure total time for 5 clips in parallel
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC#1: Parallel Execution - All scene video clips generate simultaneously in parallel using asyncio.gather() - NOT sequentially
+    AC#2: Semaphore Rate Limiting - Implementation uses asyncio.Semaphore(5) to limit concurrent Replicate API calls (max 5-10 simultaneous requests)
+    AC#3: Consistency Context Injection - Each video generation prompt includes reference image consistency context: full_prompt = f"{consistency_context}\n\nSCENE: {scene.description}"
+    AC#4: WebSocket Progress Updates - Each video generation task sends real-time progress: message type video_progress, payload {clip_id: 1, progress: 45, status: "rendering"}, polling frequency every 2 seconds from Replicate API, status values: queued, processing, rendering, complete, failed
+    AC#5: Clip Completion Notifications - As each clip completes, send video_complete WebSocket message: payload {clip_id: 1, url: "s3://bucket/clip1.mp4", duration: 6.2}, immediate S3 upload after generation, store in Generation.video_clips JSONB array
+    AC#6: Frontend ParallelProgress Component - UI displays ParallelProgress.tsx showing all clips simultaneously with individual progress bars updating in real-time
+    AC#7: Error Handling - Partial failure support: if one clip fails continue generating others, store error in database with clip_index, allow user to retry failed clip individually, log failure with full context
+    AC#8: Performance Target Met - Total video generation time &lt; 90 seconds for 5 clips (target: ~60 seconds = longest single clip time, NOT sum of all clips = ~300 seconds)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-epic-1.md</path>
+        <title>Epic Technical Specification: Unified Pipeline Consolidation</title>
+        <section>Services and Modules - Video Stage</section>
+        <snippet>Video Stage (backend/app/services/unified_pipeline/video_stage.py) - Parallel video clip generation (asyncio concurrent), Replicate API orchestration, per-clip progress tracking, S3 upload coordination. Responsibilities: Generate all scene video clips in parallel, not sequentially.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-epic-1.md</path>
+        <title>Epic Technical Specification: Unified Pipeline Consolidation</title>
+        <section>Data Models and Contracts - VideoClip Pydantic Schema</section>
+        <snippet>VideoClip schema (lines 196-206): scene_id, url (S3 URL when complete), duration, status (queued, processing, rendering, complete, failed), progress (0-100 percentage). Stored in Generation.video_clips JSONB array.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-epic-1.md</path>
+        <title>Epic Technical Specification: Unified Pipeline Consolidation</title>
+        <section>WebSocket Messages - Video Progress</section>
+        <snippet>WebSocket Messages (lines 118-128): video_progress and video_complete message types. video_progress payload: {clip_id: 1, progress: 45, status: "rendering"}. video_complete payload: {clip_id: 1, url: "s3://bucket/clip1.mp4", duration: 6.2}.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document - Ad Mint AI Unified Pipeline</title>
+        <section>Parallel Video Clip Generation Pattern (lines 599-635)</section>
+        <snippet>Generate all scene video clips in parallel using asyncio concurrent execution. Total time = longest clip (~1 min), not sum (~5 min). asyncio.gather() with semaphore limiting (max 5-10 concurrent Replicate calls). Real-time progress updates for each clip via WebSocket. 5x speed improvement.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document - Ad Mint AI Unified Pipeline</title>
+        <section>ADR-004: Parallel Video Generation Architecture (lines 1636-1670)</section>
+        <snippet>Use asyncio.gather() for concurrent execution. Semaphore limits concurrent Replicate calls (max 5-10). Real-time progress updates for each clip via WebSocket. 5x speed improvement: 5 clips in ~1 min vs ~5 min sequential. Error handling: partial failures (retry failed clips individually).</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Story 1.3: Parallel Video Clip Generation with Real-Time Progress (lines 206-271)</section>
+        <snippet>All scene video clips generate simultaneously in parallel using asyncio. Semaphore rate limiting (max 5-10 concurrent). Consistency context injection into each prompt. WebSocket progress updates (video_progress, video_complete). Frontend ParallelProgress component. Error handling for partial failures. Performance target: &lt;90s for 5 clips.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/storage/s3_storage.py</path>
+        <kind>service</kind>
+        <symbol>S3Storage</symbol>
+        <lines>16-198</lines>
+        <reason>EXISTING service for S3 uploads. Reuse upload_file() method for video clip uploads. Has retry logic (3 attempts, exponential backoff). Use generate_presigned_url() for downloads.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/websocket.py</path>
+        <kind>service</kind>
+        <symbol>ConnectionManager</symbol>
+        <lines>56-177</lines>
+        <reason>EXISTING WebSocket manager for real-time communication. Reuse send_message() to broadcast video_progress and video_complete messages to session. Has heartbeat/ping-pong for connection health.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/db/models/generation.py</path>
+        <kind>model</kind>
+        <symbol>Generation</symbol>
+        <lines>31-86</lines>
+        <reason>EXISTING database model. video_clips JSONB field (line 75) already added in Story 1.1 for storing array of video clip metadata. Store {scene_id, url, duration, status, progress, error_message}.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/schemas/unified_pipeline.py</path>
+        <kind>schema</kind>
+        <symbol>VideoClip, VideoProgressMessage, VideoCompleteMessage</symbol>
+        <lines>42-50, 118-128</lines>
+        <reason>EXISTING Pydantic schemas for video clips and WebSocket messages. VideoClip validates clip metadata structure. VideoProgressMessage and VideoCompleteMessage define WebSocket payload contracts.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/unified_pipeline/reference_stage.py</path>
+        <kind>service</kind>
+        <symbol>ReferenceStage</symbol>
+        <lines>N/A</lines>
+        <reason>REFERENCE for stage execution pattern. Story 1.2 creates reference_stage.py with execute() method that returns consistency_context string. Video stage receives this as input for prompt injection.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="fastapi" version="&gt;=0.104.0">Async web framework with WebSocket support</package>
+        <package name="replicate" version="&gt;=0.25.0">Replicate API client for Veo 3 video generation</package>
+        <package name="asyncio" version="built-in">Python async/concurrent execution (asyncio.gather, asyncio.Semaphore)</package>
+        <package name="boto3" version="&gt;=1.34.0">AWS S3 SDK for video clip uploads</package>
+        <package name="httpx" version="&gt;=0.24.0">Async HTTP client for Replicate API polling</package>
+        <package name="pydantic" version="&gt;=2.0.0">Data validation for VideoClip schema</package>
+        <package name="pytest" version="&gt;=7.4.0">Testing framework</package>
+        <package name="pytest-asyncio" version="&gt;=0.21.0">Async test support</package>
+      </python>
+      <typescript>
+        <package name="react" version="^19.2.0">UI framework for ParallelProgress component</package>
+        <package name="@testing-library/react" version="^16.1.0">React component testing</package>
+        <package name="zustand" version="^5.0.8">State management for WebSocket updates</package>
+      </typescript>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Replicate API Rate Limits: Semaphore already limits concurrency to 5-10, implement exponential backoff on 429 responses, monitor Replicate API quotas
+    - Partial Failure Handling: If 1 of 5 clips fails, continue generating others, allow user to retry failed clip individually, do not fail entire generation
+    - Performance Target: Total video generation time &lt; 90 seconds for 5 clips (target: ~60 seconds for 5 parallel clips), measure from first API call to last clip complete
+    - Replicate Veo 3 Model: Use Replicate Veo 3 for video generation, polling every 2 seconds until complete/failed, timeout after 10 minutes per clip
+    - Consistency Context Required: Reference images must be generated first (Story 1.2), video stage depends on consistency_context from reference stage
+    - asyncio Concurrent Execution: Use asyncio.gather() with semaphore, NOT threading or multiprocessing
+    - Error Handling: Use return_exceptions=True in gather() to catch individual clip failures without stopping other clips
+    - WebSocket Per-Clip Updates: Send progress/complete messages for EACH clip individually, frontend displays all simultaneously
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Replicate Veo 3 Video Generation API</name>
+      <kind>REST endpoint</kind>
+      <signature>POST /v1/predictions -&gt; {id, status, output}, GET /v1/predictions/{id} -&gt; {status, progress, output}</signature>
+      <path>External API (replicate.com)</path>
+      <usage>Create video generation prediction, poll status every 2 seconds until complete/failed. Use Veo 3 model.</usage>
+    </interface>
+    <interface>
+      <name>WebSocket Manager - send_message()</name>
+      <kind>Python async function</kind>
+      <signature>async def send_message(session_id: str, message: dict) -&gt; None</signature>
+      <path>backend/app/api/routes/websocket.py:122</path>
+      <usage>Send video_progress and video_complete messages to all active WebSocket connections for session.</usage>
+    </interface>
+    <interface>
+      <name>S3Storage - upload_file()</name>
+      <kind>Python function</kind>
+      <signature>def upload_file(local_path: str, s3_key: str, content_type: Optional[str]) -&gt; str</signature>
+      <path>backend/app/services/storage/s3_storage.py:47</path>
+      <usage>Upload completed video clip to S3. Returns S3 URL. Has built-in retry logic (3 attempts).</usage>
+    </interface>
+    <interface>
+      <name>Generation.video_clips JSONB field</name>
+      <kind>Database field</kind>
+      <signature>video_clips JSONB: [{scene_id, url, duration, status, progress, error_message}]</signature>
+      <path>backend/app/db/models/generation.py:75</path>
+      <usage>Store array of video clip metadata. Update after each clip completes with S3 URL and duration.</usage>
+    </interface>
+    <interface>
+      <name>Orchestrator - execute_video_stage()</name>
+      <kind>Python async function</kind>
+      <signature>async def execute_video_stage(scenes: List[Scene], consistency_context: str) -&gt; List[VideoResult]</signature>
+      <path>backend/app/services/unified_pipeline/orchestrator.py</path>
+      <usage>Orchestrator calls video stage after scene approval. Passes scenes and consistency_context. Measures total generation time.</usage>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing standards from existing codebase:
+      - Unit tests use pytest with pytest-asyncio for async functions
+      - Mock external services (Replicate API, S3) using unittest.mock.AsyncMock and MagicMock
+      - Test naming convention: test_&lt;function_name&gt;_&lt;scenario&gt;
+      - Fixtures for common setup (default_config, mock_s3_storage, mock_image_processor)
+      - Integration tests verify end-to-end flows (orchestrator → video stage → database)
+      - Frontend tests use @testing-library/react with vitest runner
+      - Performance tests measure timing (asyncio timing, total generation time)
+    </standards>
+    <locations>
+      - backend/tests/test_services/test_unified_pipeline/test_video_stage.py (unit tests)
+      - backend/tests/test_api/test_websocket.py (WebSocket message delivery tests)
+      - backend/tests/test_integration/test_pipeline_execution.py (orchestrator → video stage flow)
+      - backend/tests/test_integration/test_performance.py (parallel generation timing)
+      - frontend/tests/components/test_ParallelProgress.test.tsx (frontend component tests)
+    </locations>
+    <ideas>
+      AC#1 (Parallel Execution):
+        - test_parallel_video_generation_uses_asyncio_gather: Verify asyncio.gather() called with all scene tasks
+        - test_video_clips_generate_simultaneously: Mock Replicate API, verify all 5 clips start generation within 1 second of each other (not sequential)
+      AC#2 (Semaphore Rate Limiting):
+        - test_semaphore_limits_concurrent_requests: Mock Replicate API, create 10 clips, verify max 5 concurrent calls at any time
+        - test_semaphore_releases_on_completion: Verify semaphore releases when clip completes, allowing next clip to start
+      AC#3 (Consistency Context Injection):
+        - test_consistency_context_injected_into_prompts: Verify each Replicate API call includes consistency_context in prompt
+        - test_prompt_format_matches_specification: Verify prompt format: "{consistency_context}\n\nSCENE: {scene.description}"
+      AC#4 (WebSocket Progress Updates):
+        - test_video_progress_messages_sent_during_polling: Mock Replicate polling, verify video_progress messages sent every 2 seconds
+        - test_progress_percentage_extracted_from_replicate: Mock Replicate response with progress field, verify extracted correctly
+        - test_status_mapping_from_replicate_to_internal: Verify Replicate status values map to internal status (queued, processing, rendering, complete, failed)
+      AC#5 (Clip Completion Notifications):
+        - test_video_complete_message_sent_on_completion: Mock Replicate completion, verify video_complete WebSocket message sent
+        - test_s3_upload_before_video_complete_message: Verify S3 upload completes before sending video_complete message
+        - test_video_clips_stored_in_database_jsonb: Verify clip metadata stored in Generation.video_clips JSONB array after completion
+      AC#6 (Frontend ParallelProgress Component):
+        - test_parallel_progress_renders_all_clips: Render ParallelProgress with 5 clips, verify 5 progress bars displayed
+        - test_progress_bars_update_on_websocket_messages: Simulate WebSocket video_progress messages, verify progress bars update in real-time
+        - test_green_checkmark_shows_on_completion: Simulate video_complete message, verify green checkmark displayed for clip
+      AC#7 (Error Handling):
+        - test_partial_failure_continues_other_clips: Mock 1 clip failure, verify other 4 clips continue generating
+        - test_error_stored_in_database_with_clip_index: Mock clip failure, verify error message stored in video_clips array with clip_index
+        - test_failed_clip_can_be_retried_individually: Verify retry_clip() method exists and can regenerate single failed clip
+        - test_errors_logged_with_full_context: Verify error logs include scene description, error message, Replicate API response
+      AC#8 (Performance Target):
+        - test_total_generation_time_less_than_90_seconds: Generate 5 clips in parallel, measure time from first API call to last completion, verify &lt; 90s
+        - test_parallel_time_equals_longest_clip_not_sum: Generate 5 clips with varying durations, verify total time ≈ longest clip time (not sum)
+    </ideas>
+  </tests>
+</story-context>

@@ -21,6 +21,7 @@ from app.api.routes import (
     master_mode,
     master_mode_progress,
     products,
+    unified_pipeline,
     users,
     websocket,
 )
@@ -128,6 +129,11 @@ app.include_router(
     interactive_generation.router,
     prefix="/api/v1/interactive",
     tags=["interactive"],
+)
+app.include_router(
+    unified_pipeline.router,
+    prefix="/api",
+    tags=["unified-pipeline"],
 )
 app.include_router(websocket.router, tags=["websocket"])
 

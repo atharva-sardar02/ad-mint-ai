@@ -1,0 +1,316 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>2</storyId>
+    <title>Master Mode 3-Reference-Image Consistency System</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-22</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-2-master-mode-3-reference-image-consistency-system.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>backend developer</asA>
+    <iWant>the reference image stage to implement Master Mode's proven 3-reference-image approach with GPT-4 Vision analysis</iWant>
+    <soThat>all videos achieve >85% visual similarity across clips (Master Mode quality standard)</soThat>
+    <tasks>
+- [ ] Create reference stage module (AC: #1, #2, #3, #8)
+  - [ ] Implement `backend/app/services/unified_pipeline/reference_stage.py` with main `execute()` method
+  - [ ] Add brand asset integration logic (use provided images as references)
+  - [ ] Add auto-generation fallback (generate 3 diverse reference images from story)
+  - [ ] Implement S3 upload for generated/selected reference images
+  - [ ] Write unit tests for brand asset handling and auto-generation
+
+- [ ] Implement GPT-4 Vision analysis (AC: #4, #5)
+  - [ ] Extend `backend/app/services/media/image_processor.py` with Vision API integration
+  - [ ] Create analysis prompt extracting character, product, color, style, environment
+  - [ ] Parse Vision API response into ReferenceImageAnalysis Pydantic schema
+  - [ ] Store analysis results in Generation.reference_images JSONB
+  - [ ] Write unit tests for Vision analysis parsing
+
+- [ ] Create consistency context formatter (AC: #6)
+  - [ ] Implement consistency context string builder from analysis results
+  - [ ] Format as structured text for injection into scene/video prompts
+  - [ ] Ensure all key characteristics included (character, product, colors, style)
+  - [ ] Write unit tests for context formatting
+
+- [ ] Integrate with orchestrator (AC: #1, #7)
+  - [ ] Add reference stage execution in orchestrator after story approval
+  - [ ] Pass brand_assets from GenerationRequest to reference stage
+  - [ ] Store consistency_context in orchestrator state for scene stage
+  - [ ] Add WebSocket message for reference images display in chat feed
+  - [ ] Write integration tests for orchestrator → reference stage flow
+
+- [ ] Testing and validation (AC: All)
+  - [ ] Test with brand assets provided (3 images, 1 image, logo only scenarios)
+  - [ ] Test auto-generation (no brand assets, story-based generation)
+  - [ ] Verify Vision analysis extracts all required characteristics
+  - [ ] Verify consistency context formatting matches spec
+  - [ ] Test S3 upload and database storage
+  - [ ] Test interactive mode display (chat feed message with images)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. **Reference Stage Module** - A single `backend/app/services/unified_pipeline/reference_stage.py` module executes after story approval, generating or using 3 reference images
+
+2. **Brand Asset Integration** - If user provided brand assets (product_images, logo, character_images):
+   - Use first 3 brand images as reference images
+   - Prioritize: product_images[0], character_images[0], logo (or any provided assets up to 3)
+   - Store mapping: which brand assets became references
+
+3. **Auto-Generation Fallback** - If no brand assets provided:
+   - Generate 3 reference images from approved story using Replicate Nano Banana Pro
+   - Prompts derived from story: main character, key product, scene environment
+   - Ensure diversity: 1 character-focused, 1 product-focused, 1 environment-focused
+
+4. **GPT-4 Vision Analysis** - Each reference image analyzed to extract:
+   - Character appearance (age, gender, clothing, hair, facial features, body type)
+   - Product features (color, shape, size, branding, key visual elements)
+   - Color palette (dominant colors as hex codes, accent colors)
+   - Visual style (photorealistic, illustrated, 3D render, sketch)
+   - Environmental context (indoor/outdoor, lighting, setting)
+
+5. **Structured Storage** - Analysis results stored in Generation.reference_images JSONB array:
+   ```json
+   [
+     {
+       "url": "s3://bucket/ref1.jpg",
+       "type": "character",
+       "analysis": {
+         "character_description": "...",
+         "product_features": "...",
+         "colors": ["#FF5733", "#C70039"],
+         "style": "photorealistic",
+         "environment": "..."
+       }
+     }
+   ]
+   ```
+
+6. **Consistency Context String** - Reference characteristics formatted as consistency_context string for scene stage:
+   ```
+   CHARACTER APPEARANCE: [detailed description from analysis]
+   PRODUCT FEATURES: [detailed description from analysis]
+   COLOR PALETTE: [hex codes from analysis]
+   VISUAL STYLE: [style from analysis]
+   ENVIRONMENTAL CONTEXT: [environment from analysis]
+   ```
+
+7. **Interactive Display** - In interactive mode, display reference images in chat feed with message: "Using these 3 reference images for visual consistency across all scenes" (read-only, no user feedback in MVP)
+
+8. **S3 Upload** - Reference images uploaded to S3 with paths stored in database (Generation.reference_images JSONB)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-epic-1.md</path>
+        <title>Epic Technical Specification: Unified Pipeline Consolidation</title>
+        <section>Reference Stage Module (line 84)</section>
+        <snippet>Reference Stage Module: Responsibilities include 3-ref image generation/selection, GPT-4 Vision analysis, brand asset integration, consistency context extraction</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-artifacts/tech-spec-epic-epic-1.md</path>
+        <title>Epic Technical Specification: Unified Pipeline Consolidation</title>
+        <section>Data Models and Contracts (lines 184-195)</section>
+        <snippet>ReferenceImage and ReferenceImageAnalysis Pydantic schemas with exact field structure: character_description, product_features, colors (hex codes), style, environment</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document - Ad Mint AI Unified Pipeline</title>
+        <section>3-Reference-Image Consistency System (lines 711-752)</section>
+        <snippet>Three reference images establish visual baseline (character, product, color palette), GPT-4 Vision analyzes each image to extract detailed characteristics, consistency context injected into ALL scene video prompts for >85% visual similarity</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document - Ad Mint AI Unified Pipeline</title>
+        <section>Background Task Processing (ADR-001, lines 1562-1583)</section>
+        <snippet>Reference generation uses synchronous execution (critical path before scenes), Vision analysis synchronous (fast, <5s per image), no BackgroundTasks needed</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document - Ad Mint AI Unified Pipeline</title>
+        <section>Configuration Patterns (ADR-005, lines 1672-1706)</section>
+        <snippet>Reference stage configuration in `default.yaml` (enable/disable, generation model, max retries)</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown - ad-mint-ai</title>
+        <section>Story 1.2: Master Mode 3-Reference-Image Consistency System (lines 137-203)</section>
+        <snippet>Acceptance criteria for reference image generation, GPT-4 Vision analysis, brand asset integration, consistency context formatting, S3 upload, and interactive display</snippet>
+      </doc>
+    </docs>
+    <code>
+      <file>
+        <path>backend/app/db/models/generation.py</path>
+        <kind>database model</kind>
+        <symbol>Generation</symbol>
+        <lines>31-86</lines>
+        <reason>Contains reference_images JSONB field (line 73) and brand_assets JSONB field (line 72) for storing reference image data and analysis</reason>
+      </file>
+      <file>
+        <path>backend/app/schemas/unified_pipeline.py</path>
+        <kind>pydantic schema</kind>
+        <symbol>BrandAssets</symbol>
+        <lines>11-15</lines>
+        <reason>Defines BrandAssets schema with product_images, logo, character_images fields - input to reference stage</reason>
+      </file>
+      <file>
+        <path>backend/app/schemas/unified_pipeline.py</path>
+        <kind>pydantic schema</kind>
+        <symbol>ReferenceImageAnalysis</symbol>
+        <lines>18-24</lines>
+        <reason>Defines ReferenceImageAnalysis schema for GPT-4 Vision output: character_description, product_features, colors, style, environment</reason>
+      </file>
+      <file>
+        <path>backend/app/schemas/unified_pipeline.py</path>
+        <kind>pydantic schema</kind>
+        <symbol>ReferenceImage</symbol>
+        <lines>27-31</lines>
+        <reason>Defines ReferenceImage schema with url, type, analysis - structure for reference_images JSONB array</reason>
+      </file>
+      <file>
+        <path>backend/app/services/storage/s3_storage.py</path>
+        <kind>service</kind>
+        <symbol>S3Storage</symbol>
+        <lines>16-198</lines>
+        <reason>Existing S3 upload service with upload_file() method for uploading reference images to S3, includes retry logic and error handling</reason>
+      </file>
+      <file>
+        <path>backend/app/services/unified_pipeline/orchestrator.py</path>
+        <kind>service</kind>
+        <symbol>PipelineOrchestrator</symbol>
+        <lines>1-20</lines>
+        <reason>Orchestrator will call reference stage after story approval, pass brand_assets from GenerationRequest, store consistency_context for scene stage</reason>
+      </file>
+      <file>
+        <path>backend/app/services/unified_pipeline/config_loader.py</path>
+        <kind>service</kind>
+        <symbol>load_pipeline_config</symbol>
+        <lines>1-20</lines>
+        <reason>Config loader for reference stage settings from backend/app/config/pipelines/default.yaml</reason>
+      </file>
+    </code>
+    <dependencies>
+      <python>
+        <package name="openai" version=">=1.0.0">GPT-4 Vision API client for reference image analysis</package>
+        <package name="replicate" version=">=0.25.0">Replicate API client for Nano Banana Pro image generation</package>
+        <package name="boto3" version=">=1.34.0">AWS S3 SDK for reference image uploads (already installed)</package>
+        <package name="pydantic" version=">=2.0.0">Request/response schemas (already installed)</package>
+        <package name="httpx" version=">=0.24.0">Async HTTP client for API calls (already installed)</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+**MVP Limitation:** Reference images read-only in interactive mode (no user feedback or regeneration in Story 1.2, deferred to Phase 2)
+
+**Vision API Rate Limits:** GPT-4 Vision limited to ~10 requests/minute (adequate for 3 images per generation), implement retry logic with exponential backoff
+
+**Image Generation Fallback:** If Replicate Nano Banana Pro fails, try alternative models (Stable Diffusion 3, FLUX), do not fail entire generation
+
+**No Celery Dependency:** Reference stage runs synchronously as critical path (scenes cannot proceed without references), Vision analysis fast enough (<5s per image) for synchronous execution
+
+**Brownfield Compatibility:** Reuse existing S3 infrastructure (backend/app/services/storage/s3_storage.py), do not introduce new storage backends
+
+**Database Schema:** Generation.reference_images JSONB field added in Story 1.1 migration, use existing field
+
+**Pydantic Schemas:** ReferenceImage and ReferenceImageAnalysis defined in backend/app/schemas/unified_pipeline.py, reuse directly
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>ReferenceStage.execute</name>
+      <kind>Python async method</kind>
+      <signature>async def execute(story: str, brand_assets: Optional[BrandAssets], config: PipelineConfig) -> List[ReferenceImage]</signature>
+      <path>backend/app/services/unified_pipeline/reference_stage.py</path>
+    </interface>
+    <interface>
+      <name>ImageProcessor.analyze_with_vision</name>
+      <kind>Python async method</kind>
+      <signature>async def analyze_with_vision(image_url: str) -> ReferenceImageAnalysis</signature>
+      <path>backend/app/services/media/image_processor.py</path>
+    </interface>
+    <interface>
+      <name>S3Storage.upload_file</name>
+      <kind>Python method</kind>
+      <signature>def upload_file(local_path: str, s3_key: str, content_type: Optional[str] = None) -> str</signature>
+      <path>backend/app/services/storage/s3_storage.py</path>
+    </interface>
+    <interface>
+      <name>Generation.reference_images</name>
+      <kind>SQLAlchemy JSONB column</kind>
+      <signature>reference_images = Column(JSON, nullable=True)</signature>
+      <path>backend/app/db/models/generation.py</path>
+    </interface>
+    <interface>
+      <name>Generation.brand_assets</name>
+      <kind>SQLAlchemy JSONB column</kind>
+      <signature>brand_assets = Column(JSON, nullable=True)</signature>
+      <path>backend/app/db/models/generation.py</path>
+    </interface>
+    <interface>
+      <name>ReferenceImagesReadyMessage</name>
+      <kind>WebSocket message type</kind>
+      <signature>{"type": "reference_images_ready", "payload": {"images": [{"url": "s3://...", "type": "product", "analysis": {...}}]}}</signature>
+      <path>backend/app/schemas/unified_pipeline.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+Epic 1 follows pyramid testing strategy: extensive unit tests (>70% coverage) → integration tests for critical flows → manual testing for UX validation. Backend uses pytest with async support (pytest-asyncio), mocking external services (OpenAI API, Replicate API, S3 uploads). Unit tests in tests/test_services/, integration tests in tests/test_integration/.
+    </standards>
+    <locations>
+- tests/test_services/test_unified_pipeline/test_reference_stage.py
+- tests/test_services/test_media/test_image_processor.py
+- tests/test_integration/test_pipeline_execution.py
+    </locations>
+    <ideas>
+**AC #1 - Reference Stage Module:**
+- Test reference stage initialization with valid config
+- Test execute() method with brand assets provided (uses first 3)
+- Test execute() method with no brand assets (generates 3 images)
+- Test execute() method with partial brand assets (1 logo, generates 2 more)
+
+**AC #2 - Brand Asset Integration:**
+- Test prioritization logic: product_images[0], character_images[0], logo
+- Test with 3+ brand assets (uses first 3)
+- Test with 1 brand asset (generates 2 more)
+- Test brand asset mapping stored correctly
+
+**AC #3 - Auto-Generation Fallback:**
+- Mock Replicate Nano Banana Pro API calls
+- Test 3 diverse prompts generated from story (character, product, environment)
+- Test image generation failure → retry with alternative models
+- Test S3 upload of generated images
+
+**AC #4 - GPT-4 Vision Analysis:**
+- Mock OpenAI Vision API calls
+- Test analysis prompt extracts all 5 characteristics
+- Test parsing Vision API response into ReferenceImageAnalysis schema
+- Test Vision API failure → retry with exponential backoff
+
+**AC #5 - Structured Storage:**
+- Test reference_images JSONB array structure matches schema
+- Test 3 ReferenceImage objects stored correctly
+- Test analysis field populated with all characteristics
+
+**AC #6 - Consistency Context String:**
+- Test context string formatting includes all 5 sections
+- Test hex color codes extracted correctly
+- Test context string passed to scene stage
+
+**AC #7 - Interactive Display:**
+- Mock WebSocket manager
+- Test ReferenceImagesReadyMessage sent with 3 images
+- Test message payload includes urls, types, analysis
+
+**AC #8 - S3 Upload:**
+- Mock S3Storage.upload_file()
+- Test S3 URLs stored in reference_images array
+- Test S3 upload failure → retry 3 times
+    </ideas>
+  </tests>
+</story-context>

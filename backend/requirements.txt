@@ -22,6 +22,7 @@ torch>=2.0.0
 numpy>=1.24.0,<2.0
 requests>=2.31.0
 redis>=5.0.0
+pyyaml>=6.0.0
 # VBench evaluation library (when available)
 # vbench>=0.1.0  # TODO: Install from GitHub: Vchitect/VBench when library becomes available
 
