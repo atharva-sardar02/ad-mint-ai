@@ -17,6 +17,7 @@ from app.api.deps import get_current_user
 from app.db.models.user import User
 from app.db.models.generation import Generation
 from app.db.session import get_db
+from app.core.config import settings
 from app.services.master_mode import convert_scenes_to_video_prompts, generate_and_stitch_videos
 from app.services.master_mode.streaming_wrapper import (
     generate_story_iterative_with_streaming,
@@ -367,11 +368,59 @@ async def generate_story(
                             normalized = "/" + normalized
                         return normalized
                     
+                    scene_local_paths = sorted(
+                        [p for p in video_output_dir.glob("scene_*.mp4") if p.is_file()],
+                        key=lambda p: p.name
+                    )
                     final_video_url = path_to_url(final_video_path)
-                    scene_video_urls = [
-                        path_to_url(video_output_dir / f"scene_{i+1:02d}.mp4")
-                        for i in range(len(video_params_list))
-                    ]
+                    scene_video_urls = [path_to_url(path) for path in scene_local_paths]
+
+                    storage_scene_paths = list(scene_video_urls)
+                    storage_final_video_path = final_video_url
+
+                    if settings.STORAGE_MODE == "s3":
+                        try:
+                            from app.services.storage.s3_storage import get_s3_storage
+                            s3_storage = get_s3_storage()
+                            base_s3_prefix = f"master_mode/{current_user.id}/{generation_id}"
+
+                            final_s3_key = f"{base_s3_prefix}/{Path(final_video_path).name}"
+                            try:
+                                s3_storage.upload_file(final_video_path, final_s3_key, content_type="video/mp4")
+                                storage_final_video_path = final_s3_key
+                                final_video_url = s3_storage.generate_presigned_url(final_s3_key, expiration=86400)
+                                try:
+                                    os.remove(final_video_path)
+                                except OSError as remove_err:
+                                    logger.warning(f"[Master Mode] Failed to delete local final video {final_video_path}: {remove_err}")
+                            except Exception as upload_err:
+                                logger.error(f"[Master Mode] Failed to upload final video to S3: {upload_err}", exc_info=True)
+
+                            storage_scene_paths = []
+                            scene_video_urls = []
+                            for scene_path in scene_local_paths:
+                                scene_s3_key = f"{base_s3_prefix}/scene_videos/{scene_path.name}"
+                                try:
+                                    s3_storage.upload_file(str(scene_path), scene_s3_key, content_type="video/mp4")
+                                    storage_scene_paths.append(scene_s3_key)
+                                    scene_video_urls.append(
+                                        s3_storage.generate_presigned_url(scene_s3_key, expiration=86400)
+                                    )
+                                    try:
+                                        os.remove(scene_path)
+                                    except OSError as scene_remove_err:
+                                        logger.warning(f"[Master Mode] Failed to delete local scene video {scene_path}: {scene_remove_err}")
+                                except Exception as scene_upload_err:
+                                    logger.error(f"[Master Mode] Failed to upload scene video {scene_path} to S3: {scene_upload_err}", exc_info=True)
+                                    fallback_url = path_to_url(scene_path)
+                                    storage_scene_paths.append(fallback_url)
+                                    scene_video_urls.append(fallback_url)
+                        except Exception as s3_init_err:
+                            logger.error(f"[Master Mode] Could not initialize S3 storage, falling back to local paths: {s3_init_err}", exc_info=True)
+                            storage_scene_paths = [path_to_url(path) for path in scene_local_paths]
+                            storage_final_video_path = path_to_url(final_video_path)
+                            scene_video_urls = list(storage_scene_paths)
+                            final_video_url = storage_final_video_path
                     
                     response["final_video_path"] = final_video_url
                     response["video_generation_status"] = "success"
@@ -383,9 +432,9 @@ async def generate_story(
                     })
                     
                     # Update database record with video information
-                    db_generation.video_path = final_video_path
-                    db_generation.video_url = final_video_url
-                    db_generation.temp_clip_paths = scene_video_urls
+                    db_generation.video_path = storage_final_video_path
+                    db_generation.video_url = storage_final_video_path
+                    db_generation.temp_clip_paths = storage_scene_paths
                     db_generation.num_scenes = len(video_params_list)
                     db_generation.num_clips = len(video_params_list)
                     db_generation.status = "completed"
