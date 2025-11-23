@@ -627,43 +627,15 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Welcome, {user?.username}!
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Create professional video ads from simple text prompts.
-          </p>
-          {(user || userProfile) && (
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                User Information
-              </h2>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>
-                  <strong>Username:</strong> {userProfile?.username || user?.username}
-                </p>
-                {(userProfile?.email || user?.email) && (
-                  <p>
-                    <strong>Email:</strong> {userProfile?.email || user?.email}
-                  </p>
-                )}
-                <p>
-                  <strong>Total Generations:</strong> {userProfile?.total_generations ?? user?.total_generations ?? 0}
-                </p>
-                <p>
-                  <strong>Total Cost:</strong> ${((userProfile?.total_cost ?? user?.total_cost ?? 0)).toFixed(2)}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Create Video Ad
-          </h2>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Create Video Ad
+            </h2>
+            <span className="px-5 py-2 text-base font-bold text-red-800 bg-red-200 rounded-full">
+              Evolving Feature
+            </span>
+          </div>
           <p className="text-gray-600 mb-6">
             Enter a description of the product or service you want to advertise.
             Our AI will create a professional video ad for you.
@@ -684,40 +656,6 @@ export const Dashboard: React.FC = () => {
               Use this example
             </button>
           </div>
-
-          {/* Interactive Pipeline CTA */}
-          {(!activeGeneration || activeGeneration.status === "completed" || activeGeneration.status === "failed") && (
-            <div className="mb-6 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg">
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0">
-                  <span className="text-4xl">🎬</span>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-purple-900 mb-2">
-                    Try Our New Interactive Pipeline
-                  </h3>
-                  <p className="text-sm text-purple-800 mb-3">
-                    Review and refine your video at every stage with conversational AI feedback.
-                    Perfect your story, images, and storyboard before generating the final video.
-                  </p>
-                  <ul className="text-xs text-purple-700 mb-4 space-y-1">
-                    <li>✓ Chat with AI to refine your story</li>
-                    <li>✓ Provide feedback on reference images</li>
-                    <li>✓ Edit images with AI inpainting</li>
-                    <li>✓ Review and approve each stage</li>
-                  </ul>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => navigate('/interactive')}
-                    className="bg-purple-600 hover:bg-purple-700"
-                  >
-                    Start Interactive Generation →
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Active Generation Progress Display */}
           {activeGeneration && (
