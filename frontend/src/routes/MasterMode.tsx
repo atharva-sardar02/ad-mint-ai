@@ -375,7 +375,7 @@ export const MasterMode: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">Master Mode</h1>
+          <h1 className="text-4xl font-bold text-gray-900">Video Generation</h1>
           <p className="mt-2 text-lg text-gray-600">
             Generate professional advertisements with AI-powered storytelling and video generation.
           </p>
@@ -570,7 +570,7 @@ export const MasterMode: React.FC = () => {
             <VideoPlayer
               videoPath={finalVideo}
               title={title || "Complete Advertisement"}
-              description={`Brand: ${brandName || "N/A"} | Generated with Master Mode AI`}
+              description={`Brand: ${brandName || "N/A"} | Generated with Video Generation AI`}
               className="max-w-4xl mx-auto"
             />
             
@@ -596,7 +596,7 @@ export const MasterMode: React.FC = () => {
                 )}
                 <div>
                   <span className="text-gray-600">Framework:</span>
-                  <span className="ml-2 text-blue-600 font-semibold">Master Mode</span>
+                  <span className="ml-2 text-blue-600 font-semibold">Video Generation</span>
                 </div>
               </div>
             </div>

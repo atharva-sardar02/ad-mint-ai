@@ -81,6 +81,14 @@ function App() {
             path="/dashboard"
             element={
               <ProtectedRoute>
+                <MasterMode />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/advanced"
+            element={
+              <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
             }
@@ -178,14 +186,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <InteractivePipelineWrapper />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/master-mode"
-            element={
-              <ProtectedRoute>
-                <MasterMode />
               </ProtectedRoute>
             }
           />

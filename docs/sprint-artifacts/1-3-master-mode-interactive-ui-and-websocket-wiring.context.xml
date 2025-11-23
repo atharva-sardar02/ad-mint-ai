@@ -1,0 +1,245 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>3</storyId>
+    <title>Master Mode Interactive UI & WebSocket Wiring</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-23T18:00:00Z</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/sprint-artifacts/1-3-master-mode-interactive-ui-and-websocket-wiring.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>full-stack developer</asA>
+    <iWant>the existing Master Mode route (`frontend/src/routes/MasterMode.tsx`) to become the unified conversational UI that talks to the new orchestrator</iWant>
+    <soThat>every new backend capability can be exercised immediately through the UI and verified after each story</soThat>
+    <tasks>
+      - Update Master Mode to use unified API endpoint (AC: #1, #2)
+        - Replace existing API call with `POST /api/v2/generate` using GenerationRequest schema
+        - Extract prompt, framework, brand_assets from form inputs
+        - Store generation_id and session_id in pipelineStore
+        - Handle API response (202 Accepted) and extract session_id
+        - Write unit tests for API integration
+      - Integrate WebSocket connection (AC: #3)
+        - Update `useWebSocket` hook to accept session_id from store
+        - Auto-connect WebSocket when session_id is available
+        - Add message handlers for unified message types (story_generated, reference_images_ready, scenes_generated, video_progress, video_complete, vbench_score, error, heartbeat)
+        - Update pipelineStore for each message type
+        - Add heartbeat/reconnect UI banners
+        - Write unit tests for WebSocket message handling
+      - Implement ChatGPT-style chat interface (AC: #4)
+        - Create or update `ChatFeed` component for scrollable message history
+        - Create or update `MessageBubble` component for user/system messages
+        - Create or update `PromptInput` component for text input with send button
+        - Create or update `QuickActions` component for approve/regenerate buttons
+        - Replace legacy Master Mode layout with chat interface
+        - Add inline editing for scene descriptions (Breakpoint 2)
+        - Write component tests for chat interface
+      - Add reference images display (AC: #5)
+        - Create or update `ReferenceImages` component for inline display
+        - Display reference images in chat feed when `reference_images_ready` message received
+        - Show GPT-4 Vision analysis summary (character, product, colors, style)
+        - Add "Using these 3 reference images..." banner message
+        - Make display read-only (no feedback/regeneration in MVP)
+        - Write component tests for reference images display
+      - Implement session persistence (AC: #6)
+        - Update pipelineStore to persist session state (already using Zustand persist middleware)
+        - Add session resumption logic on page load
+        - Check for existing session_id in store and resume if valid
+        - Add "Resuming generation…" status indicator
+        - Handle expired sessions (24-hour TTL)
+        - Write integration tests for session persistence
+      - End-to-end integration testing (AC: #7)
+        - Test full pipeline execution via Master Mode UI
+        - Test interactive feedback at story stage
+        - Test interactive feedback at scene stage
+        - Test real-time progress updates via WebSocket
+        - Test final video display and download
+        - Test session resumption after page refresh
+        - Verify no CLI or alternate route needed for QA
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. **Unified API Endpoint Integration** - Master Mode page calls `POST /api/v2/generate` with the new `GenerationRequest` schema:
+       - prompt (required)
+       - framework (optional: AIDA, PAS, FAB, custom)
+       - brand_assets (optional: product_images[], logo, character_images[])
+       - config overrides (optional: quality_threshold, parallel_variants, enable_vbench)
+       - interactive flag (true for UI)
+       - session_id (optional for resuming)
+
+    2. **Session State Management** - Master Mode stores `generation_id` and `session_id` returned from `/api/v2/generate` using the existing Zustand `pipelineStore`:
+       - Store generation_id for tracking
+       - Store session_id for WebSocket connection
+       - Persist session state across page refreshes (24-hour TTL)
+       - Handle session resumption when navigating away and back
+
+    3. **WebSocket Connection** - Master Mode reuses `frontend/src/hooks/useWebSocket.ts` but now connects automatically with the `session_id` from `/api/v2/generate`:
+       - Auto-connect when session_id is available
+       - Listen for unified message types: `story_generated`, `reference_images_ready`, `scenes_generated`, `video_progress`, `video_complete`, `vbench_score`, `error`, `heartbeat`
+       - Update store accordingly for each message type
+       - Heartbeat/reconnect banners surface in the UI exactly as described in Story 1.5
+
+    4. **Chat Feed + Interactive Checkpoints** - Replace the legacy static Master Mode layout with ChatGPT-style components:
+       - `ChatFeed` component renders scrollable message history
+       - `MessageBubble` component displays user/system messages
+       - `PromptInput` component for text input with send button
+       - `QuickActions` component shows optional approve/regenerate buttons
+       - Breakpoint 1 (story) and Breakpoint 2 (scenes) show approve/regenerate controls plus inline editing per PRD FR57–FR63/FR29–FR31
+
+    5. **Reference Images Display** - Reference images display read-only inside the feed with the "Using these 3 reference images for visual consistency across all scenes" banner so users understand consistency context:
+       - Display reference images inline in chat feed
+       - Show GPT-4 Vision analysis summary (character, product, colors, style)
+       - Read-only display (no user feedback or regeneration in MVP)
+
+    6. **Session Persistence** - Master Mode persists the current session via existing Redis-backed session storage:
+       - Refreshing the page reloads the last conversation within 24 hours
+       - Navigation away and back resumes the session
+       - Status indicator shows "Resuming generation…" when resuming
+
+    7. **Developer Validation** - After this story, QA can run a generation end-to-end via the Master Mode UI using the new orchestrator without touching a CLI or alternate route:
+       - Full pipeline execution (prompt → story → references → scenes → videos)
+       - Interactive feedback at story and scene stages
+       - Real-time progress updates via WebSocket
+       - Final video display and download
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/prd.md" title="Product Requirements Document" section="Conversational Generation Flow">
+        <snippet>ChatGPT-style interface with scrollable feed, natural language input, quick action buttons, conversation history, WebSocket real-time updates. Interactive checkpoints at story narrative and scene descriptions stages.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Interactive Conversational Interface">
+        <snippet>ChatGPT-style interface requirements (lines 329-343): Dark background, scrollable feed, grey message bubbles, text input at bottom. Components: ChatFeed, MessageBubble, PromptInput, QuickActions.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="WebSocket Message Flow">
+        <snippet>User Input → WS Send → WebSocket Route → Conversation Handler → Pipeline Orchestrator → Agent Execution → WS Send Response → Frontend Update → UI Render (lines 582-593).</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="WebSocket Message Format">
+        <snippet>Unified message types: story_generated, reference_images_ready, scenes_generated, video_progress, video_complete, vbench_score, error, heartbeat. Client sends user_feedback with message, stage, session_id (lines 850-883).</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document" section="State Management">
+        <snippet>Zustand stores (pipelineStore, authStore, uiStore), Redis session storage for WebSocket sessions. PipelineStore manages session state, connection state, conversation history, stage outputs (lines 472-475).</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Story 1.3">
+        <snippet>Master Mode Interactive UI & WebSocket Wiring story definition with acceptance criteria. Unified API endpoint integration, WebSocket connection management, ChatGPT-style chat interface, session persistence (lines 206-241).</snippet>
+      </doc>
+      <doc path="docs/sprint-artifacts/tech-spec-epic-epic-1.md" title="Epic Technical Specification" section="Master Mode UI Integration">
+        <snippet>Story 1.3 responsibilities: unified API endpoint integration, WebSocket connection management, ChatGPT-style chat interface, session persistence. WebSocket message contract with unified message types.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <code path="frontend/src/routes/MasterMode.tsx" kind="route component" symbol="MasterMode" lines="1-608" reason="Existing Master Mode route that needs to be modified to integrate unified API endpoint and chat interface. Currently has legacy form-based UI that needs replacement." />
+      <code path="frontend/src/hooks/useWebSocket.ts" kind="hook" symbol="useWebSocket" lines="1-331" reason="Existing WebSocket hook that needs to be updated to handle unified message types (story_generated, reference_images_ready, etc.) and auto-connect with session_id from store." />
+      <code path="frontend/src/stores/pipelineStore.ts" kind="store" symbol="usePipelineStore" lines="1-297" reason="Zustand store for pipeline state management. Already has session management, needs extension for generation_id and unified message type handlers." />
+      <code path="frontend/src/services/websocket-service.ts" kind="service" symbol="WebSocketService" lines="42-413" reason="WebSocket service class that handles connection management. Already has auto-reconnect logic, needs to support unified message types." />
+      <code path="frontend/src/components/generation/ChatInterface.tsx" kind="component" symbol="ChatInterface" lines="1-183" reason="Existing chat interface component that can be reused or adapted for Master Mode. Provides message list, auto-scroll, input handling." />
+      <code path="frontend/src/components/generation/StoryReview.tsx" kind="component" symbol="StoryReview" lines="36-191" reason="Story review component with chat interface integration. Shows approve/regenerate controls and feedback input." />
+      <code path="frontend/src/components/generation/ImageReview.tsx" kind="component" symbol="ImageReview" lines="83-539" reason="Image review component with chat interface. Can be adapted for reference images display." />
+      <code path="backend/app/api/routes/unified_pipeline.py" kind="api route" symbol="generate_video" lines="20-103" reason="Unified pipeline API endpoint POST /api/v2/generate. Returns GenerationResponse with generation_id, session_id, websocket_url. Master Mode needs to call this endpoint." />
+      <code path="backend/app/schemas/unified_pipeline.py" kind="schema" symbol="GenerationRequest" lines="80-88" reason="Pydantic schema for unified API request. Includes prompt, framework, brand_assets, config, interactive flag, session_id. Frontend needs to construct this request." />
+      <code path="backend/app/schemas/unified_pipeline.py" kind="schema" symbol="GenerationResponse" lines="91-92" reason="Pydantic schema for unified API response. Returns generation_id, session_id, websocket_url, status. Frontend needs to extract session_id for WebSocket connection." />
+      <code path="frontend/src/types/pipeline.ts" kind="types" symbol="ChatMessage, WSServerMessage" lines="30-61" reason="TypeScript type definitions for pipeline messages. May need extension for unified message types (story_generated, reference_images_ready, etc.)." />
+    </code>
+    <dependencies>
+      <node>
+        <package name="react" version="^19.2.0" />
+        <package name="react-dom" version="^19.2.0" />
+        <package name="react-router-dom" version="^7.9.6" />
+        <package name="zustand" version="^5.0.8" />
+        <package name="axios" version="^1.13.2" />
+      </node>
+      <python>
+        <package name="fastapi" version=">=0.104.0" />
+        <package name="pydantic" version=">=2.0.0" />
+        <package name="sqlalchemy" version=">=2.0.0" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Reuse existing Master Mode assets; do NOT build new `UnifiedPipeline.tsx` component. Modify existing `frontend/src/routes/MasterMode.tsx`.</constraint>
+    <constraint>WebSocket message contract aligns with PRD Flow 1 that explicitly states "User opens Master Mode page…". Follow architecture.md WebSocket Message Format specification.</constraint>
+    <constraint>Reference images are read-only in MVP (no user feedback or regeneration) - Story 1.3 should maintain this constraint from Story 1.2.</constraint>
+    <constraint>WebSocket auto-reconnect logic already exists in `useWebSocket.ts` - Story 1.3 should leverage this, not recreate.</constraint>
+    <constraint>Session storage: Redis-backed session storage already exists - Story 1.3 should use existing infrastructure, not create new.</constraint>
+    <constraint>State management: Zustand pipelineStore already exists with persist middleware - Story 1.3 should extend, not replace.</constraint>
+    <constraint>No new routes: Story 1.3 modifies existing Master Mode route, does not create new routes.</constraint>
+    <constraint>Brownfield compatibility: Reuse existing Master Mode assets, do not build new `UnifiedPipeline.tsx` component.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="POST /api/v2/generate" kind="REST endpoint" signature="POST /api/v2/generate
+Request: GenerationRequest {
+  prompt: string (required, 10-5000 chars)
+  framework?: string (AIDA, PAS, FAB, custom)
+  brand_assets?: BrandAssets { product_images[], logo?, character_images[] }
+  config?: Dict[str, Any] (quality_threshold, parallel_variants, enable_vbench)
+  interactive: bool (default: true)
+  session_id?: string (optional for resuming)
+}
+Response: GenerationResponse {
+  generation_id: string
+  session_id: string
+  websocket_url: string
+  status: string (pending, story, references, scenes, videos, completed, failed)
+}" path="backend/app/api/routes/unified_pipeline.py" />
+    <interface name="WebSocket /ws/{session_id}" kind="WebSocket endpoint" signature="WS /ws/{session_id}
+Client → Server: {
+  type: 'user_feedback'
+  payload: { message: string, stage: string, session_id: string }
+  timestamp: string
+}
+Server → Client: {
+  type: 'story_generated' | 'reference_images_ready' | 'scenes_generated' | 'video_progress' | 'video_complete' | 'vbench_score' | 'error' | 'heartbeat'
+  payload: { /* stage-specific data */ }
+  timestamp: string
+}" path="backend/app/api/routes/websocket.py" />
+    <interface name="useWebSocket hook" kind="React hook" signature="useWebSocket(options: {
+  sessionId: string | null
+  autoConnect?: boolean
+  onStageComplete?: (stage: string, data: any) => void
+  onError?: (error: string) => void
+}): {
+  isConnected: boolean
+  connectionState: string
+  sendFeedback: (message: string) => void
+  disconnect: () => void
+}" path="frontend/src/hooks/useWebSocket.ts" />
+    <interface name="pipelineStore" kind="Zustand store" signature="usePipelineStore(): {
+  session: PipelineSession | null
+  sessionId: string | null
+  generationId?: string | null  // NEW: needs to be added
+  connectionState: ConnectionState
+  setSession: (session: PipelineSession) => void
+  setGenerationId: (id: string) => void  // NEW: needs to be added
+  addMessage: (message: ChatMessage) => void
+  updateStageOutput: (stage, output) => void
+  // ... other actions
+}" path="frontend/src/stores/pipelineStore.ts" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Frontend testing uses vitest with @testing-library/react for component tests. Backend testing uses pytest with pytest-asyncio for async tests. Component tests should verify rendering, user interactions, and state updates. Integration tests should verify end-to-end flows including WebSocket communication. Test structure: `frontend/tests/components/chat/*.test.tsx` for chat components, `frontend/tests/integration/master-mode.test.tsx` for end-to-end pipeline execution, `frontend/tests/hooks/useWebSocket.test.ts` for WebSocket message handling.
+    </standards>
+    <locations>
+      <location>frontend/tests/components/chat/</location>
+      <location>frontend/tests/components/pipeline/</location>
+      <location>frontend/tests/integration/</location>
+      <location>frontend/tests/hooks/</location>
+      <location>frontend/tests/routes/</location>
+    </locations>
+    <ideas>
+      <test acId="1">Test Master Mode calls POST /api/v2/generate with correct GenerationRequest schema. Mock API response, verify generation_id and session_id stored in pipelineStore.</test>
+      <test acId="2">Test session persistence: store session_id, refresh page, verify session restored from localStorage (Zustand persist). Test 24-hour TTL expiration.</test>
+      <test acId="3">Test WebSocket auto-connect when session_id available. Mock WebSocket connection, verify connect() called with correct session_id. Test message handlers for all unified message types (story_generated, reference_images_ready, scenes_generated, video_progress, video_complete, vbench_score, error, heartbeat).</test>
+      <test acId="4">Test ChatFeed component renders scrollable message history. Test MessageBubble displays user/system messages correctly. Test PromptInput submits on Enter key. Test QuickActions shows approve/regenerate buttons at story and scene breakpoints.</test>
+      <test acId="5">Test ReferenceImages component displays 3 images inline in chat feed. Test GPT-4 Vision analysis summary display. Test "Using these 3 reference images..." banner message. Verify read-only display (no edit buttons).</test>
+      <test acId="6">Test session resumption: navigate away, return, verify "Resuming generation…" indicator shown. Test expired session handling (24-hour TTL).</test>
+      <test acId="7">Integration test: Full pipeline execution via Master Mode UI. Submit prompt → receive story → approve → receive reference images → receive scenes → edit scene → approve → receive videos → verify final video display. Test WebSocket real-time updates throughout. Test session resumption after page refresh.</test>
+    </ideas>
+  </tests>
+</story-context>
+
