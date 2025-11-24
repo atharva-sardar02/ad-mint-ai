@@ -270,15 +270,31 @@ class VideoStitcher:
             
             logger.info(f"[Stitcher] Writing final video to: {output_path_obj}")
             
-            final_video.write_videofile(
-                str(output_path_obj),
-                codec='libx264',
-                audio_codec='aac',
-                fps=self.target_fps,
-                preset='medium',
-                bitrate='5000k',  # High quality
-                logger=None  # Suppress MoviePy progress
-            )
+            # Set temp directory to output directory to avoid permission issues
+            # MoviePy/FFMPEG creates temp audio files in the current directory
+            import os
+            original_tmpdir = os.environ.get('TMPDIR')
+            temp_dir = str(output_path_obj.parent)
+            os.environ['TMPDIR'] = temp_dir
+            logger.debug(f"[Stitcher] Set TMPDIR to: {temp_dir}")
+            
+            try:
+                final_video.write_videofile(
+                    str(output_path_obj),
+                    codec='libx264',
+                    audio_codec='aac',
+                    fps=self.target_fps,
+                    preset='medium',
+                    bitrate='5000k',  # High quality
+                    logger=None,  # Suppress MoviePy progress
+                    temp_audiofile=str(output_path_obj.parent / f"{output_path_obj.stem}_TEMP_AUDIO.m4a")
+                )
+            finally:
+                # Restore original TMPDIR
+                if original_tmpdir:
+                    os.environ['TMPDIR'] = original_tmpdir
+                elif 'TMPDIR' in os.environ:
+                    del os.environ['TMPDIR']
             
             # Cleanup
             final_video.close()
